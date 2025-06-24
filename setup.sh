@@ -19,12 +19,11 @@ echo "🔧 [3/3] AI 서버 설정 중..."
 cd ai-server
 
 # Python 가상환경 생성
-python3 -m venv venv
+python3.12 -m venv venv
 source venv/bin/activate
 
 # 시스템 종속성 확인 및 설치
 sudo apt update
-sudo apt install -y python3.10-venv python3.10-distutils
 
 # Python 패키지 설치
 pip install --upgrade pip
