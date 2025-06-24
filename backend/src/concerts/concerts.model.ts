@@ -1,0 +1,28 @@
+export interface Concert {
+  id: string;
+  title: string;
+  date: string;
+  location: string;
+  poster_url: string;
+  created_at: string;
+  organizer: string;
+  promoter: string;
+  customer_service: string;
+  running_time: string;
+  age_rating: string;
+  main_performer: string;
+  booking_fee: number;
+  shipping_note: string;
+  valid_from: string;
+  valid_to: string;
+  mobile_ticket_supported: boolean;
+  android_min_version: string;
+  ios_min_version: string;
+  id_doc_required: boolean;
+  seller_name: string;
+  seller_rep: string;
+  seller_reg_no: string;
+  seller_email: string;
+  seller_contact: string;
+  seller_address: string;
+} 
