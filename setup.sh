@@ -18,14 +18,15 @@ cd ..
 echo "🔧 [3/3] AI 서버 설정 중..."
 cd ai-server
 
-# Python 가상환경 생성
-python3.12 -m venv venv
-source venv/bin/activate
-
-# 시스템 종속성 확인 및 설치
+# Python 3.12.8 환경 준비
 sudo apt update
+sudo apt install -y python3.12 python3.12-venv python3.12-dev python3-pip
 
-# Python 패키지 설치
+# 가상환경 생성 및 활성화
+python3.12 -m venv venv || { echo "❌ 가상환경 생성 실패"; exit 1; }
+source venv/bin/activate || { echo "❌ 가상환경 활성화 실패"; exit 1; }
+
+# pip 설치 및 requirements 설치
 pip install --upgrade pip
 pip install -r requirements.txt || { echo "❌ requirements.txt 설치 실패"; exit 1; }
 
@@ -37,4 +38,3 @@ echo "🔹 프론트엔드 실행: cd frontend && npm run dev"
 echo "🔹 블록체인 노드 실행: cd blockchain && npx hardhat node"
 echo "🔹 스마트컨트랙트 배포: npx hardhat run scripts/deploy.ts --network localhost"
 echo "🔹 AI 서버 실행: cd ai-server && source venv/bin/activate && uvicorn app.main:app --reload"
-
