@@ -1,9 +1,46 @@
-import { Ticket } from './tickets.model';
-import { supabase } from '../lib/supabaseClient';
+// backend/src/tickets/tickets.service.ts
 
+import dotenv from 'dotenv';
+import path from 'path';
+import { supabase } from '../lib/supabaseClient';
+import { Ticket } from './tickets.model';
+import { ethers } from 'ethers';
+// artifacts 폴더 내 생성된 JSON ABI 파일을 가져옵니다.
+// tickets.service.ts 기준으로 ../../../blockchain/artifacts/... 경로
+import TicketJSON from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
+
+<<<<<<< backup-my-work
+// .deployed 파일(.deployed)에 기록된 환경변수도 불러오려면 이렇게
+dotenv.config({ path: path.resolve(__dirname, '../../.deployed') });
+// 그리고 .env 파일도
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+const TICKET_MANAGER_ADDRESS = process.env.TICKET_MANAGER_ADDRESS!;
+if (!TICKET_MANAGER_ADDRESS) {
+  throw new Error('.deployed 또는 .env 에 TICKET_MANAGER_ADDRESS가 설정되어 있지 않습니다');
+}
+
+// ───────────────────────────────────────────────────────────
+// on‐chain 연결 설정
+// ───────────────────────────────────────────────────────────
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const admin    = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY!, provider);
+
+// ABI + Contract 주소로 ethers.js Contract 인스턴스 생성
+const contract = new ethers.Contract(
+  TICKET_MANAGER_ADDRESS,
+  TicketJSON.abi as any,
+  admin
+);
+
+// ───────────────────────────────────────────────────────────
+// 확장된 티켓 타입 (콘서트·좌석 정보 포함)
+// ───────────────────────────────────────────────────────────
+=======
 /**
  * 티켓 상세 정보를 위한 확장 인터페이스
  */
+>>>>>>> main
 export interface TicketWithDetails extends Ticket {
   concert?: {
     id: string;
@@ -19,6 +56,16 @@ export interface TicketWithDetails extends Ticket {
   };
 }
 
+<<<<<<< backup-my-work
+// ───────────────────────────────────────────────────────────
+// 모든 티켓 조회
+// ───────────────────────────────────────────────────────────
+export const getAllTickets = async (): Promise<Ticket[]> => {
+  const { data, error } = await supabase
+    .from<'tickets', Ticket>('tickets')
+    .select('*')
+    .order('created_at', { ascending: false });
+=======
 /**
  * 사용자 ID로 예매한 티켓 목록 조회
  * @param userId - 사용자 ID
@@ -53,119 +100,181 @@ export const getUserTickets = async (userId: string): Promise<TicketWithDetails[
       console.error('사용자 티켓 조회 오류:', error);
       return [];
     }
+>>>>>>> main
 
-    if (!ticketsData) {
-      return [];
-    }
+  if (error) {
+    console.error('getAllTickets 오류:', error);
+    throw error;
+  }
+  return data || [];
+};
 
-    // 데이터 변환
-    return ticketsData.map((ticket: any) => ({
-      id: ticket.id,
-      user_id: ticket.user_id,
-      concert_id: ticket.concert_id,
-      seat_id: ticket.seat_id,
-      nft_token_id: ticket.nft_token_id,
-      token_uri: ticket.token_uri,
-      tx_hash: ticket.tx_hash,
-      issued_at: ticket.issued_at,
-      purchase_price: ticket.purchase_price,
-      is_used: ticket.is_used,
-      canceled_at: ticket.canceled_at,
-      cancellation_fee: ticket.cancellation_fee,
-      refund_tx_hash: ticket.refund_tx_hash,
-      created_at: ticket.created_at,
-      concert: ticket.concerts ? {
-        id: ticket.concerts.id,
-        title: ticket.concerts.title,
-        date: ticket.concerts.date,
-        location: ticket.concerts.location,
-        poster_url: ticket.concerts.poster_url
-      } : undefined,
-      seat: ticket.seats ? {
-        id: ticket.seats.id,
-        seat_number: ticket.seats.seat_number,
-        grade_name: ticket.seats.seat_grades?.grade_name || ''
-      } : undefined
-    }));
-  } catch (error) {
+// ───────────────────────────────────────────────────────────
+// 티켓 생성 (예매)
+// ───────────────────────────────────────────────────────────
+export const createTicket = async (
+  payload: Omit<Ticket, 'id' | 'created_at'>
+): Promise<Ticket> => {
+  const { data, error } = await supabase
+    .from('tickets')          // ← 제네릭 없이 호출
+    .insert([payload])
+    .single();
+
+  if (error) {
+    console.error('createTicket 오류:', error);
+    throw error;
+  }
+  return data as Ticket;      // ← 결과만 Ticket 으로 단언
+};
+
+// ───────────────────────────────────────────────────────────
+// 사용자별 예매 티켓 목록 조회
+// ───────────────────────────────────────────────────────────
+export const getUserTickets = async (
+  userId: string
+): Promise<TicketWithDetails[]> => {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select(`
+      *,
+      concerts ( id, title, date, location, poster_url ),
+      seats    ( id, seat_number, seat_grades ( grade_name ) )
+    `)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
     console.error('getUserTickets 오류:', error);
-    return [];
+    throw error;
+  }
+
+  return (data || []).map((t: any) => ({
+    ...t,
+    concert: t.concerts && {
+      id:         t.concerts.id,
+      title:      t.concerts.title,
+      date:       t.concerts.date,
+      location:   t.concerts.location,
+      poster_url: t.concerts.poster_url,
+    },
+    seat: t.seats && {
+      id:          t.seats.id,
+      seat_number: t.seats.seat_number,
+      grade_name:  t.seats.seat_grades?.grade_name || ''
+    }
+  }));
+};
+
+// ───────────────────────────────────────────────────────────
+// 티켓 단건 조회
+// ───────────────────────────────────────────────────────────
+export const getTicketById = async (
+  ticketId: string,
+  userId: string
+): Promise<TicketWithDetails | null> => {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select(`
+      *,
+      concerts ( id, title, date, location, poster_url ),
+      seats    ( id, seat_number, seat_grades ( grade_name ) )
+    `)
+    .eq('id', ticketId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    console.error('getTicketById 오류:', error);
+    throw error;
+  }
+  if (!data) return null;
+
+  return {
+    ...data,
+    concert: data.concerts && {
+      id:         data.concerts.id,
+      title:      data.concerts.title,
+      date:       data.concerts.date,
+      location:   data.concerts.location,
+      poster_url: data.concerts.poster_url,
+    },
+    seat: data.seats && {
+      id:          data.seats.id,
+      seat_number: data.seats.seat_number,
+      grade_name:  data.seats.seat_grades?.grade_name || ''
+    }
+  };
+};
+
+// ───────────────────────────────────────────────────────────
+// 좌석 예약 상태 변경
+// ───────────────────────────────────────────────────────────
+export const setSeatReserved = async (
+  seatId: string,
+  reserved: boolean
+) => {
+  const { error } = await supabase
+    .from('seats')
+    .update({ is_reserved: reserved })
+    .eq('id', seatId);
+
+  if (error) {
+    console.error('setSeatReserved 오류:', error);
+    throw error;
   }
 };
 
-/**
- * 티켓 ID로 특정 티켓 조회
- * @param ticketId - 티켓 ID
- * @param userId - 사용자 ID (권한 확인용)
- * @returns 티켓 정보
- */
-export const getTicketById = async (
-  ticketId: string, 
-  userId: string
-): Promise<TicketWithDetails | null> => {
-  try {
-    const { data: ticketData, error } = await supabase
-      .from('tickets')
-      .select(`
-        *,
-        concerts (
-          id,
-          title,
-          date,
-          location,
-          poster_url
-        ),
-        seats (
-          id,
-          seat_number,
-          seat_grades (
-            grade_name
-          )
-        )
-      `)
-      .eq('id', ticketId)
-      .eq('user_id', userId)
-      .single();
+// ───────────────────────────────────────────────────────────
+// 온체인: 티켓 취소 → 재오픈 시간 반환
+// ───────────────────────────────────────────────────────────
+export const cancelOnChain = async (tokenId: number): Promise<number> => {
+  const tx = await contract.cancelTicket(tokenId);
+  const receipt = await tx.wait();
+  const evt = receipt.events?.find((e: any) => e.event === 'TicketCancelled');
+  return evt!.args!.reopenTime.toNumber();
+};
 
-    if (error) {
-      console.error('티켓 조회 오류:', error);
-      return null;
-    }
-
-    if (!ticketData) {
-      return null;
-    }
-
-    return {
-      id: ticketData.id,
-      user_id: ticketData.user_id,
-      concert_id: ticketData.concert_id,
-      seat_id: ticketData.seat_id,
-      nft_token_id: ticketData.nft_token_id,
-      token_uri: ticketData.token_uri,
-      tx_hash: ticketData.tx_hash,
-      issued_at: ticketData.issued_at,
-      purchase_price: ticketData.purchase_price,
-      is_used: ticketData.is_used,
-      canceled_at: ticketData.canceled_at,
-      cancellation_fee: ticketData.cancellation_fee,
-      refund_tx_hash: ticketData.refund_tx_hash,
-      created_at: ticketData.created_at,
-      concert: ticketData.concerts ? {
-        id: ticketData.concerts.id,
-        title: ticketData.concerts.title,
-        date: ticketData.concerts.date,
-        location: ticketData.concerts.location,
-        poster_url: ticketData.concerts.poster_url
-      } : undefined,
-      seat: ticketData.seats ? {
-        id: ticketData.seats.id,
-        seat_number: ticketData.seats.seat_number,
-        grade_name: ticketData.seats.seat_grades?.grade_name || ''
-      } : undefined
-    };
-  } catch (error) {
-    console.error('getTicketById 오류:', error);
-    return null;
+// ───────────────────────────────────────────────────────────
+// DB: 티켓 취소 정보 저장
+// ───────────────────────────────────────────────────────────
+export const markTicketCancelled = async (
+  ticketId: string,
+  reopenTime: number
+) => {
+  const { error } = await supabase
+    .from('tickets')
+    .update({
+      canceled_at:      new Date(),
+      cancellation_fee: 0,
+      refund_tx_hash:   null,
+      is_cancelled:     true,
+      reopen_time:      reopenTime
+    })
+    .eq('id', ticketId);
+  if (error) {
+    console.error('markTicketCancelled 오류:', error);
+    throw error;
   }
-}; 
+};
+
+// ───────────────────────────────────────────────────────────
+// 온체인: 티켓 재오픈
+// ───────────────────────────────────────────────────────────
+export const reopenOnChain = async (tokenId: number) => {
+  const tx = await contract.reopenTicket(tokenId);
+  await tx.wait();
+};
+
+// ───────────────────────────────────────────────────────────
+// DB: 티켓 재오픈 상태 저장
+// ───────────────────────────────────────────────────────────
+export const markTicketReopened = async (ticketId: string) => {
+  const { error } = await supabase
+    .from('tickets')
+    .update({ is_cancelled: false })
+    .eq('id', ticketId);
+  if (error) {
+    console.error('markTicketReopened 오류:', error);
+    throw error;
+  }
+};
