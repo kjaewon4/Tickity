@@ -1,30 +1,39 @@
+// hardhat.config.ts
 import { HardhatUserConfig } from "hardhat/config";
-// ethers v5 연동
-import "@nomiclabs/hardhat-ethers";
-// Waffle/Chai 매처 연결
-import "@nomiclabs/hardhat-waffle";
-import "@nomicfoundation/hardhat-network-helpers";
+import "@typechain/hardhat";
+import "@nomicfoundation/hardhat-ethers";
+import "@nomicfoundation/hardhat-chai-matchers";
+import 'hardhat-deploy';
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.28",         // 컨트랙트의 pragma와 맞추세요
+    version: "0.8.28",
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,             // 최적화 정도 (기본값 200)
+        runs: 200,
       },
     },
   },
+  namedAccounts: {
+    deployer: {
+      default: 0, // hardhat 네트워크에서 첫 번째 계정을 deployer 로 사용
+    },
+  },
+  typechain: {
+    outDir: "typechain",   // 팩토리들이 생성될 디렉터리
+    target: "ethers-v6",   // ethers 버전에 맞춰
+  },
+
   paths: {
-    sources: "./contracts",    // 솔리디티 소스 위치
-    tests:   "./test",         // 테스트 파일 위치
-    cache:   "./cache",
+    sources:   "./contracts",
+    tests:     "./test",
+    cache:     "./cache",
     artifacts: "./artifacts",
   },
+
   networks: {
-    hardhat: {
-      // 필요한 옵션이 있으면 여기다가 추가
-    },
+    hardhat: { /* 필요하다면 옵션 추가 */ },
   },
 };
 

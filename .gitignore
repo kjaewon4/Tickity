@@ -22,3 +22,6 @@ venv/
 # Python 캐시 파일
 __pycache__/
 *.py[cod]
+
+# deployed 스크립트가 생성하는 주소 파일
+blockchain/.deployed
