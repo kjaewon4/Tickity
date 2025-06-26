@@ -1,16 +1,6 @@
 import { Ticket } from './tickets.model';
 import { supabase } from '../lib/supabaseClient';
 
-// 레거시 메모리 기반 (하위 호환성)
-const tickets: Ticket[] = [];
-
-export const getAllTickets = (): Ticket[] => tickets;
-
-export const createTicket = (ticket: Ticket): Ticket => {
-  tickets.push(ticket);
-  return ticket;
-};
-
 /**
  * 티켓 상세 정보를 위한 확장 인터페이스
  */
@@ -35,6 +25,7 @@ export interface TicketWithDetails extends Ticket {
  * @returns 사용자의 티켓 목록 (콘서트, 좌석 정보 포함)
  */
 export const getUserTickets = async (userId: string): Promise<TicketWithDetails[]> => {
+
   try {
     const { data: ticketsData, error } = await supabase
       .from('tickets')
