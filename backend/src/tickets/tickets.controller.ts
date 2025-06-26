@@ -1,10 +1,15 @@
 // src/tickets/tickets.controller.ts
 import { Router, Request, Response } from 'express';
+<<<<<<< backup-my-work
 import * as ticketsService from './tickets.service';
+=======
+import { getUserTickets } from './tickets.service';
+>>>>>>> main
 import { ApiResponse } from '../types/auth';
 
 const router = Router();
 
+<<<<<<< backup-my-work
 /**
  * 전체 티켓 조회
  * GET /tickets
@@ -43,6 +48,8 @@ router.post(
   }
 );
 
+=======
+>>>>>>> main
 /**
  * 사용자별 예매 티켓 목록 조회
  * GET /tickets/my-tickets/:userId

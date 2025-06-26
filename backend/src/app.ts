@@ -13,6 +13,7 @@ import seatGradesRouter from './seat_grades/seat_grades.controller';
 import seatsRouter from './seats/seats.controller';
 import ticketsRouter from './tickets/tickets.controller';
 import authRouter from './auth/auth.controller';
+import chatbotRouter from './chatbot/chatbot.controller';
 
 // NODE_ENV 가 test 가 아닐 때만 스케줄러 실행
 if (process.env.NODE_ENV !== 'test') {
@@ -61,5 +62,6 @@ app.use('/seats', seatsRouter);
 //    - /tickets/cancel (티켓 취소 / on-chain + DB)
 //    - /tickets/... 기타 엔드포인트
 app.use('/tickets', ticketsRouter);
+app.use('/chatbot', chatbotRouter);
 
 export default app; 
