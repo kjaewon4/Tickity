@@ -8,6 +8,8 @@ import {
   AuthResponse,
   UserInfo 
 } from '../types/auth';
+import { createClient } from '@supabase/supabase-js';
+import { encryptResidentNumber } from '../utils/encryption';
 
 const router = Router();
 
@@ -362,7 +364,7 @@ router.put('/user', async (req: Request, res: Response<ApiResponse>) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { name, date_of_birth } = req.body;
+    const { name, resident_number, password_hash, password } = req.body;
 
     // 토큰으로 사용자 정보 조회
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -379,7 +381,7 @@ router.put('/user', async (req: Request, res: Response<ApiResponse>) => {
       .from('users')
       .update({
         name,
-        date_of_birth
+        date_of_birth: resident_number
       })
       .eq('id', user.id);
 
@@ -476,7 +478,7 @@ router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => 
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { name, date_of_birth, password_hash } = req.body;
+    const { name, resident_number, password_hash, password } = req.body;
 
     // 토큰으로 사용자 정보 조회
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -486,6 +488,32 @@ router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => 
         success: false,
         error: '유효하지 않은 토큰입니다.'
       });
+    }
+
+    // 주민번호 암호화
+    let encryptedResidentNumber = '';
+    if (resident_number) {
+      try {
+        encryptedResidentNumber = encryptResidentNumber(resident_number);
+      } catch (encryptError) {
+        console.error('주민번호 암호화 오류:', encryptError);
+        return res.status(400).json({
+          success: false,
+          error: '주민번호 형식이 올바르지 않습니다.'
+        });
+      }
+    }
+
+    // 비밀번호 해시 생성 (실제 비밀번호가 전달된 경우)
+    let passwordHash = password_hash || 'email_signup';
+    if (password && password !== 'email_signup') {
+      try {
+        const crypto = require('crypto');
+        passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+      } catch (hashError) {
+        console.error('비밀번호 해시 생성 오류:', hashError);
+        passwordHash = 'email_signup';
+      }
     }
 
     // 이미 사용자가 데이터베이스에 있는지 확인
@@ -511,9 +539,9 @@ router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => 
           id: user.id,
           email: user.email,
           name,
-          date_of_birth,
+          resident_number_encrypted: encryptedResidentNumber,
           wallet_address: '',
-          password_hash: password_hash || 'email_signup', // 기본값 설정
+          password_hash: passwordHash,
           created_at: new Date().toISOString()
         }]);
 
@@ -567,8 +595,19 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
     // 사용자 메타데이터에서 정보 추출
     const userMetadata = data.user.user_metadata;
     const name = userMetadata?.name || '';
-    const dateOfBirth = userMetadata?.date_of_birth || '';
+    const residentNumber = userMetadata?.resident_number || '';
     const passwordHash = userMetadata?.password_hash || '';
+
+    // 주민번호 암호화
+    let encryptedResidentNumber = '';
+    if (residentNumber) {
+      try {
+        encryptedResidentNumber = encryptResidentNumber(residentNumber);
+      } catch (encryptError) {
+        console.error('주민번호 암호화 오류:', encryptError);
+        return res.redirect(`${process.env.FRONTEND_URL}/login?error=resident_number_invalid`);
+      }
+    }
 
     // 데이터베이스에 사용자 정보 저장
     const { error: insertError } = await supabase
@@ -577,7 +616,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
         id: data.user.id,
         email: data.user.email,
         name,
-        date_of_birth: dateOfBirth,
+        resident_number_encrypted: encryptedResidentNumber,
         wallet_address: '',
         password_hash: passwordHash,
         created_at: new Date().toISOString()
