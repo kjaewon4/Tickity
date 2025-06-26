@@ -73,16 +73,35 @@ export const getAllTickets = async (): Promise<Ticket[]> => {
 export const createTicket = async (
   payload: Omit<Ticket, 'id' | 'created_at'>
 ): Promise<Ticket> => {
+  // issued_at이 없으면 현재 시간으로 설정
+  const ticketData = {
+    ...payload,
+    issued_at: payload.issued_at || new Date().toISOString()
+  };
+
   const { data, error } = await supabase
-    .from('tickets')          // ← 제네릭 없이 호출
-    .insert([payload])
-    .single();
+    .from('tickets')
+    .insert([ticketData]);
 
   if (error) {
     console.error('createTicket 오류:', error);
     throw error;
   }
-  return data as Ticket;      // ← 결과만 Ticket 으로 단언
+
+  // insert 후 select로 다시 조회
+  const { data: inserted, error: selectError } = await supabase
+    .from('tickets')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (selectError) {
+    console.error('createTicket select 오류:', selectError);
+    throw selectError;
+  }
+
+  return inserted as Ticket;
 };
 
 // ───────────────────────────────────────────────────────────
