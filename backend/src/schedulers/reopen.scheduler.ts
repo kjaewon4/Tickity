@@ -1,35 +1,40 @@
 // src/schedulers/reopen.scheduler.ts
-import cron from "node-cron";
-import { Op } from "sequelize";
-import { Ticket } from "../tickets/tickets.model";
-import { reopenOnChain, markTicketReopened } from "../tickets/tickets.service";
+import cron from 'node-cron'
+import { supabase } from '../lib/supabaseClient'
+import { reopenOnChain, markTicketReopened } from '../tickets/tickets.service'
 
-export function startReopenScheduler() {
-  // 매 분마다 실행
-  cron.schedule("*/1 * * * *", async () => {
-    const now = Math.floor(Date.now() / 1000);
+/**
+ * 실제 재오픈 로직: is_cancelled=true 이고 reopen_time <= now 인 티켓을 찾아
+ * on‐chain reopen, DB 업데이트를 호출
+ */
+export async function runReopenJob(): Promise<void> {
+  const now = Math.floor(Date.now() / 1000)
+  // 1) 재오픈 대상 티켓 조회
+  const { data: tickets, error } = await supabase
+    .from('tickets')
+    .select('id, nft_token_id')
+    .eq('is_cancelled', true)
+    .lte('reopen_time', now)
+
+  if (error) throw error
+
+  for (const t of tickets || []) {
+    const tokenId = parseInt(t.nft_token_id, 10)
     try {
-      // 취소 상태이면서 reopen_time이 지났거나 같은 티켓들
-      const expired = await Ticket.findAll({
-        where: {
-          is_cancelled: true,
-          reopen_time:  { [Op.lte]: now },
-        },
-      });
-      if (!expired.length) return;
-
-      for (const tk of expired) {
-        const tokenId = Number(tk.nft_token_id);
-        try {
-          await reopenOnChain(tokenId);
-          await markTicketReopened(tk.id);
-          console.log(`✅ 티켓 ${tk.id} (tokenId=${tokenId}) 재오픈 완료`);
-        } catch (e) {
-          console.error(`❌ 티켓 ${tk.id} 재오픈 에러:`, e);
-        }
-      }
+      await reopenOnChain(tokenId)
+      await markTicketReopened(t.id)
     } catch (e) {
-      console.error("Scheduler error:", e);
+      console.error(`reopen failed for ${t.id}`, e)
     }
-  });
+  }
+}
+
+/**
+ * cron 으로 매 분(runEveryMinute)마다 runReopenJob 호출
+ */
+export function startReopenScheduler(): void {
+  // 예: 매 분마다 실행
+  cron.schedule('* * * * *', () => {
+    runReopenJob().catch(console.error)
+  })
 }

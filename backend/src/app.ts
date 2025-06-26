@@ -3,8 +3,8 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 dotenv.config();
-// import "./schedulers/reopen.scheduler";    // ← import 만 해도 스케줄러가 자동 등록됩니다
-// import { startReopenScheduler } from "./schedulers/reopen.scheduler";
+import "./schedulers/reopen.scheduler";    // ← import 만 해도 스케줄러가 자동 등록됩니다
+import { startReopenScheduler } from "./schedulers/reopen.scheduler";
 import cors from 'cors';
 import usersRouter from './users/users.controller';
 import concertsRouter from './concerts/concerts.controller';
@@ -15,12 +15,11 @@ import ticketsRouter from './tickets/tickets.controller';
 import authRouter from './auth/auth.controller';
 import chatbotRouter from './chatbot/chatbot.controller';
 
-// // NODE_ENV 가 test 가 아닐 때만 스케줄러 실행
-// if (process.env.NODE_ENV !== 'test') {
-//   import('./schedulers/reopen.scheduler').then(({ startReopenScheduler }) => {
-//     startReopenScheduler();
-//   });
-// }
+
+// NODE_ENV가 test 가 아닐 때만 스케줄러 구동
+if (process.env.NODE_ENV !== 'test') {
+  startReopenScheduler()
+}
 
 const app = express();
 

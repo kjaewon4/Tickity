@@ -6,7 +6,8 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test:api": "mocha -r ts-node/register --extensions ts --spec \"test/**/*.api.test.ts\""
+    "test:api": "NODE_ENV=test mocha -r ts-node/register --extensions ts --recursive \"test/**/*.api.test.ts\"",
+    "test:unit": "NODE_ENV=test mocha -r ts-node/register --extensions ts --recursive \"test/**/*.scheduler.test.ts\"" 
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

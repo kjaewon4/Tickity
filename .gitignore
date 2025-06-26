@@ -1,5 +1,6 @@
 node_modules
 .env
+**/.env  
 
 # Hardhat files
 /cache
@@ -26,5 +27,7 @@ __pycache__/
 # deployed 스크립트가 생성하는 주소 파일
 blockchain/.deployed
 
-# TypeScript 빌드 결과물
-/dist
+# Build outputs
+dist/                   
+build/
+
