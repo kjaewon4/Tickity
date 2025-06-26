@@ -7,6 +7,7 @@ import seatGradesRouter from './seat_grades/seat_grades.controller';
 import seatsRouter from './seats/seats.controller';
 import ticketsRouter from './tickets/tickets.controller';
 import authRouter from './auth/auth.controller';
+import chatbotRouter from './chatbot/chatbot.controller';
 
 const app = express();
 
@@ -44,5 +45,6 @@ app.use('/face-embeddings', faceEmbeddingsRouter);
 app.use('/seat-grades', seatGradesRouter);
 app.use('/seats', seatsRouter);
 app.use('/tickets', ticketsRouter);
+app.use('/chatbot', chatbotRouter);
 
 export default app; 

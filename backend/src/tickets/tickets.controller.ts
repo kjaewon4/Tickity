@@ -1,17 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { getAllTickets, createTicket, getUserTickets } from './tickets.service';
+import { getUserTickets } from './tickets.service';
 import { ApiResponse } from '../types/auth';
 
 const router = Router();
-
-router.get('/', (req, res) => {
-  res.json(getAllTickets());
-});
-
-router.post('/', (req, res) => {
-  const ticket = createTicket(req.body);
-  res.status(201).json(ticket);
-});
 
 /**
  * 사용자 예매 티켓 목록 조회 (JWT 미들웨어 제거 - 임시)
