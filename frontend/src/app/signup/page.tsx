@@ -2,9 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/apiClient';
+import { createClient } from '@supabase/supabase-js';
 import { SignupRequest } from '@/types/auth';
 import Link from 'next/link';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function SignupPage() {
   const router = useRouter();
@@ -12,9 +17,14 @@ export default function SignupPage() {
   const [password, setPassword] = useState<string>('');
   const [passwordCheck, setPasswordCheck] = useState<string>('');
   const [name, setName] = useState<string>('');
-  const [dateOfBirth, setDateOfBirth] = useState<string>('');
+  const [residentNumber, setResidentNumber] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
+
+  // 주민번호 형식 검증
+  const validateResidentNumber = (number: string): boolean => {
+    return /^\d{7}$/.test(number);
+  };
 
   // 일반 이메일 회원가입
   const handleSignup = async (): Promise<void> => {
@@ -25,46 +35,49 @@ export default function SignupPage() {
       setError('비밀번호가 일치하지 않습니다.');
       return;
     }
-    if (!dateOfBirth) {
-      setError('생년월일을 입력해주세요.');
+    if (!residentNumber) {
+      setError('주민번호를 입력해주세요.');
+      return;
+    }
+    if (!validateResidentNumber(residentNumber)) {
+      setError('주민번호는 7자리 숫자로 입력해주세요.');
       return;
     }
     
     try {
-      const signupData: SignupRequest = {
+      // Supabase Auth로 직접 회원가입 (이메일 인증 포함)
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        name: name.trim(),
-        dateOfBirth
-      };
-
-      const response = await apiClient.signup(signupData);
-      
-      if (response.success && response.data) {
-        if (response.data.requiresEmailConfirmation) {
-          // 이메일 인증이 필요한 경우
-          setSuccess('회원가입이 완료되었습니다! 이메일을 확인하여 인증을 완료해주세요.');
-          
-          // 로그인 페이지로 이동하지 않고 인증 안내만 표시
-          setTimeout(() => {
-            router.replace('/login');
-          }, 5000);
-        } else {
-          // 이메일 인증이 완료된 경우 (토큰이 있는 경우)
-          if (response.data.accessToken && response.data.refreshToken) {
-            localStorage.setItem('accessToken', response.data.accessToken);
-            localStorage.setItem('refreshToken', response.data.refreshToken);
-          }
-          
-          setSuccess('회원가입이 완료되었습니다!');
-          
-          // 잠시 후 로그인 페이지로 이동
-          setTimeout(() => {
-            router.replace('/login');
-          }, 2000);
+        options: {
+          data: {
+            name: name.trim(),
+            resident_number: residentNumber  // 주민번호 7자리
+          },
+          emailRedirectTo: `${window.location.origin}/confirm-email`
         }
+      });
+
+      if (signUpError) {
+        console.error('회원가입 오류:', signUpError);
+        setError(signUpError.message);
+        return;
+      }
+
+      if (data.user && data.session) {
+        // 이메일 인증이 필요하지 않은 경우 (즉시 인증됨)
+        setSuccess('회원가입이 완료되었습니다!');
+        setTimeout(() => {
+          router.replace('/login');
+        }, 2000);
+      } else if (data.user && !data.session) {
+        // 이메일 인증이 필요한 경우
+        setSuccess('회원가입이 완료되었습니다! 이메일을 확인하여 인증을 완료해주세요.');
+        setTimeout(() => {
+          router.replace('/login');
+        }, 5000);
       } else {
-        setError(response.error || '회원가입 중 오류가 발생했습니다.');
+        setError('회원가입 중 오류가 발생했습니다.');
       }
     } catch (error) {
       console.error('회원가입 오류:', error);
@@ -93,8 +106,11 @@ export default function SignupPage() {
     setName(e.target.value);
   };
 
-  const handleDateOfBirthChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    setDateOfBirth(e.target.value);
+  const handleResidentNumberChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    // 숫자만 입력 허용
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    // 7자리로 제한
+    setResidentNumber(value.slice(0, 7));
   };
 
   if (success) {
@@ -131,11 +147,15 @@ export default function SignupPage() {
         />
         <input
           className="w-full mb-2 p-2 border rounded"
-          type="date"
-          placeholder="생년월일"
-          value={dateOfBirth}
-          onChange={handleDateOfBirthChange}
+          type="text"
+          placeholder="주민번호 7자리 (예: 950101)"
+          value={residentNumber}
+          onChange={handleResidentNumberChange}
+          maxLength={7}
         />
+        <div className="text-xs text-gray-500 mb-2">
+          생년월일 6자리 + 성별 1자리 (예: 9501011)
+        </div>
         <input
           className="w-full mb-2 p-2 border rounded"
           type="password"

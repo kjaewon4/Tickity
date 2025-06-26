@@ -8,118 +8,17 @@ import {
   AuthResponse,
   UserInfo 
 } from '../types/auth';
+import { createClient } from '@supabase/supabase-js';
+import { encryptResidentNumber } from '../utils/encryption';
 
 const router = Router();
 
-// 회원가입
+// 회원가입 (프론트엔드에서만 처리하도록 비활성화)
 router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response<ApiResponse>) => {
-  try {
-    const { email, password, name, dateOfBirth } = req.body;
-
-    // 입력 검증
-    if (!email || !password || !name || !dateOfBirth) {
-      return res.status(400).json({
-        success: false,
-        error: '모든 필드를 입력해주세요.'
-      });
-    }
-
-    // 이메일 중복 체크 (Supabase Auth에서 확인)
-    const { data: existingAuthUser, error: authCheckError } = await supabase.auth.admin.listUsers();
-    
-    if (authCheckError) {
-      console.error('사용자 목록 조회 오류:', authCheckError);
-      return res.status(500).json({
-        success: false,
-        error: '이메일 확인 중 오류가 발생했습니다.'
-      });
-    }
-
-    const existingUser = existingAuthUser.users.find(user => user.email === email);
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        error: '이미 가입된 이메일입니다.'
-      });
-    }
-
-    // 비밀번호 해시화
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Supabase Auth로 사용자 생성 (이메일 인증 없이 바로 생성)
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true, // 이메일 인증 없이 바로 생성
-      user_metadata: {
-        name,
-        date_of_birth: dateOfBirth,
-        password_hash: hashedPassword
-      }
-    });
-
-    if (authError) {
-      console.error('Supabase Auth 오류:', authError);
-      
-      // 이미 가입된 이메일인 경우
-      if (authError.message.includes('already been registered') || authError.code === 'email_exists') {
-        return res.status(409).json({
-          success: false,
-          error: '이미 가입된 이메일입니다. 로그인 페이지로 이동해주세요.'
-        });
-      }
-      
-      return res.status(500).json({
-        success: false,
-        error: authError.message
-      });
-    }
-
-    if (!authData.user) {
-      return res.status(500).json({
-        success: false,
-        error: '사용자 생성에 실패했습니다.'
-      });
-    }
-
-    // 데이터베이스에 사용자 정보 바로 저장
-    const { error: insertError } = await supabase
-      .from('users')
-      .insert([{
-        id: authData.user.id,
-        email,
-        name,
-        date_of_birth: dateOfBirth,
-        wallet_address: '',
-        password_hash: hashedPassword,
-        created_at: new Date().toISOString()
-      }]);
-
-    if (insertError) {
-      console.error('사용자 정보 저장 오류:', insertError);
-      return res.status(500).json({
-        success: false,
-        error: '사용자 정보 저장 중 오류가 발생했습니다.'
-      });
-    }
-
-    // 회원가입 완료 후 바로 로그인 가능하도록 안내
-    res.status(201).json({
-      success: true,
-      message: '회원가입이 완료되었습니다! 이제 로그인할 수 있습니다.',
-      data: {
-        requiresEmailConfirmation: false,
-        email: email
-      }
-    });
-
-  } catch (error) {
-    console.error('회원가입 오류:', error);
-    res.status(500).json({
-      success: false,
-      error: '회원가입 중 오류가 발생했습니다.'
-    });
-  }
+  return res.status(400).json({
+    success: false,
+    error: '회원가입은 프론트엔드에서 처리해주세요. (/signup 페이지 사용)'
+  });
 });
 
 // 로그인
@@ -465,7 +364,7 @@ router.put('/user', async (req: Request, res: Response<ApiResponse>) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { name, date_of_birth } = req.body;
+    const { name, resident_number, password_hash, password } = req.body;
 
     // 토큰으로 사용자 정보 조회
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -482,7 +381,7 @@ router.put('/user', async (req: Request, res: Response<ApiResponse>) => {
       .from('users')
       .update({
         name,
-        date_of_birth
+        date_of_birth: resident_number
       })
       .eq('id', user.id);
 
@@ -567,6 +466,108 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
   }
 });
 
+// 이메일 인증 완료 후 사용자 생성
+router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        error: '인증 토큰이 필요합니다.'
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { name, resident_number, password_hash, password } = req.body;
+
+    // 토큰으로 사용자 정보 조회
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({
+        success: false,
+        error: '유효하지 않은 토큰입니다.'
+      });
+    }
+
+    // 주민번호 암호화
+    let encryptedResidentNumber = '';
+    if (resident_number) {
+      try {
+        encryptedResidentNumber = encryptResidentNumber(resident_number);
+      } catch (encryptError) {
+        console.error('주민번호 암호화 오류:', encryptError);
+        return res.status(400).json({
+          success: false,
+          error: '주민번호 형식이 올바르지 않습니다.'
+        });
+      }
+    }
+
+    // 비밀번호 해시 생성 (실제 비밀번호가 전달된 경우)
+    let passwordHash = password_hash || 'email_signup';
+    if (password && password !== 'email_signup') {
+      try {
+        const crypto = require('crypto');
+        passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+      } catch (hashError) {
+        console.error('비밀번호 해시 생성 오류:', hashError);
+        passwordHash = 'email_signup';
+      }
+    }
+
+    // 이미 사용자가 데이터베이스에 있는지 확인
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('사용자 확인 오류:', checkError);
+      return res.status(500).json({
+        success: false,
+        error: '사용자 확인 중 오류가 발생했습니다.'
+      });
+    }
+
+    // 사용자가 없으면 데이터베이스에 사용자 정보 저장
+    if (!existingUser) {
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert([{
+          id: user.id,
+          email: user.email,
+          name,
+          resident_number_encrypted: encryptedResidentNumber,
+          wallet_address: '',
+          password_hash: passwordHash,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (insertError) {
+        console.error('사용자 정보 저장 오류:', insertError);
+        return res.status(500).json({
+          success: false,
+          error: '사용자 정보 저장 중 오류가 발생했습니다.'
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: '사용자 정보가 생성되었습니다.'
+    });
+
+  } catch (error) {
+    console.error('사용자 생성 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '사용자 정보 생성 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 // 이메일 인증 확인
 router.get('/confirm-email', async (req: Request, res: Response) => {
   try {
@@ -594,8 +595,19 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
     // 사용자 메타데이터에서 정보 추출
     const userMetadata = data.user.user_metadata;
     const name = userMetadata?.name || '';
-    const dateOfBirth = userMetadata?.date_of_birth || '';
+    const residentNumber = userMetadata?.resident_number || '';
     const passwordHash = userMetadata?.password_hash || '';
+
+    // 주민번호 암호화
+    let encryptedResidentNumber = '';
+    if (residentNumber) {
+      try {
+        encryptedResidentNumber = encryptResidentNumber(residentNumber);
+      } catch (encryptError) {
+        console.error('주민번호 암호화 오류:', encryptError);
+        return res.redirect(`${process.env.FRONTEND_URL}/login?error=resident_number_invalid`);
+      }
+    }
 
     // 데이터베이스에 사용자 정보 저장
     const { error: insertError } = await supabase
@@ -604,7 +616,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
         id: data.user.id,
         email: data.user.email,
         name,
-        date_of_birth: dateOfBirth,
+        resident_number_encrypted: encryptedResidentNumber,
         wallet_address: '',
         password_hash: passwordHash,
         created_at: new Date().toISOString()
