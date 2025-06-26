@@ -9,9 +9,8 @@ import { ethers } from 'ethers';
 // tickets.service.ts 기준으로 ../../../blockchain/artifacts/... 경로
 import TicketJSON from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
 
-<<<<<<< backup-my-work
 // .deployed 파일(.deployed)에 기록된 환경변수도 불러오려면 이렇게
-dotenv.config({ path: path.resolve(__dirname, '../../.deployed') });
+dotenv.config({ path: path.resolve(__dirname, '../../../blockchain/.deployed') });
 // 그리고 .env 파일도
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
@@ -36,11 +35,6 @@ const contract = new ethers.Contract(
 // ───────────────────────────────────────────────────────────
 // 확장된 티켓 타입 (콘서트·좌석 정보 포함)
 // ───────────────────────────────────────────────────────────
-=======
-/**
- * 티켓 상세 정보를 위한 확장 인터페이스
- */
->>>>>>> main
 export interface TicketWithDetails extends Ticket {
   concert?: {
     id: string;
@@ -56,7 +50,6 @@ export interface TicketWithDetails extends Ticket {
   };
 }
 
-<<<<<<< backup-my-work
 // ───────────────────────────────────────────────────────────
 // 모든 티켓 조회
 // ───────────────────────────────────────────────────────────
@@ -65,42 +58,7 @@ export const getAllTickets = async (): Promise<Ticket[]> => {
     .from<'tickets', Ticket>('tickets')
     .select('*')
     .order('created_at', { ascending: false });
-=======
-/**
- * 사용자 ID로 예매한 티켓 목록 조회
- * @param userId - 사용자 ID
- * @returns 사용자의 티켓 목록 (콘서트, 좌석 정보 포함)
- */
-export const getUserTickets = async (userId: string): Promise<TicketWithDetails[]> => {
 
-  try {
-    const { data: ticketsData, error } = await supabase
-      .from('tickets')
-      .select(`
-        *,
-        concerts (
-          id,
-          title,
-          date,
-          location,
-          poster_url
-        ),
-        seats (
-          id,
-          seat_number,
-          seat_grades (
-            grade_name
-          )
-        )
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('사용자 티켓 조회 오류:', error);
-      return [];
-    }
->>>>>>> main
 
   if (error) {
     console.error('getAllTickets 오류:', error);
