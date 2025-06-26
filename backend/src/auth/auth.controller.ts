@@ -11,115 +11,12 @@ import {
 
 const router = Router();
 
-// 회원가입
+// 회원가입 (프론트엔드에서만 처리하도록 비활성화)
 router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response<ApiResponse>) => {
-  try {
-    const { email, password, name, dateOfBirth } = req.body;
-
-    // 입력 검증
-    if (!email || !password || !name || !dateOfBirth) {
-      return res.status(400).json({
-        success: false,
-        error: '모든 필드를 입력해주세요.'
-      });
-    }
-
-    // 이메일 중복 체크 (Supabase Auth에서 확인)
-    const { data: existingAuthUser, error: authCheckError } = await supabase.auth.admin.listUsers();
-    
-    if (authCheckError) {
-      console.error('사용자 목록 조회 오류:', authCheckError);
-      return res.status(500).json({
-        success: false,
-        error: '이메일 확인 중 오류가 발생했습니다.'
-      });
-    }
-
-    const existingUser = existingAuthUser.users.find(user => user.email === email);
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        error: '이미 가입된 이메일입니다.'
-      });
-    }
-
-    // 비밀번호 해시화
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Supabase Auth로 사용자 생성 (이메일 인증 없이 바로 생성)
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true, // 이메일 인증 없이 바로 생성
-      user_metadata: {
-        name,
-        date_of_birth: dateOfBirth,
-        password_hash: hashedPassword
-      }
-    });
-
-    if (authError) {
-      console.error('Supabase Auth 오류:', authError);
-      
-      // 이미 가입된 이메일인 경우
-      if (authError.message.includes('already been registered') || authError.code === 'email_exists') {
-        return res.status(409).json({
-          success: false,
-          error: '이미 가입된 이메일입니다. 로그인 페이지로 이동해주세요.'
-        });
-      }
-      
-      return res.status(500).json({
-        success: false,
-        error: authError.message
-      });
-    }
-
-    if (!authData.user) {
-      return res.status(500).json({
-        success: false,
-        error: '사용자 생성에 실패했습니다.'
-      });
-    }
-
-    // 데이터베이스에 사용자 정보 바로 저장
-    const { error: insertError } = await supabase
-      .from('users')
-      .insert([{
-        id: authData.user.id,
-        email,
-        name,
-        date_of_birth: dateOfBirth,
-        wallet_address: '',
-        password_hash: hashedPassword,
-        created_at: new Date().toISOString()
-      }]);
-
-    if (insertError) {
-      console.error('사용자 정보 저장 오류:', insertError);
-      return res.status(500).json({
-        success: false,
-        error: '사용자 정보 저장 중 오류가 발생했습니다.'
-      });
-    }
-
-    // 회원가입 완료 후 바로 로그인 가능하도록 안내
-    res.status(201).json({
-      success: true,
-      message: '회원가입이 완료되었습니다! 이제 로그인할 수 있습니다.',
-      data: {
-        requiresEmailConfirmation: false,
-        email: email
-      }
-    });
-
-  } catch (error) {
-    console.error('회원가입 오류:', error);
-    res.status(500).json({
-      success: false,
-      error: '회원가입 중 오류가 발생했습니다.'
-    });
-  }
+  return res.status(400).json({
+    success: false,
+    error: '회원가입은 프론트엔드에서 처리해주세요. (/signup 페이지 사용)'
+  });
 });
 
 // 로그인
@@ -560,6 +457,82 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
 
   } catch (error) {
     console.error('Google OAuth 사용자 생성 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '사용자 정보 생성 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 이메일 인증 완료 후 사용자 생성
+router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        error: '인증 토큰이 필요합니다.'
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { name, date_of_birth, password_hash } = req.body;
+
+    // 토큰으로 사용자 정보 조회
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({
+        success: false,
+        error: '유효하지 않은 토큰입니다.'
+      });
+    }
+
+    // 이미 사용자가 데이터베이스에 있는지 확인
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('사용자 확인 오류:', checkError);
+      return res.status(500).json({
+        success: false,
+        error: '사용자 확인 중 오류가 발생했습니다.'
+      });
+    }
+
+    // 사용자가 없으면 데이터베이스에 사용자 정보 저장
+    if (!existingUser) {
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert([{
+          id: user.id,
+          email: user.email,
+          name,
+          date_of_birth,
+          wallet_address: '',
+          password_hash: password_hash || 'email_signup', // 기본값 설정
+          created_at: new Date().toISOString()
+        }]);
+
+      if (insertError) {
+        console.error('사용자 정보 저장 오류:', insertError);
+        return res.status(500).json({
+          success: false,
+          error: '사용자 정보 저장 중 오류가 발생했습니다.'
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: '사용자 정보가 생성되었습니다.'
+    });
+
+  } catch (error) {
+    console.error('사용자 생성 오류:', error);
     res.status(500).json({
       success: false,
       error: '사용자 정보 생성 중 오류가 발생했습니다.'
