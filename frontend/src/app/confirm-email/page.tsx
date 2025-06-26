@@ -78,7 +78,7 @@ export default function ConfirmEmail() {
           // 사용자 메타데이터에서 정보 추출
           const userMetadata = user.user_metadata;
           const name = userMetadata?.name || '';
-          const dateOfBirth = userMetadata?.date_of_birth || '';
+          const residentNumber = userMetadata?.resident_number || '';
 
           // 백엔드에 사용자 정보 저장 요청
           const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/create-user`, {
@@ -89,7 +89,7 @@ export default function ConfirmEmail() {
             },
             body: JSON.stringify({
               name,
-              date_of_birth: dateOfBirth,
+              resident_number: residentNumber,
               password_hash: 'email_signup'
             })
           });
@@ -145,7 +145,7 @@ export default function ConfirmEmail() {
           // 사용자 메타데이터에서 정보 추출
           const userMetadata = data.user.user_metadata;
           const name = userMetadata?.name || '';
-          const dateOfBirth = userMetadata?.date_of_birth || '';
+          const residentNumber = userMetadata?.resident_number || '';
 
           // 백엔드에 사용자 정보 저장 요청
           const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/create-user`, {
@@ -156,7 +156,7 @@ export default function ConfirmEmail() {
             },
             body: JSON.stringify({
               name,
-              date_of_birth: dateOfBirth,
+              resident_number: residentNumber,
               password_hash: 'email_signup'
             })
           });

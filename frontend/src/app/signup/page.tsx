@@ -17,9 +17,14 @@ export default function SignupPage() {
   const [password, setPassword] = useState<string>('');
   const [passwordCheck, setPasswordCheck] = useState<string>('');
   const [name, setName] = useState<string>('');
-  const [dateOfBirth, setDateOfBirth] = useState<string>('');
+  const [residentNumber, setResidentNumber] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
+
+  // 주민번호 형식 검증
+  const validateResidentNumber = (number: string): boolean => {
+    return /^\d{7}$/.test(number);
+  };
 
   // 일반 이메일 회원가입
   const handleSignup = async (): Promise<void> => {
@@ -30,8 +35,12 @@ export default function SignupPage() {
       setError('비밀번호가 일치하지 않습니다.');
       return;
     }
-    if (!dateOfBirth) {
-      setError('생년월일을 입력해주세요.');
+    if (!residentNumber) {
+      setError('주민번호를 입력해주세요.');
+      return;
+    }
+    if (!validateResidentNumber(residentNumber)) {
+      setError('주민번호는 7자리 숫자로 입력해주세요.');
       return;
     }
     
@@ -43,7 +52,7 @@ export default function SignupPage() {
         options: {
           data: {
             name: name.trim(),
-            date_of_birth: dateOfBirth
+            resident_number: residentNumber  // 주민번호 7자리
           },
           emailRedirectTo: `${window.location.origin}/confirm-email`
         }
@@ -97,8 +106,11 @@ export default function SignupPage() {
     setName(e.target.value);
   };
 
-  const handleDateOfBirthChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    setDateOfBirth(e.target.value);
+  const handleResidentNumberChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    // 숫자만 입력 허용
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    // 7자리로 제한
+    setResidentNumber(value.slice(0, 7));
   };
 
   if (success) {
@@ -135,11 +147,15 @@ export default function SignupPage() {
         />
         <input
           className="w-full mb-2 p-2 border rounded"
-          type="date"
-          placeholder="생년월일"
-          value={dateOfBirth}
-          onChange={handleDateOfBirthChange}
+          type="text"
+          placeholder="주민번호 7자리 (예: 950101)"
+          value={residentNumber}
+          onChange={handleResidentNumberChange}
+          maxLength={7}
         />
+        <div className="text-xs text-gray-500 mb-2">
+          생년월일 6자리 + 성별 1자리 (예: 9501011)
+        </div>
         <input
           className="w-full mb-2 p-2 border rounded"
           type="password"
