@@ -16,17 +16,15 @@ router.post('/', (req: Request, res: Response) => {
   res.status(201).json(user);
 });
 
-
-
 // =================
-// 마이페이지 기능 (인증 필요)
+// 사용자 프로필 기능
 // =================
 
 /**
- * 사용자 프로필 조회 (JWT 미들웨어 제거 - 임시)
- * GET /api/users/profile/:userId
+ * 사용자 프로필 조회
+ * GET /users/profile/:userId
  */
-router.get('/profile/:userId', /* authenticateToken, */ async (req: Request, res: Response<ApiResponse<UserInfo>>) => {
+router.get('/profile/:userId', async (req: Request, res: Response<ApiResponse<UserInfo>>) => {
   try {
     const { userId } = req.params;
     
@@ -62,7 +60,7 @@ router.get('/profile/:userId', /* authenticateToken, */ async (req: Request, res
 
 /**
  * 사용자 프로필 수정 (JWT 미들웨어 제거 - 임시)
- * PUT /api/users/profile/:userId
+ * PUT /users/profile/:userId
  */
 router.put('/profile/:userId', /* authenticateToken, */ async (req: Request, res: Response<ApiResponse<UserInfo>>) => {
   try {
@@ -111,43 +109,13 @@ router.put('/profile/:userId', /* authenticateToken, */ async (req: Request, res
   }
 });
 
-/**
- * 사용자 예매 티켓 목록 조회 (JWT 미들웨어 제거 - 임시)
- * GET /api/users/my-tickets/:userId
- */
-router.get('/my-tickets/:userId', /* authenticateToken, */ async (req: Request, res: Response<ApiResponse>) => {
-  try {
-    const { userId } = req.params;
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: '사용자 ID가 필요합니다.'
-      });
-    }
-
-    const userTickets = await getUserTickets(userId);
-
-    res.json({
-      success: true,
-      data: {
-        tickets: userTickets,
-        total: userTickets.length
-      },
-      message: '티켓 목록 조회 성공'
-    });
-  } catch (error) {
-    console.error('티켓 목록 조회 오류:', error);
-    res.status(500).json({
-      success: false,
-      error: '티켓 목록 조회 중 오류가 발생했습니다.'
-    });
-  }
-});
+// =================
+// 마이페이지 대시보드 (통합 정보)
+// =================
 
 /**
  * 마이페이지 전체 정보 조회 (프로필 + 티켓) (JWT 미들웨어 제거 - 임시)
- * GET /api/users/dashboard/:userId
+ * GET /users/dashboard/:userId
  */
 router.get('/dashboard/:userId', /* authenticateToken, */ async (req: Request, res: Response<ApiResponse>) => {
   try {
