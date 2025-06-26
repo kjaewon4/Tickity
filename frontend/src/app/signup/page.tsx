@@ -2,9 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/apiClient';
+import { createClient } from '@supabase/supabase-js';
 import { SignupRequest } from '@/types/auth';
 import Link from 'next/link';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function SignupPage() {
   const router = useRouter();
@@ -31,40 +36,39 @@ export default function SignupPage() {
     }
     
     try {
-      const signupData: SignupRequest = {
+      // Supabase Auth로 직접 회원가입 (이메일 인증 포함)
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        name: name.trim(),
-        dateOfBirth
-      };
-
-      const response = await apiClient.signup(signupData);
-      
-      if (response.success && response.data) {
-        if (response.data.requiresEmailConfirmation) {
-          // 이메일 인증이 필요한 경우
-          setSuccess('회원가입이 완료되었습니다! 이메일을 확인하여 인증을 완료해주세요.');
-          
-          // 로그인 페이지로 이동하지 않고 인증 안내만 표시
-          setTimeout(() => {
-            router.replace('/login');
-          }, 5000);
-        } else {
-          // 이메일 인증이 완료된 경우 (토큰이 있는 경우)
-          if (response.data.accessToken && response.data.refreshToken) {
-            localStorage.setItem('accessToken', response.data.accessToken);
-            localStorage.setItem('refreshToken', response.data.refreshToken);
-          }
-          
-          setSuccess('회원가입이 완료되었습니다!');
-          
-          // 잠시 후 로그인 페이지로 이동
-          setTimeout(() => {
-            router.replace('/login');
-          }, 2000);
+        options: {
+          data: {
+            name: name.trim(),
+            date_of_birth: dateOfBirth
+          },
+          emailRedirectTo: `${window.location.origin}/confirm-email`
         }
+      });
+
+      if (signUpError) {
+        console.error('회원가입 오류:', signUpError);
+        setError(signUpError.message);
+        return;
+      }
+
+      if (data.user && data.session) {
+        // 이메일 인증이 필요하지 않은 경우 (즉시 인증됨)
+        setSuccess('회원가입이 완료되었습니다!');
+        setTimeout(() => {
+          router.replace('/login');
+        }, 2000);
+      } else if (data.user && !data.session) {
+        // 이메일 인증이 필요한 경우
+        setSuccess('회원가입이 완료되었습니다! 이메일을 확인하여 인증을 완료해주세요.');
+        setTimeout(() => {
+          router.replace('/login');
+        }, 5000);
       } else {
-        setError(response.error || '회원가입 중 오류가 발생했습니다.');
+        setError('회원가입 중 오류가 발생했습니다.');
       }
     } catch (error) {
       console.error('회원가입 오류:', error);
