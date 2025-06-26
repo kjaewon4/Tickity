@@ -17,6 +17,33 @@ interface ChatbotResponse {
   timestamp: string;
 }
 
+// 마크다운을 HTML로 변환하는 함수
+const formatMessage = (content: string): string => {
+  return content
+    // **텍스트** → <strong>텍스트</strong>
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // *텍스트* → <em>텍스트</em>
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // `텍스트` → <code>텍스트</code>
+    .replace(/`(.*?)`/g, '<code class="bg-gray-200 dark:bg-gray-600 px-1 rounded text-sm">$1</code>')
+    // 줄바꿈 처리
+    .replace(/\n/g, '<br>');
+};
+
+// 시간 표시 컴포넌트 (클라이언트 사이드에서만 렌더링)
+function TimeDisplay({ timestamp }: { timestamp: Date }) {
+  const [timeString, setTimeString] = useState('');
+
+  useEffect(() => {
+    setTimeString(timestamp.toLocaleTimeString('ko-KR', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    }));
+  }, [timestamp]);
+
+  return <div className="text-xs opacity-70 mt-1">{timeString}</div>;
+}
+
 export default function ChatbotPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -129,13 +156,11 @@ export default function ChatbotPage() {
                       ? 'bg-blue-500 text-white'
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
                   }`}>
-                    <div className="whitespace-pre-wrap">{message.content}</div>
-                    <div className="text-xs opacity-70 mt-1">
-                      {message.timestamp.toLocaleTimeString('ko-KR', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </div>
+                    <div 
+                      className="whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
+                    />
+                    <TimeDisplay timestamp={message.timestamp} />
                     
                     {/* 추천 질문 버튼 */}
                     {message.role === 'assistant' && message.suggestions && (

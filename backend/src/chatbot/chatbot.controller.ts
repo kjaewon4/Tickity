@@ -28,10 +28,10 @@ router.post('/chat', async (req: Request, res: Response<ApiResponse>) => {
     }
 
     // 메시지 길이 제한
-    if (message.length > 1000) {
+    if (message.length > 500) {
       return res.status(400).json({
         success: false,
-        error: '메시지는 1000자 이내로 입력해주세요.'
+        error: '메시지는 500자 이내로 입력해주세요.'
       });
     }
 
