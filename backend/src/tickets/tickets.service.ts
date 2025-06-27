@@ -14,12 +14,6 @@ dotenv.config({ path: path.resolve(__dirname, '../../../blockchain/.deployed') }
 // .env 불러오기
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-// const TICKET_MANAGER_ADDRESS = process.env.TICKET_MANAGER_ADDRESS!;
-// if (!TICKET_MANAGER_ADDRESS) {
-//   throw new Error('.deployed 또는 .env 에 TICKET_MANAGER_ADDRESS가 설정되어 있지 않습니다');
-// }
-
-
 const RPC_URL    = process.env.RPC_URL!;
 const ADMIN_KEY  = process.env.ADMIN_PRIVATE_KEY!;
 const CONTRACT   = process.env.TICKET_MANAGER_ADDRESS!;
@@ -27,13 +21,6 @@ const CONTRACT   = process.env.TICKET_MANAGER_ADDRESS!;
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const admin    = new ethers.Wallet(ADMIN_KEY, provider);
 const contract = new ethers.Contract(CONTRACT, TicketJSON.abi, admin);
-
-// // ABI + Contract 주소로 ethers.js Contract 인스턴스 생성
-// const contract = new ethers.Contract(
-//   TICKET_MANAGER_ADDRESS,
-//   TicketJSON.abi as any,
-//   admin
-// );
 
 // ───────────────────────────────────────────────────────────
 // 확장된 티켓 타입 (콘서트·좌석 정보 포함)
