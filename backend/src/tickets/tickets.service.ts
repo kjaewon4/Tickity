@@ -4,33 +4,36 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { supabase } from '../lib/supabaseClient';
 import { Ticket } from './tickets.model';
-import { ethers } from 'ethers';
+import { ethers, Contract, Wallet } from 'ethers';
 // artifacts 폴더 내 생성된 JSON ABI 파일을 가져옵니다.
 // tickets.service.ts 기준으로 ../../../blockchain/artifacts/... 경로
 import TicketJSON from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
 
-// .deployed 파일(.deployed)에 기록된 환경변수도 불러오려면 이렇게
+// 로컬 체인 배포 주소 등 불러올 .deployed
 dotenv.config({ path: path.resolve(__dirname, '../../../blockchain/.deployed') });
-// 그리고 .env 파일도
+// .env 불러오기
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const TICKET_MANAGER_ADDRESS = process.env.TICKET_MANAGER_ADDRESS!;
-if (!TICKET_MANAGER_ADDRESS) {
-  throw new Error('.deployed 또는 .env 에 TICKET_MANAGER_ADDRESS가 설정되어 있지 않습니다');
-}
+// const TICKET_MANAGER_ADDRESS = process.env.TICKET_MANAGER_ADDRESS!;
+// if (!TICKET_MANAGER_ADDRESS) {
+//   throw new Error('.deployed 또는 .env 에 TICKET_MANAGER_ADDRESS가 설정되어 있지 않습니다');
+// }
 
-// ───────────────────────────────────────────────────────────
-// on‐chain 연결 설정
-// ───────────────────────────────────────────────────────────
-const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
-const admin    = new ethers.Wallet(process.env.ADMIN_PRIVATE_KEY!, provider);
 
-// ABI + Contract 주소로 ethers.js Contract 인스턴스 생성
-const contract = new ethers.Contract(
-  TICKET_MANAGER_ADDRESS,
-  TicketJSON.abi as any,
-  admin
-);
+const RPC_URL    = process.env.RPC_URL!;
+const ADMIN_KEY  = process.env.ADMIN_PRIVATE_KEY!;
+const CONTRACT   = process.env.TICKET_MANAGER_ADDRESS!;
+
+const provider = new ethers.JsonRpcProvider(RPC_URL);
+const admin    = new ethers.Wallet(ADMIN_KEY, provider);
+const contract = new ethers.Contract(CONTRACT, TicketJSON.abi, admin);
+
+// // ABI + Contract 주소로 ethers.js Contract 인스턴스 생성
+// const contract = new ethers.Contract(
+//   TICKET_MANAGER_ADDRESS,
+//   TicketJSON.abi as any,
+//   admin
+// );
 
 // ───────────────────────────────────────────────────────────
 // 확장된 티켓 타입 (콘서트·좌석 정보 포함)
@@ -205,9 +208,9 @@ export const setSeatReserved = async (
 // 온체인: 티켓 취소 → 재오픈 시간 반환
 // ───────────────────────────────────────────────────────────
 export const cancelOnChain = async (tokenId: number): Promise<number> => {
-  const tx = await contract.cancelTicket(tokenId);
+  const tx      = await contract.cancelTicket(tokenId);
   const receipt = await tx.wait();
-  const evt = receipt.events?.find((e: any) => e.event === 'TicketCancelled');
+  const evt     = receipt.events?.find((e: any) => e.event === 'TicketCancelled');
   return evt!.args!.reopenTime.toNumber();
 };
 
