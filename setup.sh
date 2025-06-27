@@ -2,6 +2,27 @@
 
 echo "📦 Tickity 프로젝트 초기 설정 시작..."
 
+# DNS 문제 해결
+echo "🌐 DNS 설정 중 (8.8.8.8 적용)..."
+sudo bash -c 'echo -e "nameserver 8.8.8.8\nnameserver 1.1.1.1" > /etc/resolv.conf'
+
+# Python 3.12 설치 및 기본 설정
+echo "🐍 Python 3.12 설치 및 등록 중..."
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install -y python3.12 python3.12-venv python3.12-dev python3-pip
+
+# python3 기본값을 3.12로 설정
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 2
+sudo update-alternatives --set python3 /usr/bin/python3.12
+
+# pip도 최신화
+echo "⬆️ pip 업그레이드 중..."
+python3 -m ensurepip --upgrade
+python3 -m pip install --upgrade pip
+
 # 1. 프론트엔드 설정
 echo "🔧 [1/3] 프론트엔드 설치 중..."
 cd frontend
@@ -17,19 +38,18 @@ cd ..
 # 3. AI 서버 설정
 echo "🔧 [3/3] AI 서버 설정 중..."
 cd ai-server
-
-# Python 3.12.8 환경 준비
-sudo apt update
-sudo apt install -y python3.12 python3.12-venv python3.12-dev python3-pip
-
-# 가상환경 생성 및 활성화
-python3.12 -m venv venv || { echo "❌ 가상환경 생성 실패"; exit 1; }
+python3 -m venv venv || { echo "❌ 가상환경 생성 실패"; exit 1; }
 source venv/bin/activate || { echo "❌ 가상환경 활성화 실패"; exit 1; }
 
-# pip 설치 및 requirements 설치
+# requirements 설치 (버전 존재 확인도 필요)
+echo "📦 requirements.txt 설치 중..."
+if grep -q "anyio==4.9.0" requirements.txt; then
+  echo "⚠️ anyio==4.9.0은 존재하지 않으므로 4.6.2로 자동 교체"
+  sed -i 's/anyio==4.9.0/anyio==4.6.2/' requirements.txt
+fi
+
 pip install --upgrade pip
 pip install -r requirements.txt || { echo "❌ requirements.txt 설치 실패"; exit 1; }
-
 cd ..
 
 echo "✅ 초기 설정 완료!"
