@@ -9,11 +9,13 @@ import {
   UserInfo 
 } from '../types/auth';
 import { createClient } from '@supabase/supabase-js';
-import { encryptResidentNumber } from '../utils/encryption';
+import { encryptResidentNumber, encrypt } from '../utils/encryption';
 import { config, getDynamicConfig } from '../config/environment';
+import { BlockchainService } from './blockchain.service';
 import axios from 'axios';
 
 const router = Router();
+const bc     = new BlockchainService();
 
 // 회원가입
 router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response<ApiResponse>) => {
@@ -588,9 +590,10 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
   }
 });
 
-// 이메일 인증 완료 후 사용자 생성
+// 이메일 인증 완료 후 사용자, 지갑 생성 및 DB 저장
 router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => {
   try {
+    // 인증 토큰 검사
     const authHeader = req.headers.authorization;
     if (!authHeader) {
       return res.status(401).json({
@@ -605,7 +608,7 @@ router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => 
     console.log('=== 사용자 생성 시작 ===');
     console.log('요청 데이터:', { name, resident_number: !!resident_number, password_hash, password: !!password });
 
-    // 토큰으로 사용자 정보 조회
+    // Supabase Auth에서 토큰으로 사용자 정보 조회
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
@@ -645,6 +648,11 @@ router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => 
       }
     }
 
+    // on-demand 지갑 생성 (Hardhat Localhost 에 10 000 ETH 충전된 계정)
+    const { address, privateKey } = await bc.createUserWallet();
+    // 개인키 AES 암호화
+    const encryptedKey = encrypt(privateKey);
+
     // 이미 사용자가 데이터베이스에 있는지 확인
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
@@ -669,7 +677,8 @@ router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => 
         email: user.email,
         name,
         resident_number_encrypted: encryptedResidentNumber,
-        wallet_address: '',
+        wallet_address:             address,
+        private_key_encrypted:      encryptedKey,
         password_hash: passwordHash,
         created_at: new Date().toISOString()
       };
@@ -755,6 +764,10 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
       }
     }
 
+    // 지갑 생성
+    const { address, privateKey } = await bc.createUserWallet();
+    const encryptedKey = encrypt(privateKey);
+
     // 데이터베이스에 사용자 정보 저장
     const { error: insertError } = await supabase
       .from('users')
@@ -763,7 +776,8 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
         email: data.user.email,
         name,
         resident_number_encrypted: encryptedResidentNumber,
-        wallet_address: '',
+        wallet_address: address,
+        private_key_encrypted: encryptedKey,
         password_hash: passwordHash,
         created_at: new Date().toISOString()
       }]);
