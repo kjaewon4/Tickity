@@ -11,6 +11,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { encryptResidentNumber } from '../utils/encryption';
 import { config, getDynamicConfig } from '../config/environment';
+import axios from 'axios';
 
 const router = Router();
 
@@ -29,10 +30,42 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
     }
 
     // 주민번호 형식 검증
-    if (!/^\d{7}$/.test(resident_number)) {
+    if (!/^[0-9]{7}$/.test(resident_number)) {
       return res.status(400).json({
         success: false,
         error: '주민번호는 7자리 숫자로 입력해주세요.'
+      });
+    }
+
+    // 이메일 유효성 검증 (Mailboxlayer)
+    const mailboxlayerApiKeys = [
+      process.env.MAILBOXLAYER_API_KEY1,
+      process.env.MAILBOXLAYER_API_KEY2,
+      process.env.MAILBOXLAYER_API_KEY3
+    ];
+    let mailboxRes, mailboxError;
+    for (let i = 0; i < mailboxlayerApiKeys.length; i++) {
+      try {
+        const mailboxlayerUrl = `http://apilayer.net/api/check?access_key=${mailboxlayerApiKeys[i]}&email=${encodeURIComponent(email.trim())}&smtp=1&format=1`;
+        mailboxRes = await axios.get(mailboxlayerUrl);
+        mailboxError = null;
+        break; // 성공하면 반복 종료
+      } catch (err) {
+        mailboxError = err;
+        // 2번째 키로 재시도
+      }
+    }
+    if (mailboxError || !mailboxRes) {
+      return res.status(500).json({
+        success: false,
+        error: '이메일 유효성 검증 중 오류가 발생했습니다.'
+      });
+    }
+    const { format_valid, smtp_check, mx_found } = mailboxRes.data;
+    if (!format_valid || !smtp_check || !mx_found) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 이메일 주소입니다. 올바른 이메일을 입력해주세요.'
       });
     }
 
@@ -747,6 +780,86 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
     const dynamicConfig = getDynamicConfig(req);
     console.error('이메일 인증 확인 오류:', error);
     res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=confirmation_failed`);
+  }
+});
+
+// 이메일 유효성 검증 (MailboxLayer API 사용)
+router.post('/validate-email', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: '이메일 주소를 입력해주세요.'
+      });
+    }
+
+    // 이메일 형식 기본 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({
+        success: false,
+        data: { valid: false, message: '올바른 이메일 형식이 아닙니다.' }
+      });
+    }
+
+    // MailboxLayer API를 사용한 이메일 유효성 검증
+    const mailboxlayerApiKeys = [
+      process.env.MAILBOXLAYER_API_KEY1,
+      process.env.MAILBOXLAYER_API_KEY2,
+      process.env.MAILBOXLAYER_API_KEY3
+    ];
+    
+    let mailboxRes, mailboxError;
+    for (let i = 0; i < mailboxlayerApiKeys.length; i++) {
+      if (!mailboxlayerApiKeys[i]) continue;
+      
+      console.log(`API 키 ${i + 1} 사용:`, mailboxlayerApiKeys[i]);
+      
+      try {
+        const mailboxlayerUrl = `http://apilayer.net/api/check?access_key=${mailboxlayerApiKeys[i]}&email=${encodeURIComponent(email.trim())}&smtp=1&format=1`;
+        mailboxRes = await axios.get(mailboxlayerUrl);
+        mailboxError = null;
+        break; // 성공하면 반복 종료
+      } catch (err) {
+        mailboxError = err;
+        console.log(`API 키 ${i + 1} 실패:`, err);
+        // 다음 키로 재시도
+      }
+    }
+
+    if (mailboxError || !mailboxRes) {
+      console.error('MailboxLayer API 오류:', mailboxError);
+      return res.status(500).json({
+        success: false,
+        error: '이메일 유효성 검증 중 오류가 발생했습니다.'
+      });
+    }
+
+    const { format_valid, smtp_check, mx_found } = mailboxRes.data;
+    
+    if (!format_valid || !smtp_check || !mx_found) {
+      return res.status(200).json({
+        success: true,
+        data: { 
+          valid: false, 
+          message: '유효하지 않은 이메일 주소입니다. 올바른 이메일을 입력해주세요.' 
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { valid: true }
+    });
+
+  } catch (error) {
+    console.error('이메일 유효성 검증 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '이메일 유효성 검증 중 오류가 발생했습니다.'
+    });
   }
 });
 

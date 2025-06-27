@@ -119,6 +119,14 @@ class ApiClient {
       method: 'GET',
     });
   }
+
+  // 이메일 유효성 검증 (MailboxLayer API 사용)
+  async validateEmail(email: string): Promise<ApiResponse<{ valid: boolean; message?: string }>> {
+    return this.request<{ valid: boolean; message?: string }>('/auth/validate-email', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL); 
