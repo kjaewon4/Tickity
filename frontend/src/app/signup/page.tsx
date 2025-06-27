@@ -1,28 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
-import { SignupRequest } from '@/types/auth';
 import Link from 'next/link';
 import { apiClient } from '@/lib/apiClient';
-
-// 동적으로 Supabase 클라이언트 생성
-const createSupabaseClient = () => {
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-  
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true
-      }
-    }
-  );
-};
 
 export default function SignupPage() {
   const router = useRouter();
@@ -33,44 +14,91 @@ export default function SignupPage() {
   const [residentNumber, setResidentNumber] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
-  const [isValidating, setIsValidating] = useState<boolean>(false);
   const [isSigningUp, setIsSigningUp] = useState<boolean>(false);
+  
+  // 이메일 중복 체크 관련 상태
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'error'>('idle');
+  const [emailMessage, setEmailMessage] = useState<string>('');
 
   // 주민번호 형식 검증
   const validateResidentNumber = (number: string): boolean => {
     return /^\d{7}$/.test(number);
   };
 
-  // 이메일 유효성 검증
-  const validateEmail = async (email: string): Promise<boolean> => {
+  // 이메일 중복 체크 함수
+  const checkEmailAvailability = async (emailToCheck: string): Promise<void> => {
+    if (!emailToCheck || !emailToCheck.includes('@')) {
+      setEmailStatus('idle');
+      setEmailMessage('');
+      return;
+    }
+
+    setEmailStatus('checking');
+    setEmailMessage('이메일 확인 중...');
+
     try {
-      setIsValidating(true);
-      const response = await apiClient.validateEmail(email);
-      
-      if (response.success && response.data) {
-        if (response.data.valid) {
-          return true;
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/check-email/${encodeURIComponent(emailToCheck.trim())}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        if (result.data.exists) {
+          setEmailStatus('taken');
+          setEmailMessage('이미 가입된 이메일입니다.');
         } else {
-          setError(response.data.message || '유효하지 않은 이메일 주소입니다.');
-          return false;
+          setEmailStatus('available');
+          setEmailMessage('사용 가능한 이메일입니다.');
         }
       } else {
-        setError('이메일 유효성 검증 중 오류가 발생했습니다.');
-        return false;
+        setEmailStatus('error');
+        setEmailMessage('이메일 확인 중 오류가 발생했습니다.');
       }
     } catch (error) {
-      console.error('이메일 유효성 검증 오류:', error);
-      setError('이메일 유효성 검증 중 오류가 발생했습니다.');
-      return false;
-    } finally {
-      setIsValidating(false);
+      console.error('이메일 중복 체크 오류:', error);
+      setEmailStatus('error');
+      setEmailMessage('이메일 확인 중 오류가 발생했습니다.');
     }
   };
+
+  // 이메일 변경 시 디바운스된 중복 체크
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (email) {
+        checkEmailAvailability(email);
+      } else {
+        setEmailStatus('idle');
+        setEmailMessage('');
+      }
+    }, 500); // 500ms 디바운스
+
+    return () => clearTimeout(timeoutId);
+  }, [email]);
 
   // 일반 이메일 회원가입
   const handleSignup = async (): Promise<void> => {
     setError('');
     setSuccess('');
+    
+    // 이메일 중복 체크
+    if (emailStatus === 'taken') {
+      setError('이미 가입된 이메일입니다. 다른 이메일을 사용하거나 로그인해주세요.');
+      return;
+    }
+    
+    if (emailStatus === 'checking') {
+      setError('이메일 확인 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    
+    if (emailStatus === 'error') {
+      setError('이메일 확인에 실패했습니다. 다시 시도해주세요.');
+      return;
+    }
     
     if (password !== passwordCheck) {
       setError('비밀번호가 일치하지 않습니다.');
@@ -88,55 +116,44 @@ export default function SignupPage() {
     try {
       setIsSigningUp(true);
       
-      // 이메일 유효성 검증
-      const isEmailValid = await validateEmail(email.trim());
-      if (!isEmailValid) {
-        return;
-      }
-      
-      const supabase = createSupabaseClient();
-      
-      // 현재 origin을 기반으로 이메일 리다이렉트 URL 설정
-      const currentOrigin = window.location.origin;
-      const emailRedirectUrl = `${currentOrigin}/confirm-email`;
-      
       console.log('=== 프론트엔드 회원가입 시작 ===');
-      console.log('Current Origin:', currentOrigin);
-      console.log('Email Redirect URL:', emailRedirectUrl);
+      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL);
 
-      // Supabase Auth로 직접 회원가입 (이메일 인증 포함)
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          data: {
-            name: name.trim(),
-            resident_number: residentNumber  // 주민번호 7자리
-          },
-          emailRedirectTo: emailRedirectUrl
-        }
+      // 백엔드 API를 통해 회원가입
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          name: name.trim(),
+          resident_number: residentNumber
+        })
       });
 
-      if (signUpError) {
-        console.error('회원가입 오류:', signUpError);
-        setError(signUpError.message);
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('회원가입 오류:', result);
+        
+        // Rate limit 에러 처리
+        if (response.status === 429) {
+          setError('이메일 전송이 너무 많습니다. 잠시 후 다시 시도해주세요. (1-2분 후)');
+        } else {
+          setError(result.error || '회원가입 중 오류가 발생했습니다.');
+        }
         return;
       }
 
-      if (data.user && data.session) {
-        // 이메일 인증이 필요하지 않은 경우 (즉시 인증됨)
-        setSuccess('회원가입이 완료되었습니다!');
-        setTimeout(() => {
-          router.replace('/login');
-        }, 2000);
-      } else if (data.user && !data.session) {
-        // 이메일 인증이 필요한 경우
-        setSuccess('회원가입이 완료되었습니다! 이메일을 확인하여 인증을 완료해주세요.');
+      if (result.success) {
+        setSuccess(result.message || '회원가입이 완료되었습니다! 이메일을 확인하여 인증을 완료해주세요.');
         setTimeout(() => {
           router.replace('/login');
         }, 5000);
       } else {
-        setError('회원가입 중 오류가 발생했습니다.');
+        setError(result.error || '회원가입 중 오류가 발생했습니다.');
       }
     } catch (error) {
       console.error('회원가입 오류:', error);
@@ -178,6 +195,39 @@ export default function SignupPage() {
     setResidentNumber(value.slice(0, 7));
   };
 
+  // 이메일 상태에 따른 스타일 클래스
+  const getEmailInputClass = (): string => {
+    const baseClass = "w-full mb-2 p-2 border rounded";
+    switch (emailStatus) {
+      case 'available':
+        return `${baseClass} border-green-500 bg-green-50`;
+      case 'taken':
+        return `${baseClass} border-red-500 bg-red-50`;
+      case 'checking':
+        return `${baseClass} border-yellow-500 bg-yellow-50`;
+      case 'error':
+        return `${baseClass} border-red-500 bg-red-50`;
+      default:
+        return baseClass;
+    }
+  };
+
+  // 이메일 상태에 따른 메시지 색상
+  const getEmailMessageClass = (): string => {
+    switch (emailStatus) {
+      case 'available':
+        return 'text-green-600 text-sm';
+      case 'taken':
+        return 'text-red-600 text-sm';
+      case 'checking':
+        return 'text-yellow-600 text-sm';
+      case 'error':
+        return 'text-red-600 text-sm';
+      default:
+        return 'text-gray-600 text-sm';
+    }
+  };
+
   if (success) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
@@ -203,13 +253,39 @@ export default function SignupPage() {
           value={name}
           onChange={handleNameChange}
         />
-        <input
-          className="w-full mb-2 p-2 border rounded"
-          type="email"
-          placeholder="이메일"
-          value={email}
-          onChange={handleEmailChange}
-        />
+        <div className="relative">
+          <input
+            className={getEmailInputClass()}
+            type="email"
+            placeholder="이메일"
+            value={email}
+            onChange={handleEmailChange}
+          />
+          {emailStatus === 'checking' && (
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+            </div>
+          )}
+          {emailStatus === 'available' && (
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          )}
+          {emailStatus === 'taken' && (
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <svg className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          )}
+        </div>
+        {emailMessage && (
+          <div className={getEmailMessageClass()}>
+            {emailMessage}
+          </div>
+        )}
         <input
           className="w-full mb-2 p-2 border rounded"
           type="text"
@@ -237,18 +313,26 @@ export default function SignupPage() {
         />
         <button
           className={`w-full py-2 rounded font-semibold ${
-            isValidating || isSigningUp 
+            isSigningUp || emailStatus === 'taken' || emailStatus === 'checking'
               ? 'bg-gray-400 cursor-not-allowed' 
               : 'bg-blue-600 hover:bg-blue-700'
           } text-white`}
           onClick={handleSignup}
-          disabled={isValidating || isSigningUp}
+          disabled={isSigningUp || emailStatus === 'taken' || emailStatus === 'checking'}
         >
-          {isValidating ? '이메일 검증 중...' : 
-           isSigningUp ? '회원가입 중...' : 
-           '이메일로 회원가입'}
+          {isSigningUp ? '회원가입 중...' : '회원가입'}
         </button>
-        {error && <div className="text-red-500 mt-2">{error}</div>}
+        {error && (
+          <div className="text-red-500 mt-2">
+            {error}
+            {error.includes('rate limit') && (
+              <div className="text-sm mt-1">
+                <p>• 다른 이메일 주소로 시도해보세요</p>
+                <p>• 1-2분 후 다시 시도해보세요</p>
+              </div>
+            )}
+          </div>
+        )}
         
         <div className="mt-4 text-center">
           <span className="text-gray-600">이미 계정이 있으신가요? </span>
