@@ -24,8 +24,6 @@ export default function ConfirmEmail() {
     const errorCode = params.get('error_code');
     const errorDescription = params.get('error_description');
 
-    console.log('URL fragment 파라미터:', { error, errorCode, errorDescription });
-
     // 에러가 있는 경우
     if (error) {
       setStatus('error');
@@ -50,9 +48,6 @@ export default function ConfirmEmail() {
     const fragmentAccessToken = params.get('access_token');
     const fragmentRefreshToken = params.get('refresh_token');
 
-    console.log('URL 파라미터:', { token_hash, token, type, access_token: !!access_token, refresh_token: !!refresh_token });
-    console.log('URL fragment 토큰:', { fragmentToken, fragmentType, fragmentAccessToken: !!fragmentAccessToken, fragmentRefreshToken: !!fragmentRefreshToken });
-
     // 토큰이 있는 경우 (이미 인증됨) - query parameter 또는 fragment에서 확인
     if ((access_token && refresh_token) || (fragmentAccessToken && fragmentRefreshToken)) {
       const finalAccessToken = access_token || fragmentAccessToken;
@@ -69,7 +64,6 @@ export default function ConfirmEmail() {
           const { data: { user }, error: userError } = await supabase.auth.getUser();
           
           if (userError || !user) {
-            console.error('사용자 정보 조회 오류:', userError);
             setStatus('error');
             setMessage('사용자 정보를 찾을 수 없습니다.');
             return;
@@ -101,12 +95,10 @@ export default function ConfirmEmail() {
               router.push('/login?message=email_confirmed');
             }, 3000);
           } else {
-            console.error('사용자 정보 저장 실패:', response.status, response.statusText);
             setStatus('error');
             setMessage('사용자 정보 저장에 실패했습니다.');
           }
         } catch (error) {
-          console.error('사용자 정보 저장 오류:', error);
           setStatus('error');
           setMessage('사용자 정보 저장 중 오류가 발생했습니다.');
         }
@@ -130,7 +122,6 @@ export default function ConfirmEmail() {
           });
 
           if (error) {
-            console.error('이메일 인증 오류:', error);
             setStatus('error');
             setMessage('이메일 인증에 실패했습니다.');
             return;
@@ -173,7 +164,6 @@ export default function ConfirmEmail() {
           }
 
         } catch (error) {
-          console.error('이메일 인증 오류:', error);
           setStatus('error');
           setMessage('이메일 인증 중 오류가 발생했습니다.');
         }

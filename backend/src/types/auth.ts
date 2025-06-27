@@ -4,6 +4,7 @@ export interface SignupRequest {
   password: string;
   name: string;
   dateOfBirth: string;
+  resident_number: string;
 }
 
 // 로그인 요청 타입
