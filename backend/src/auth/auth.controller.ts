@@ -11,6 +11,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { encryptResidentNumber } from '../utils/encryption';
 import { config, getDynamicConfig } from '../config/environment';
+import axios from 'axios';
 
 const router = Router();
 
@@ -29,10 +30,43 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
     }
 
     // 주민번호 형식 검증
-    if (!/^\d{7}$/.test(resident_number)) {
+    if (!/^[0-9]{7}$/.test(resident_number)) {
       return res.status(400).json({
         success: false,
         error: '주민번호는 7자리 숫자로 입력해주세요.'
+      });
+    }
+
+    // 이메일 유효성 검증 (Mailboxlayer)
+    const mailboxlayerApiKeys = [
+      process.env.MAILBOXLAYER_API_KEY1,
+      process.env.MAILBOXLAYER_API_KEY2
+    ];
+    let mailboxRes, mailboxError;
+    for (let i = 0; i < mailboxlayerApiKeys.length; i++) {
+      try {
+        const mailboxlayerUrl = `https://api.apilayer.com/email_verification/check?email=${encodeURIComponent(email.trim())}`;
+        mailboxRes = await axios.get(mailboxlayerUrl, {
+          headers: { 'apikey': mailboxlayerApiKeys[i] }
+        });
+        mailboxError = null;
+        break; // 성공하면 반복 종료
+      } catch (err) {
+        mailboxError = err;
+        // 2번째 키로 재시도
+      }
+    }
+    if (mailboxError || !mailboxRes) {
+      return res.status(500).json({
+        success: false,
+        error: '이메일 유효성 검증 중 오류가 발생했습니다.'
+      });
+    }
+    const { format_valid, smtp_check, mx_found } = mailboxRes.data;
+    if (!format_valid || !smtp_check || !mx_found) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 이메일 주소입니다. 올바른 이메일을 입력해주세요.'
       });
     }
 
@@ -451,12 +485,26 @@ router.put('/user', async (req: Request, res: Response<ApiResponse>) => {
       });
     }
 
+    // 주민번호 암호화
+    let encryptedResidentNumber = 'not_provided'; // 기본값 설정 (NOT NULL 제약조건 때문)
+    if (resident_number) {
+      try {
+        encryptedResidentNumber = encryptResidentNumber(resident_number);
+      } catch (encryptError) {
+        console.error('주민번호 암호화 오류:', encryptError);
+        return res.status(400).json({
+          success: false,
+          error: '주민번호 형식이 올바르지 않습니다.'
+        });
+      }
+    }
+
     // 사용자 정보 업데이트
     const { error: updateError } = await supabase
       .from('users')
       .update({
         name,
-        resident_number_encrypted: resident_number
+        resident_number_encrypted: encryptedResidentNumber
       })
       .eq('id', user.id);
 
@@ -513,7 +561,7 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
         id: user.id,
         email: user.email,
         name,
-        resident_number_encrypted: '', // date_of_birth 대신 resident_number_encrypted 사용
+        resident_number_encrypted: 'not_provided', // 기본값 설정 (NOT NULL 제약조건 때문)
         wallet_address: '',
         password_hash: 'google_oauth',
         created_at: new Date().toISOString()
@@ -555,21 +603,28 @@ router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => 
     const token = authHeader.replace('Bearer ', '');
     const { name, resident_number, password_hash, password } = req.body;
 
+    console.log('=== 사용자 생성 시작 ===');
+    console.log('요청 데이터:', { name, resident_number: !!resident_number, password_hash, password: !!password });
+
     // 토큰으로 사용자 정보 조회
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
+      console.error('토큰 인증 오류:', authError);
       return res.status(401).json({
         success: false,
         error: '유효하지 않은 토큰입니다.'
       });
     }
 
+    console.log('사용자 인증 성공:', user.id);
+
     // 주민번호 암호화
-    let encryptedResidentNumber = '';
+    let encryptedResidentNumber = 'not_provided'; // 기본값 설정 (NOT NULL 제약조건 때문)
     if (resident_number) {
       try {
         encryptedResidentNumber = encryptResidentNumber(resident_number);
+        console.log('주민번호 암호화 성공');
       } catch (encryptError) {
         console.error('주민번호 암호화 오류:', encryptError);
         return res.status(400).json({
@@ -606,27 +661,43 @@ router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => 
       });
     }
 
+    console.log('기존 사용자 확인:', existingUser ? '존재함' : '존재하지 않음');
+
     // 사용자가 없으면 데이터베이스에 사용자 정보 저장
     if (!existingUser) {
+      const userData = {
+        id: user.id,
+        email: user.email,
+        name,
+        resident_number_encrypted: encryptedResidentNumber,
+        wallet_address: '',
+        password_hash: passwordHash,
+        created_at: new Date().toISOString()
+      };
+
+      console.log('저장할 사용자 데이터:', { ...userData, resident_number_encrypted: userData.resident_number_encrypted });
+
       const { error: insertError } = await supabase
         .from('users')
-        .insert([{
-          id: user.id,
-          email: user.email,
-          name,
-          resident_number_encrypted: encryptedResidentNumber,
-          wallet_address: '',
-          password_hash: passwordHash,
-          created_at: new Date().toISOString()
-        }]);
+        .insert([userData]);
 
       if (insertError) {
         console.error('사용자 정보 저장 오류:', insertError);
+        console.error('오류 상세:', {
+          code: insertError.code,
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint
+        });
         return res.status(500).json({
           success: false,
           error: '사용자 정보 저장 중 오류가 발생했습니다.'
         });
       }
+
+      console.log('사용자 정보 저장 성공');
+    } else {
+      console.log('사용자가 이미 존재하므로 저장 건너뜀');
     }
 
     res.json({
@@ -675,7 +746,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
     const passwordHash = userMetadata?.password_hash || '';
 
     // 주민번호 암호화
-    let encryptedResidentNumber = '';
+    let encryptedResidentNumber = 'not_provided'; // 기본값 설정 (NOT NULL 제약조건 때문)
     if (residentNumber) {
       try {
         encryptedResidentNumber = encryptResidentNumber(residentNumber);
