@@ -1,5 +1,6 @@
 node_modules
 .env
+**/.env  
 
 # Hardhat files
 /cache
@@ -18,3 +19,18 @@ ignition/deployments/chain-31337
 
 # Python 가상환경
 venv/
+<<<<<<< main
+=======
+
+# Python 캐시 파일
+__pycache__/
+*.py[cod]
+
+# deployed 스크립트가 생성하는 주소 파일
+blockchain/.deployed
+
+# Build outputs
+dist/                   
+build/
+
+>>>>>>> main
