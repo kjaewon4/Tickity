@@ -6,10 +6,22 @@ import { createClient } from '@supabase/supabase-js';
 import { SignupRequest } from '@/types/auth';
 import Link from 'next/link';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// 동적으로 Supabase 클라이언트 생성
+const createSupabaseClient = () => {
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true
+      }
+    }
+  );
+};
 
 export default function SignupPage() {
   const router = useRouter();
@@ -45,6 +57,16 @@ export default function SignupPage() {
     }
     
     try {
+      const supabase = createSupabaseClient();
+      
+      // 현재 origin을 기반으로 이메일 리다이렉트 URL 설정
+      const currentOrigin = window.location.origin;
+      const emailRedirectUrl = `${currentOrigin}/confirm-email`;
+      
+      console.log('=== 프론트엔드 회원가입 시작 ===');
+      console.log('Current Origin:', currentOrigin);
+      console.log('Email Redirect URL:', emailRedirectUrl);
+
       // Supabase Auth로 직접 회원가입 (이메일 인증 포함)
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
@@ -54,7 +76,7 @@ export default function SignupPage() {
             name: name.trim(),
             resident_number: residentNumber  // 주민번호 7자리
           },
-          emailRedirectTo: `${window.location.origin}/confirm-email`
+          emailRedirectTo: emailRedirectUrl
         }
       });
 
@@ -154,7 +176,7 @@ export default function SignupPage() {
           maxLength={7}
         />
         <div className="text-xs text-gray-500 mb-2">
-          생년월일 6자리 + 성별 1자리 (예: 9501011)
+          생년월일 6자리 + 성별 1자리 (예: 9501013)
         </div>
         <input
           className="w-full mb-2 p-2 border rounded"
