@@ -57,6 +57,16 @@ export const analyzeUserIntent = (message: string): {
     };
   }
   
+  // 취소 관련 (가장 구체적인 조건을 먼저 확인)
+  if (lowerMessage.includes('취소') || lowerMessage.includes('환불') ||
+      lowerMessage.includes('캔슬') || lowerMessage.includes('cancel')) {
+    return {
+      intent: 'cancellation',
+      needsData: true,
+      dataType: 'tickets'
+    };
+  }
+  
   // 내 티켓 관련 (더 구체적인 조건을 먼저 확인)
   if (lowerMessage.includes('내 티켓') || lowerMessage.includes('예매 내역') ||
       lowerMessage.includes('구매한') || lowerMessage.includes('마이페이지') ||
@@ -200,6 +210,23 @@ const generateMockResponse = async (
     const concertTable = tableHeader + tableRows + tableFooter;
     message = `현재 예매 가능한 콘서트 목록입니다:<br/><br/>${concertTable}`;
     actionType = 'show_concerts';
+  } else if (intent === 'cancellation' && userId) {
+    const tickets = await getUserTickets(userId);
+    const activeTickets = tickets.filter(ticket => !ticket.canceled_at && !ticket.is_used);
+    
+    if (activeTickets.length > 0) {
+      const ticketList = activeTickets.map((ticket, index) => 
+        `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🪑 ${ticket.seat?.seat_number || '좌석 정보 없음'} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price.toLocaleString()}원\n   📅 ${new Date(ticket.created_at).toLocaleDateString('ko-KR')} 예매`
+      ).join('\n\n');
+      
+      message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
+    } else {
+      message = `현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!`;
+    }
+    actionType = 'show_tickets';
+  } else if (intent === 'cancellation' && !userId) {
+    message = `티켓 취소를 위해서는 로그인이 필요합니다. 🔐\n\n로그인 후 다시 시도해 주세요.\n\n취소 정책:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가`;
+    actionType = 'show_tickets';
   } else if (intent === 'my_tickets' && userId) {
     const tickets = await getUserTickets(userId);
     if (tickets.length > 0) {
@@ -328,9 +355,13 @@ export const generateChatResponse = async (
     let suggestions: string[] = [];
 
     // userId가 반드시 필요한 intent인데 userId가 없는 경우 안내 메시지 반환
-    if (intent === 'my_tickets' && !userId) {
+    if ((intent === 'my_tickets' || intent === 'cancellation') && !userId) {
+      const message = intent === 'cancellation' 
+        ? '티켓 취소를 위해서는 로그인이 필요합니다. 🔐\n\n로그인 후 다시 시도해 주세요.\n\n취소 정책:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가'
+        : '이 기능을 이용하려면 로그인이 필요합니다. 로그인 후 다시 시도해 주세요.';
+      
       return {
-        message: '이 기능을 이용하려면 로그인이 필요합니다. 로그인 후 다시 시도해 주세요.',
+        message,
         suggestions: ['로그인하기', '회원가입'],
         needsUserInfo: true,
         actionType: 'show_tickets'
@@ -374,6 +405,29 @@ export const generateChatResponse = async (
       }
       suggestions = generateSuggestions(intent);
       actionType = 'show_concerts';
+      return {
+        message,
+        suggestions,
+        needsUserInfo: false,
+        actionType
+      };
+    }
+
+    // 취소 요청은 AI를 거치지 않고 직접 응답
+    if (intent === 'cancellation' && userId) {
+      const tickets = await getUserTickets(userId);
+      const activeTickets = tickets.filter(ticket => !ticket.canceled_at && !ticket.is_used);
+      
+      if (activeTickets.length === 0) {
+        message = '현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!';
+      } else {
+        const ticketList = activeTickets.map((ticket, index) => {
+          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${ticket.seat?.seat_number} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price.toLocaleString()}원\n   - 예매일: ${new Date(ticket.created_at).toLocaleDateString('ko-KR')}`;
+        }).join('\n\n');
+        message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
+      }
+      suggestions = generateSuggestions(intent);
+      actionType = 'show_tickets';
       return {
         message,
         suggestions,
@@ -468,6 +522,13 @@ const generateSuggestions = (intent: string): string[] => {
         '티켓 취소하고 싶어',
         '환불 정책이 궁금해',
         '티켓 사용 방법 알려줘'
+      ];
+    
+    case 'cancellation':
+      return [
+        '환불 정책 자세히 알려줘',
+        '취소 수수료가 있어?',
+        '고객센터 연결해줘'
       ];
     
     default:

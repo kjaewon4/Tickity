@@ -257,11 +257,6 @@ export default function ChatbotPage() {
               </form>
             </div>
           </div>
-
-          {/* 사용자 정보 (테스트용) */}
-          <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
-            테스트 사용자: 김민수 ({userId})
-          </div>
         </div>
       </div>
     </div>

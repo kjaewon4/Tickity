@@ -238,6 +238,9 @@ export const markTicketCancelled = async (
 // 온체인: 티켓 재오픈
 // ───────────────────────────────────────────────────────────
 export const reopenOnChain = async (tokenId: number) => {
+  if (!contract) {
+    throw new Error('블록체인 연결이 설정되지 않았습니다.');
+  }
   const tx = await contract.reopenTicket(tokenId);
   await tx.wait();
 };
