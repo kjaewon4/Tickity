@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { SignupRequest } from '@/types/auth';
 import Link from 'next/link';
+import { apiClient } from '@/lib/apiClient';
 
 // 동적으로 Supabase 클라이언트 생성
 const createSupabaseClient = () => {
@@ -32,10 +33,38 @@ export default function SignupPage() {
   const [residentNumber, setResidentNumber] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
+  const [isValidating, setIsValidating] = useState<boolean>(false);
+  const [isSigningUp, setIsSigningUp] = useState<boolean>(false);
 
   // 주민번호 형식 검증
   const validateResidentNumber = (number: string): boolean => {
     return /^\d{7}$/.test(number);
+  };
+
+  // 이메일 유효성 검증
+  const validateEmail = async (email: string): Promise<boolean> => {
+    try {
+      setIsValidating(true);
+      const response = await apiClient.validateEmail(email);
+      
+      if (response.success && response.data) {
+        if (response.data.valid) {
+          return true;
+        } else {
+          setError(response.data.message || '유효하지 않은 이메일 주소입니다.');
+          return false;
+        }
+      } else {
+        setError('이메일 유효성 검증 중 오류가 발생했습니다.');
+        return false;
+      }
+    } catch (error) {
+      console.error('이메일 유효성 검증 오류:', error);
+      setError('이메일 유효성 검증 중 오류가 발생했습니다.');
+      return false;
+    } finally {
+      setIsValidating(false);
+    }
   };
 
   // 일반 이메일 회원가입
@@ -57,6 +86,14 @@ export default function SignupPage() {
     }
     
     try {
+      setIsSigningUp(true);
+      
+      // 이메일 유효성 검증
+      const isEmailValid = await validateEmail(email.trim());
+      if (!isEmailValid) {
+        return;
+      }
+      
       const supabase = createSupabaseClient();
       
       // 현재 origin을 기반으로 이메일 리다이렉트 URL 설정
@@ -108,12 +145,18 @@ export default function SignupPage() {
       } else {
         setError('회원가입 중 오류가 발생했습니다.');
       }
+    } finally {
+      setIsSigningUp(false);
     }
   };
 
   // 이벤트 핸들러 타입 정의
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setEmail(e.target.value);
+    // 이메일 변경 시 에러 메시지 초기화
+    if (error && error.includes('이메일')) {
+      setError('');
+    }
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -193,10 +236,17 @@ export default function SignupPage() {
           onChange={handlePasswordCheckChange}
         />
         <button
-          className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700"
+          className={`w-full py-2 rounded font-semibold ${
+            isValidating || isSigningUp 
+              ? 'bg-gray-400 cursor-not-allowed' 
+              : 'bg-blue-600 hover:bg-blue-700'
+          } text-white`}
           onClick={handleSignup}
+          disabled={isValidating || isSigningUp}
         >
-          이메일로 회원가입
+          {isValidating ? '이메일 검증 중...' : 
+           isSigningUp ? '회원가입 중...' : 
+           '이메일로 회원가입'}
         </button>
         {error && <div className="text-red-500 mt-2">{error}</div>}
         
