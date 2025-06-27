@@ -18,11 +18,20 @@ def extract_embedding_from_image(image_bytes):
     return faces[0].embedding
 
 def extract_embedding_from_video(video_bytes, frame_skip=5):
-    tmp_path = "temp_video.mp4"
-    with open(tmp_path, "wb") as f:
+    tmp_path = "./temp_video.mp4"
+    with open(tmp_path, 'wb') as f:
         f.write(video_bytes)
 
+    import os
+    size = os.path.getsize(tmp_path)
+    print(f"✅ 저장된 파일 크기: {size} bytes")
+
     cap = cv2.VideoCapture(tmp_path)
+    if not cap.isOpened():
+        print("❌ VideoCapture가 열리지 않았습니다.")
+        os.remove(tmp_path)
+        return None
+
     embeddings = []
     frame_idx = 0
 
@@ -45,6 +54,7 @@ def extract_embedding_from_video(video_bytes, frame_skip=5):
     if not embeddings:
         return None
     return np.mean(embeddings, axis=0)
+
 
 def save_embedding(name, embedding):
     path = os.path.join(REGISTERED_FACE_DIR, f"{name}.npy")
