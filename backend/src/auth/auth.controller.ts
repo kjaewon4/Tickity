@@ -11,6 +11,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { encryptResidentNumber } from '../utils/encryption';
 import { config, getDynamicConfig } from '../config/environment';
+import axios from 'axios';
 
 const router = Router();
 
@@ -29,10 +30,43 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
     }
 
     // 주민번호 형식 검증
-    if (!/^\d{7}$/.test(resident_number)) {
+    if (!/^[0-9]{7}$/.test(resident_number)) {
       return res.status(400).json({
         success: false,
         error: '주민번호는 7자리 숫자로 입력해주세요.'
+      });
+    }
+
+    // 이메일 유효성 검증 (Mailboxlayer)
+    const mailboxlayerApiKeys = [
+      process.env.MAILBOXLAYER_API_KEY1,
+      process.env.MAILBOXLAYER_API_KEY2
+    ];
+    let mailboxRes, mailboxError;
+    for (let i = 0; i < mailboxlayerApiKeys.length; i++) {
+      try {
+        const mailboxlayerUrl = `https://api.apilayer.com/email_verification/check?email=${encodeURIComponent(email.trim())}`;
+        mailboxRes = await axios.get(mailboxlayerUrl, {
+          headers: { 'apikey': mailboxlayerApiKeys[i] }
+        });
+        mailboxError = null;
+        break; // 성공하면 반복 종료
+      } catch (err) {
+        mailboxError = err;
+        // 2번째 키로 재시도
+      }
+    }
+    if (mailboxError || !mailboxRes) {
+      return res.status(500).json({
+        success: false,
+        error: '이메일 유효성 검증 중 오류가 발생했습니다.'
+      });
+    }
+    const { format_valid, smtp_check, mx_found } = mailboxRes.data;
+    if (!format_valid || !smtp_check || !mx_found) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 이메일 주소입니다. 올바른 이메일을 입력해주세요.'
       });
     }
 
