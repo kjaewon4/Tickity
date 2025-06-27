@@ -18,6 +18,6 @@
       "supertest"
     ]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "blockchain/artifacts"],
   "exclude": ["node_modules", "dist", "test"]
 } 
