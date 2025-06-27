@@ -1,25 +1,34 @@
-// scripts/deploy.ts
-import 'dotenv/config';               // .env 로드
-import { writeFileSync } from 'fs';   // Node.js 내장
+import { config } from 'dotenv';
+import path from 'path';
+
+// ✅ backend/.env에서 환경변수 로드
+config({ path: path.resolve(__dirname, '../../backend/.env') });
+
+import { writeFileSync } from 'fs';
 import { ethers } from 'hardhat';
 
 async function main() {
+  const admin = process.env.ADMIN_ADDRESS;
+  if (!admin) {
+    throw new Error('❌ .env에 ADMIN_ADDRESS가 없습니다');
+  }
+
   // 1) 배포자 서명자
   const [deployer] = await ethers.getSigners();
   console.log('📡 Deploying contracts with:', deployer.address);
 
-  // 2) FQN을 이용해 Factory 가져오기
+  // 2) 컨트랙트 Factory 생성
   const Factory = await ethers.getContractFactory(
     'contracts/SoulboundTicket.sol:SoulboundTicket'
   );
 
-  // 3) 배포 (constructor 인자로 admin 주소 전달)
-  const sbt = await Factory.deploy(deployer.address);
+  // ✅ 3) 관리자 주소를 constructor에 주입
+  const sbt = await Factory.deploy(admin);
 
-  // 4) v6 방식으로 배포 대기
+  // 4) 배포 완료 대기
   await sbt.waitForDeployment();
 
-  // 5) 주소 조회
+  // 5) 배포된 주소 출력
   const deployedAddress = await sbt.getAddress();
   console.log('✅ SoulboundTicket deployed to:', deployedAddress);
 
