@@ -1,7 +1,72 @@
+'use client';
+
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { apiClient } from "@/lib/apiClient";
+import { UserInfo } from "@/types/auth";
 
 export default function Home() {
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    // 로컬 스토리지에서 토큰 확인
+    const token = localStorage.getItem('accessToken');
+    setAccessToken(token);
+
+    if (token) {
+      // 백엔드 API로 사용자 정보 조회
+      const getUser = async (): Promise<void> => {
+        try {
+          const response = await apiClient.getUserWithToken(token);
+          if (response.success && response.data?.user) {
+            setUser(response.data.user);
+          } else {
+            // 토큰이 유효하지 않으면 제거
+            localStorage.removeItem('accessToken');
+            setAccessToken(null);
+          }
+        } catch (error) {
+          console.error('사용자 정보 조회 오류:', error);
+          localStorage.removeItem('accessToken');
+          setAccessToken(null);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      getUser();
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleLogout = async (): Promise<void> => {
+    try {
+      if (accessToken) {
+        await apiClient.logout(accessToken);
+      }
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      setUser(null);
+      setAccessToken(null);
+    } catch (error) {
+      console.error('로그아웃 오류:', error);
+      // 에러가 발생해도 로컬 상태는 정리
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      setUser(null);
+      setAccessToken(null);
+    }
+  };
+
+  // 사용자 표시 이름 가져오기
+  const getUserDisplayName = (user: UserInfo): string => {
+    return user.name || user.email || '사용자';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       {/* Navigation */}
@@ -26,6 +91,34 @@ export default function Home() {
               >
                 About
               </Link>
+              <Link 
+                href="/chatbot" 
+                className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                챗봇 💬
+              </Link>
+              {!loading && (
+                user ? (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      {getUserDisplayName(user)}
+                    </span>
+                    <button
+                      onClick={handleLogout}
+                      className="text-gray-700 hover:text-red-600 dark:text-gray-300 dark:hover:text-red-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      로그아웃
+                    </button>
+                  </div>
+                ) : (
+                  <Link 
+                    href="/login" 
+                    className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    로그인
+                  </Link>
+                )
+              )}
             </div>
           </div>
         </div>

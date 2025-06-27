@@ -7,31 +7,51 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /// @title Soulbound Ticket
 /// @notice Mint 후에는 전송·승인 불가, 관리자는 얼굴 인증·입장 처리 가능
 contract SoulboundTicket is ERC721, Ownable {
-    uint256 public constant TICKET_PRICE = 0.1 ether;  // 추후에 동적으로 바꿔야 함
-    uint256 public nextTokenId = 1;
+    /// @notice 다음에 발행할 토큰 ID
+    uint256 public nextTokenId;
 
+    /// @notice 수수료 비율 (0.1% = 1 / 1 000)
+    uint256 public constant FEE_NUMERATOR   = 1;
+    uint256 public constant FEE_DENOMINATOR = 1000;
+
+    /// @notice 티켓 정보 구조체
     struct Ticket {
         uint256 concertId;
         string  seatNumber;
         uint256 issuedAt;
-        uint256 price;
+        uint256 price;           // 실제 보관된 금액 (msg.value - fee)
         bool    isUsed;
         bool    isFaceVerified;
         bytes32 faceHash;
     }
 
+    /// @notice 토큰ID → Ticket
     mapping(uint256 => Ticket) public tickets;
+    /// @notice (사용자 주소, 공연ID) 쌍으로 중복 mint 방지
     mapping(address => mapping(uint256 => bool)) public hasMintedForConcert;
+    /// @notice 토큰ID → tokenURI
     mapping(uint256 => string) private _tokenURIs;
 
-    constructor() ERC721("SBTicket", "SBT") Ownable(msg.sender) {}
+    /// @notice 토큰이 취소되었는지 여부 (영구 상태)
+    mapping(uint256 => bool) public isCancelled;
 
+    /// @param _admin 배포 시점에 지정할 관리자 지갑주소
+    constructor(address _admin) ERC721("SBTicket", "SBT") Ownable(_admin) {
+        nextTokenId = 1;
+    }
+
+    /// @notice 새 티켓 민팅 (예매)
+    /// @param concertId   공연 식별자
+    /// @param seatNumber  좌석번호 (예: "A-01")
+    /// @param uri         메타데이터 URI
+    /// @param price       백엔드에서 전달한 티켓 가격 (msg.value 와 동일해야 함)
     function mintTicket(
         uint256 concertId,
-        string memory seatNumber,
-        string memory uri
+        string calldata seatNumber,
+        string calldata uri,
+        uint256 price
     ) external payable {
-        require(msg.value == TICKET_PRICE, unicode"💸 정확한 금액을 전송하세요");
+        require(msg.value == price, unicode"💸 정확한 금액을 전송하세요");
         require(
             !hasMintedForConcert[msg.sender][concertId],
             unicode"⛔ 이미 해당 공연을 mint했습니다"
@@ -40,18 +60,27 @@ contract SoulboundTicket is ERC721, Ownable {
         uint256 id = nextTokenId++;
         _safeMint(msg.sender, id);
         _tokenURIs[id] = uri;
+
+        // 수수료 계산 및 관리자에게 전송
+        uint256 fee = (price * FEE_NUMERATOR) / FEE_DENOMINATOR;
+        (bool sent, ) = payable(owner()).call{ value: fee }("");
+        require(sent, unicode"수수료 전송 실패");
+
+        // 티켓 정보 저장 (net price 저장)
         tickets[id] = Ticket({
             concertId:     concertId,
             seatNumber:    seatNumber,
             issuedAt:      block.timestamp,
-            price:         msg.value,
+            price:         price - fee,
             isUsed:        false,
             isFaceVerified:false,
             faceHash:      bytes32(0)
         });
+
         hasMintedForConcert[msg.sender][concertId] = true;
     }
 
+    /// @notice tokenURI 조회
     function tokenURI(uint256 tokenId)
         public
         view
@@ -65,6 +94,7 @@ contract SoulboundTicket is ERC721, Ownable {
         return _tokenURIs[tokenId];
     }
 
+    /// @notice 얼굴 해시 등록 (관리자 전용)
     function registerFaceHash(uint256 tokenId, bytes32 hash) external onlyOwner {
         require(
             tickets[tokenId].issuedAt != 0,
@@ -77,6 +107,7 @@ contract SoulboundTicket is ERC721, Ownable {
         tickets[tokenId].faceHash = hash;
     }
 
+    /// @notice 얼굴 인증 통과 표시 (관리자 전용)
     function markFaceVerified(uint256 tokenId) external onlyOwner {
         require(
             tickets[tokenId].issuedAt != 0,
@@ -89,6 +120,7 @@ contract SoulboundTicket is ERC721, Ownable {
         tickets[tokenId].isFaceVerified = true;
     }
 
+    /// @notice 입장 처리 (관리자 전용)
     function markAsUsed(uint256 tokenId) external onlyOwner {
         require(
             tickets[tokenId].issuedAt != 0,
@@ -105,29 +137,68 @@ contract SoulboundTicket is ERC721, Ownable {
         tickets[tokenId].isUsed = true;
     }
 
+    /// @notice 티켓이 취소될 때 발생시키는 이벤트
+    /// @param tokenId     취소된 토큰 ID
+    /// @param reopenTime  다시 오픈 가능한 Unix timestamp
+    event TicketCancelled(uint256 indexed tokenId, uint256 reopenTime);
+
+    /// @notice 티켓 취소 (관리자 전용), 12시간 이내 랜덤 재오픈
+    function cancelTicket(uint256 tokenId) external onlyOwner {
+        require(tickets[tokenId].issuedAt != 0, unicode"❌ 존재하지 않는 티켓");
+        require(!isCancelled[tokenId], unicode"⛔ 이미 취소된 티켓");
+        // 1) 상태 변경
+        isCancelled[tokenId] = true;
+
+         // 2) 0 ~ 12시간(43 200초) 내 랜덤 offset 계산
+        uint256 maxDelay = 12 hours; // solidity 단위 사용 가능 (12 * 3600)
+        // keccak256(블록타임, 토큰ID, 블록난이도) → uint256 해시 → 모듈러
+        uint256 randOffset = uint256(
+            keccak256(
+                abi.encodePacked(
+                    block.timestamp,
+                    tokenId,
+                    block.difficulty,
+                    blockhash(block.number - 1)
+                )
+            )
+        ) % maxDelay;
+
+        // 3) 재오픈 시점
+        uint256 reopenTime = block.timestamp + randOffset;
+
+        // 4) 이벤트 발행
+        emit TicketCancelled(tokenId, reopenTime);
+    }
+
+    /// @notice 티켓 재오픈 (관리자 전용)
+    function reopenTicket(uint256 tokenId) external onlyOwner {
+        require(tickets[tokenId].issuedAt != 0, unicode"❌ 존재하지 않는 티켓");
+        require(isCancelled[tokenId], unicode"⛔ 취소된 티켓이 아닙니다");
+        isCancelled[tokenId] = false;
+    }
+
     // ────────────────────────────────────────────
     // 소울바운드: 승인·전송 관련 public/external 함수만 override
     // ────────────────────────────────────────────
 
     function approve(address, uint256) public pure override {
-        revert(unicode"SBT: 승인 불가");
+        revert("SBT: approval disabled");
     }
 
     function setApprovalForAll(address, bool) public pure override {
-        revert(unicode"SBT: 전체 승인 불가");
+        revert("SBT: approval disabled");
     }
 
     function transferFrom(address, address, uint256) public pure override {
-        revert(unicode"SBT: 전송 불가");
+        revert("SBT: transfer disabled");
     }
 
-    /// 4-인자 version만 virtual이므로 이걸 막습니다
     function safeTransferFrom(
         address,
         address,
         uint256,
         bytes memory
     ) public pure override {
-        revert(unicode"SBT: 안전 전송 불가");
+        revert("SBT: transfer disabled");
     }
 }
