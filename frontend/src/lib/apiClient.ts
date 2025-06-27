@@ -36,12 +36,17 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
-      
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        data = { success: false, error: text || 'API 응답이 JSON이 아닙니다.' };
+      }
       if (!response.ok) {
         throw new Error(data.error || 'API 요청 실패');
       }
-      
       return data;
     } catch (error) {
       console.error('API 요청 오류:', error);

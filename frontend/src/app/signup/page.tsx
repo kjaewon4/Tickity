@@ -66,6 +66,7 @@ export default function SignupPage() {
       console.log('=== 프론트엔드 회원가입 시작 ===');
       console.log('Current Origin:', currentOrigin);
       console.log('Email Redirect URL:', emailRedirectUrl);
+      console.log('전송 이메일:', `"${email}"`, 'trimmed:', `"${email.trim()}"`);
 
       // Supabase Auth로 직접 회원가입 (이메일 인증 포함)
       const { data, error: signUpError } = await supabase.auth.signUp({
