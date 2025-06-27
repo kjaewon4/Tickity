@@ -24,7 +24,7 @@ function initAdminWallet() {
   console.log();
 
   // .env 파일 경로
-  const envPath = path.resolve(__dirname, '../.env');
+  const envPath = path.resolve(__dirname, '../../backend/.env');
   let env = '';
   try {
     env = fs.readFileSync(envPath, 'utf-8');
