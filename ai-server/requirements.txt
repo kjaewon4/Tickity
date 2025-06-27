@@ -29,8 +29,8 @@ packaging==25.0
 pillow==11.2.1
 prettytable==3.16.0
 protobuf==6.31.1
-pydantic==2.11.7
-pydantic_core==2.35.1
+pydantic==2.7.1
+pydantic_core==2.18.1
 pyparsing==3.2.3
 python-dateutil==2.9.0.post0
 PyYAML==6.0.2
