@@ -10,15 +10,84 @@ import {
 } from '../types/auth';
 import { createClient } from '@supabase/supabase-js';
 import { encryptResidentNumber } from '../utils/encryption';
+import { config, getDynamicConfig } from '../config/environment';
 
 const router = Router();
 
-// 회원가입 (프론트엔드에서만 처리하도록 비활성화)
+// 회원가입
 router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response<ApiResponse>) => {
-  return res.status(400).json({
-    success: false,
-    error: '회원가입은 프론트엔드에서 처리해주세요. (/signup 페이지 사용)'
-  });
+  try {
+    const { email, password, name, resident_number } = req.body;
+    const dynamicConfig = getDynamicConfig(req);
+
+    // 입력 검증
+    if (!email || !password || !name || !resident_number) {
+      return res.status(400).json({
+        success: false,
+        error: '모든 필드를 입력해주세요.'
+      });
+    }
+
+    // 주민번호 형식 검증
+    if (!/^\d{7}$/.test(resident_number)) {
+      return res.status(400).json({
+        success: false,
+        error: '주민번호는 7자리 숫자로 입력해주세요.'
+      });
+    }
+
+    console.log('=== 회원가입 시작 ===');
+    console.log('Frontend URL:', dynamicConfig.FRONTEND_URL);
+    console.log('Request Origin:', req.headers.origin);
+    console.log('Request Host:', req.headers.host);
+    console.log('Email Redirect To:', `${dynamicConfig.FRONTEND_URL}/confirm-email`);
+
+    // Supabase Auth로 회원가입 (이메일 인증 포함)
+    const signUpOptions = {
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          name: name.trim(),
+          resident_number: resident_number
+        },
+        emailRedirectTo: `${dynamicConfig.FRONTEND_URL}/confirm-email`
+      }
+    };
+
+    console.log('Supabase SignUp Options:', JSON.stringify(signUpOptions, null, 2));
+
+    const { data, error: signUpError } = await supabase.auth.signUp(signUpOptions);
+
+    if (signUpError) {
+      console.error('회원가입 오류:', signUpError);
+      return res.status(400).json({
+        success: false,
+        error: signUpError.message
+      });
+    }
+
+    if (data.user && !data.session) {
+      // 이메일 인증이 필요한 경우
+      res.json({
+        success: true,
+        message: '회원가입이 완료되었습니다! 이메일을 확인하여 인증을 완료해주세요.'
+      });
+    } else {
+      // 이메일 인증이 필요하지 않은 경우 (즉시 인증됨)
+      res.json({
+        success: true,
+        message: '회원가입이 완료되었습니다!'
+      });
+    }
+
+  } catch (error) {
+    console.error('회원가입 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '회원가입 중 오류가 발생했습니다.'
+    });
+  }
 });
 
 // 로그인
@@ -73,7 +142,7 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
       id: userData.id,
       email: userData.email,
       name: userData.name,
-      dateOfBirth: userData.date_of_birth,
+      dateOfBirth: userData.resident_number_encrypted || '',
       walletAddress: userData.wallet_address,
       createdAt: userData.created_at
     };
@@ -202,7 +271,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
       id: userData.id,
       email: userData.email,
       name: userData.name,
-      dateOfBirth: userData.date_of_birth,
+      dateOfBirth: userData.resident_number_encrypted || '',
       walletAddress: userData.wallet_address,
       createdAt: userData.created_at
     };
@@ -261,15 +330,18 @@ router.get('/check-email/:email', async (req: Request, res: Response<ApiResponse
 // 구글 OAuth 로그인 시작
 router.get('/google', async (req: Request, res: Response) => {
   try {
+    const dynamicConfig = getDynamicConfig(req);
     console.log('=== Google OAuth 시작 ===');
-    console.log('Frontend URL:', process.env.FRONTEND_URL);
-    console.log('Backend URL:', process.env.BACKEND_URL);
+    console.log('Frontend URL:', dynamicConfig.FRONTEND_URL);
+    console.log('Backend URL:', dynamicConfig.BACKEND_URL);
+    console.log('Request Origin:', req.headers.origin);
+    console.log('Request Host:', req.headers.host);
     
     // 프론트엔드로 직접 리다이렉트 (Supabase가 토큰을 처리)
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${process.env.FRONTEND_URL}/login`,
+        redirectTo: `${dynamicConfig.FRONTEND_URL}/login`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent'
@@ -300,10 +372,12 @@ router.get('/google', async (req: Request, res: Response) => {
 // 구글 OAuth 콜백 처리
 router.get('/google/callback', async (req: Request, res: Response) => {
   try {
+    const dynamicConfig = getDynamicConfig(req);
     console.log('=== Google OAuth 콜백 디버그 ===');
     console.log('전체 URL:', req.url);
     console.log('Query 파라미터:', req.query);
     console.log('Headers:', req.headers);
+    console.log('Frontend URL:', dynamicConfig.FRONTEND_URL);
     
     const { code, error, state } = req.query;
     console.log('Google OAuth 콜백 호출됨:', { 
@@ -315,14 +389,14 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 
     if (error) {
       console.error('Google OAuth 콜백 오류:', error);
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=google_auth_failed&details=${error}`);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=google_auth_failed&details=${error}`);
     }
 
     if (!code) {
       console.error('Google OAuth 코드 없음');
       console.log('전체 query 객체:', JSON.stringify(req.query, null, 2));
       console.log('전체 URL 파라미터:', req.url);
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_code`);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=no_code`);
     }
 
     console.log('코드 교환 시작...');
@@ -331,24 +405,25 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 
     if (exchangeError) {
       console.error('세션 교환 오류:', exchangeError);
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_exchange_failed&details=${exchangeError.message}`);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=session_exchange_failed&details=${exchangeError.message}`);
     }
 
     if (!data.session) {
       console.error('세션 데이터 없음');
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_session`);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=no_session`);
     }
 
     console.log('세션 교환 성공, 사용자 ID:', data.user?.id);
 
     // 프론트엔드로 토큰과 함께 리다이렉트 (fragment 사용)
-    const redirectUrl = `${process.env.FRONTEND_URL}/login#access_token=${data.session.access_token}&refresh_token=${data.session.refresh_token}&type=google`;
+    const redirectUrl = `${dynamicConfig.FRONTEND_URL}/login#access_token=${data.session.access_token}&refresh_token=${data.session.refresh_token}&type=google`;
     console.log('리다이렉트 URL:', redirectUrl);
     res.redirect(redirectUrl);
 
   } catch (error) {
+    const dynamicConfig = getDynamicConfig(req);
     console.error('Google OAuth 콜백 오류:', error);
-    res.redirect(`${process.env.FRONTEND_URL}/login?error=callback_failed&details=${error instanceof Error ? error.message : 'unknown'}`);
+    res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=callback_failed&details=${error instanceof Error ? error.message : 'unknown'}`);
   }
 });
 
@@ -381,7 +456,7 @@ router.put('/user', async (req: Request, res: Response<ApiResponse>) => {
       .from('users')
       .update({
         name,
-        date_of_birth: resident_number
+        resident_number_encrypted: resident_number
       })
       .eq('id', user.id);
 
@@ -438,7 +513,7 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
         id: user.id,
         email: user.email,
         name,
-        date_of_birth,
+        resident_number_encrypted: '', // date_of_birth 대신 resident_number_encrypted 사용
         wallet_address: '',
         password_hash: 'google_oauth',
         created_at: new Date().toISOString()
@@ -571,10 +646,11 @@ router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => 
 // 이메일 인증 확인
 router.get('/confirm-email', async (req: Request, res: Response) => {
   try {
+    const dynamicConfig = getDynamicConfig(req);
     const { token_hash, type } = req.query;
     
     if (!token_hash || type !== 'signup') {
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=invalid_confirmation`);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=invalid_confirmation`);
     }
 
     // 이메일 인증 처리
@@ -585,11 +661,11 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
 
     if (error) {
       console.error('이메일 인증 오류:', error);
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=confirmation_failed`);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=confirmation_failed`);
     }
 
     if (!data.user) {
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_user`);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=no_user`);
     }
 
     // 사용자 메타데이터에서 정보 추출
@@ -605,7 +681,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
         encryptedResidentNumber = encryptResidentNumber(residentNumber);
       } catch (encryptError) {
         console.error('주민번호 암호화 오류:', encryptError);
-        return res.redirect(`${process.env.FRONTEND_URL}/login?error=resident_number_invalid`);
+        return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=resident_number_invalid`);
       }
     }
 
@@ -624,15 +700,16 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
 
     if (insertError) {
       console.error('사용자 정보 저장 오류:', insertError);
-      return res.redirect(`${process.env.FRONTEND_URL}/login?error=user_creation_failed`);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_creation_failed`);
     }
 
     // 인증 성공 후 로그인 페이지로 리다이렉트
-    res.redirect(`${process.env.FRONTEND_URL}/login?message=email_confirmed`);
+    res.redirect(`${dynamicConfig.FRONTEND_URL}/login?message=email_confirmed`);
 
   } catch (error) {
+    const dynamicConfig = getDynamicConfig(req);
     console.error('이메일 인증 확인 오류:', error);
-    res.redirect(`${process.env.FRONTEND_URL}/login?error=confirmation_failed`);
+    res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=confirmation_failed`);
   }
 });
 

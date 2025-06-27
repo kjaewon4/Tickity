@@ -25,7 +25,7 @@ export const getUserProfile = async (userId: string): Promise<UserInfo | null> =
         id,
         email,
         name,
-        date_of_birth,
+        resident_number_encrypted,
         wallet_address,
         created_at
       `)
@@ -42,7 +42,7 @@ export const getUserProfile = async (userId: string): Promise<UserInfo | null> =
       id: userData.id,
       email: userData.email,
       name: userData.name,
-      dateOfBirth: userData.date_of_birth,
+      dateOfBirth: userData.resident_number_encrypted || '',
       walletAddress: userData.wallet_address || '',
       createdAt: userData.created_at
     };
@@ -80,7 +80,7 @@ export const updateUserProfile = async (
         id,
         email,
         name,
-        date_of_birth,
+        resident_number_encrypted,
         wallet_address,
         created_at
       `)
@@ -95,7 +95,7 @@ export const updateUserProfile = async (
       id: userData.id,
       email: userData.email,
       name: userData.name,
-      dateOfBirth: userData.date_of_birth,
+      dateOfBirth: userData.resident_number_encrypted || '',
       walletAddress: userData.wallet_address || '',
       createdAt: userData.created_at
     };
