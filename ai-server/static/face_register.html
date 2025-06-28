@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>얼굴 등록 - 웹캠</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            text-align: center;
+            color: #4a5568;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .camera-container {
+            position: relative;
+            margin: 20px 0;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        #video {
+            width: 100%;
+            height: 400px;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .camera-controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            min-width: 120px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4a5568;
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c53030;
+        }
+
+        .btn-success {
+            background: #38a169;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #2f855a;
+        }
+
+        .recording {
+            background: #e53e3e !important;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .status.recording {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .status.ready {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+
+        .status.error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result.success {
+            background: #c6f6d5;
+            color: #2f855a;
+            border: 2px solid #68d391;
+        }
+
+        .result.error {
+            background: #fed7d7;
+            color: #c53030;
+            border: 2px solid #fc8181;
+        }
+
+        .result.loading {
+            background: #bee3f8;
+            color: #2b6cb0;
+            border: 2px solid #63b3ed;
+        }
+
+        .info-box {
+            background: #ebf8ff;
+            border: 1px solid #bee3f8;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .info-box h3 {
+            margin-top: 0;
+            color: #2b6cb0;
+        }
+
+        .info-box ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .info-box li {
+            margin: 5px 0;
+        }
+
+        .recording-time {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #e53e3e;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>얼굴 등록</h1>
+        
+        <div class="info-box">
+            <h3>사용 방법</h3>
+            <ul>
+                <li>User ID (UUID) 필드는 테스트시 'test-embedding-only' 로 설정</li>
+                <li>Concert ID는 테스트시 비워두기</li>
+                <li>웹캠 권한을 허용하고 얼굴이 잘 보이도록 위치하세요</li>
+                <li>녹화 버튼을 눌러 3-5초간 비디오를 촬영하세요</li>
+                <li>등록 버튼을 눌러 서버에 얼굴 정보를 저장하세요</li>
+            </ul>
+        </div>
+
+        <div class="form-group">
+            <label for="userId">User ID (UUID):</label>
+            <input type="text" id="userId" placeholder="예: 123e4567-e89b-12d3-a456-426614174000" required>
+        </div>
+
+        <div class="form-group">
+            <label for="concertId">Concert ID (선택사항):</label>
+            <input type="text" id="concertId" placeholder="콘서트와 연동하려면 UUID를 입력하세요">
+        </div>
+
+        <div class="camera-container">
+            <video id="video" autoplay muted></video>
+        </div>
+
+        <div class="recording-time" id="recordingTime" style="display: none;">
+            녹화 중... <span id="timer">0</span>초
+        </div>
+
+        <div class="camera-controls">
+            <button id="startCamera" class="btn-primary">📹 카메라 시작</button>
+            <button id="stopCamera" class="btn-secondary" disabled>📷 카메라 종료</button>
+            <button id="recordBtn" class="btn-secondary" disabled>🎬 녹화 시작</button>
+            <button id="stopRecordBtn" class="btn-danger" disabled>⏹️ 녹화 중지</button>
+            <button id="registerBtn" class="btn-success" disabled>✅ 얼굴 등록</button>
+        </div>
+
+        <div class="status" id="status">카메라를 시작해주세요</div>
+
+        <div class="result" id="result"></div>
+    </div>
+
+    <script>
+        let stream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        let recordingTimer = null;
+        let recordingSeconds = 0;
+
+        const video = document.getElementById('video');
+        const startCameraBtn = document.getElementById('startCamera');
+        const stopCameraBtn = document.getElementById('stopCamera');
+        const recordBtn = document.getElementById('recordBtn');
+        const stopRecordBtn = document.getElementById('stopRecordBtn');
+        const registerBtn = document.getElementById('registerBtn');
+        const status = document.getElementById('status');
+        const result = document.getElementById('result');
+        const recordingTime = document.getElementById('recordingTime');
+        const timer = document.getElementById('timer');
+
+        // 카메라 시작
+        startCameraBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    }, 
+                    audio: false 
+                });
+                
+                video.srcObject = stream;
+                startCameraBtn.disabled = true;
+                stopCameraBtn.disabled = false;
+                recordBtn.disabled = false;
+                status.textContent = '카메라가 준비되었습니다. 녹화를 시작하세요.';
+                status.className = 'status ready';
+            } catch (error) {
+                console.error('카메라 접근 오류:', error);
+                status.textContent = '카메라에 접근할 수 없습니다. 권한을 확인해주세요.';
+                status.className = 'status error';
+            }
+        });
+
+        // 카메라 종료
+        stopCameraBtn.addEventListener('click', () => {
+            if (isRecording) {
+                alert('녹화 중에는 카메라를 종료할 수 없습니다. 먼저 녹화를 중지해주세요.');
+                return;
+            }
+            
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                video.srcObject = null;
+                startCameraBtn.disabled = false;
+                stopCameraBtn.disabled = true;
+                recordBtn.disabled = true;
+                stopRecordBtn.disabled = true;
+                registerBtn.disabled = true;
+                status.textContent = '카메라가 종료되었습니다. 카메라를 다시 시작하세요.';
+                status.className = 'status ready';
+            }
+        });
+
+        // 녹화 시작
+        recordBtn.addEventListener('click', () => {
+            if (!stream) return;
+
+            recordedChunks = [];
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                isRecording = false;
+                recordBtn.disabled = false;
+                stopRecordBtn.disabled = true;
+                registerBtn.disabled = false;
+                recordingTime.style.display = 'none';
+                clearInterval(recordingTimer);
+                status.textContent = '녹화가 완료되었습니다. 얼굴 등록을 진행하세요.';
+                status.className = 'status ready';
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            recordingSeconds = 0;
+            recordBtn.disabled = true;
+            stopRecordBtn.disabled = false;
+            registerBtn.disabled = true;
+            recordingTime.style.display = 'block';
+            
+            // 타이머 시작
+            recordingTimer = setInterval(() => {
+                recordingSeconds++;
+                timer.textContent = recordingSeconds;
+                
+                // 10초 후 자동 중지
+                if (recordingSeconds >= 10) {
+                    stopRecordBtn.click();
+                }
+            }, 1000);
+
+            status.textContent = '녹화 중입니다...';
+            status.className = 'status recording';
+        });
+
+        // 녹화 중지
+        stopRecordBtn.addEventListener('click', () => {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+            }
+        });
+
+        // 얼굴 등록
+        registerBtn.addEventListener('click', async () => {
+            const userId = document.getElementById('userId').value.trim();
+            const concertId = document.getElementById('concertId').value.trim();
+            
+            if (!userId) {
+                alert('User ID를 입력해주세요.');
+                return;
+            }
+
+            if (recordedChunks.length === 0) {
+                alert('먼저 비디오를 녹화해주세요.');
+                return;
+            }
+
+            result.style.display = 'block';
+            result.className = 'result loading';
+            result.innerHTML = '🔄 얼굴 등록 중...';
+
+            try {
+                const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                const formData = new FormData();
+                formData.append('user_id', userId);
+                formData.append('video', videoBlob, 'face_video.webm');
+                
+                if (concertId.trim()) {
+                    formData.append('concert_id', concertId);
+                }
+
+                const response = await fetch('/face/register', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const resultData = await response.json();
+
+                if (response.ok) {
+                    result.className = 'result success';
+                    result.innerHTML = `
+                        <h3>✅ 얼굴 등록 성공</h3>
+                        <p>${resultData.message}</p>
+                        ${resultData.embedding_shape ? `<p><strong>임베딩 크기:</strong> ${resultData.embedding_shape}</p>` : ''}
+                        ${resultData.embedding_sample ? `<p><strong>임베딩 샘플:</strong> [${resultData.embedding_sample.join(', ')}]</p>` : ''}
+                    `;
+                } else {
+                    result.className = 'result error';
+                    result.innerHTML = `
+                        <h3>❌ 얼굴 등록 실패</h3>
+                        <p>${resultData.detail}</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('등록 오류:', error);
+                result.className = 'result error';
+                result.innerHTML = `
+                    <h3>❌ 등록 중 오류 발생</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        });
+
+        // 페이지 종료 시 스트림 정리
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+    </script>
+</body>
+</html> 
