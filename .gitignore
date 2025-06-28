@@ -5,10 +5,16 @@ node_modules
 # Hardhat files
 /cache
 /artifacts
+blockchain/cache/
+blockchain/artifacts/
+blockchain/typechain/
+blockchain/typechain-types/
 
-# TypeChain files
-/typechain
-/typechain-types
+# Solidity cache and debug files
+*.dbg
+*.dbg.json
+solidity-files-cache/
+4aed82807*
 
 # solidity-coverage files
 /coverage
@@ -31,3 +37,24 @@ blockchain/.deployed
 dist/                   
 build/
 
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock

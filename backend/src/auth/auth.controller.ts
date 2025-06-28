@@ -39,43 +39,61 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
       });
     }
 
-    // 이메일 유효성 검증 (Mailboxlayer)
-    const mailboxlayerApiKeys = [
-      process.env.MAILBOXLAYER_API_KEY1,
-      process.env.MAILBOXLAYER_API_KEY2,
-      process.env.MAILBOXLAYER_API_KEY3
-    ];
-    let mailboxRes, mailboxError;
-    for (let i = 0; i < mailboxlayerApiKeys.length; i++) {
-      try {
-        const mailboxlayerUrl = `http://apilayer.net/api/check?access_key=${mailboxlayerApiKeys[i]}&email=${encodeURIComponent(email.trim())}&smtp=1&format=1`;
-        mailboxRes = await axios.get(mailboxlayerUrl);
-        mailboxError = null;
-        break; // 성공하면 반복 종료
-      } catch (err) {
-        mailboxError = err;
-        // 2번째 키로 재시도
-      }
-    }
-    if (mailboxError || !mailboxRes) {
-      return res.status(500).json({
-        success: false,
-        error: '이메일 유효성 검증 중 오류가 발생했습니다.'
-      });
-    }
-    const { format_valid, smtp_check, mx_found } = mailboxRes.data;
-    if (!format_valid || !smtp_check || !mx_found) {
-      return res.status(400).json({
-        success: false,
-        error: '유효하지 않은 이메일 주소입니다. 올바른 이메일을 입력해주세요.'
-      });
-    }
-
     console.log('=== 회원가입 시작 ===');
     console.log('Frontend URL:', dynamicConfig.FRONTEND_URL);
     console.log('Request Origin:', req.headers.origin);
     console.log('Request Host:', req.headers.host);
     console.log('Email Redirect To:', `${dynamicConfig.FRONTEND_URL}/confirm-email`);
+
+    // 이메일 중복 체크
+    console.log('이메일 중복 체크 시작...');
+    const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+    
+    if (authError) {
+      console.error('Supabase Auth 사용자 조회 오류:', authError);
+      return res.status(500).json({
+        success: false,
+        error: '회원가입 중 오류가 발생했습니다.'
+      });
+    }
+
+    // Supabase Auth에서 이메일로 사용자 찾기
+    const existingAuthUser = authUsers.users.find(user => 
+      user.email?.toLowerCase() === email.trim().toLowerCase()
+    );
+
+    if (existingAuthUser) {
+      console.log('이미 Supabase Auth에 존재하는 이메일:', email);
+      return res.status(400).json({
+        success: false,
+        error: '이미 가입된 이메일입니다. 다른 이메일을 사용하거나 로그인해주세요.'
+      });
+    }
+
+    // 데이터베이스에서도 이메일 중복 체크
+    const { data: existingDbUser, error: dbError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.trim().toLowerCase())
+      .maybeSingle();
+
+    if (dbError) {
+      console.error('데이터베이스 이메일 중복 체크 오류:', dbError);
+      return res.status(500).json({
+        success: false,
+        error: '회원가입 중 오류가 발생했습니다.'
+      });
+    }
+
+    if (existingDbUser) {
+      console.log('이미 데이터베이스에 존재하는 이메일:', email);
+      return res.status(400).json({
+        success: false,
+        error: '이미 가입된 이메일입니다. 다른 이메일을 사용하거나 로그인해주세요.'
+      });
+    }
+
+    console.log('이메일 중복 체크 통과');
 
     // Supabase Auth로 회원가입 (이메일 인증 포함)
     const signUpOptions = {
@@ -96,10 +114,53 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
 
     if (signUpError) {
       console.error('회원가입 오류:', signUpError);
-      return res.status(400).json({
-        success: false,
-        error: signUpError.message
-      });
+      
+      // Rate limit 에러 처리
+      if (signUpError.code === 'over_email_send_rate_limit' || 
+          signUpError.message.includes('rate limit') || 
+          signUpError.message.includes('429')) {
+        return res.status(429).json({
+          success: false,
+          error: '이메일 전송이 너무 많습니다. 잠시 후 다시 시도해주세요. (1-2분 후)'
+        });
+      } else if (signUpError.message.includes('email')) {
+        return res.status(400).json({
+          success: false,
+          error: '이메일 관련 오류가 발생했습니다. 다른 이메일로 시도해주세요.'
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: signUpError.message
+        });
+      }
+    }
+
+    // 회원가입 성공 시에만 이메일 유효성 검증 수행
+    const mailboxlayerApiKeys = [
+      process.env.MAILBOXLAYER_API_KEY1,
+      process.env.MAILBOXLAYER_API_KEY2,
+      process.env.MAILBOXLAYER_API_KEY3
+    ];
+    let mailboxRes, mailboxError;
+    for (let i = 0; i < mailboxlayerApiKeys.length; i++) {
+      try {
+        const mailboxlayerUrl = `http://apilayer.net/api/check?access_key=${mailboxlayerApiKeys[i]}&email=${encodeURIComponent(email.trim())}&smtp=1&format=1`;
+        mailboxRes = await axios.get(mailboxlayerUrl);
+        mailboxError = null;
+        break; // 성공하면 반복 종료
+      } catch (err) {
+        mailboxError = err;
+        // 2번째 키로 재시도
+      }
+    }
+    if (mailboxError || !mailboxRes) {
+      console.warn('이메일 유효성 검증 실패, 하지만 회원가입은 성공:', mailboxError);
+    } else {
+      const { format_valid, smtp_check, mx_found } = mailboxRes.data;
+      if (!format_valid || !smtp_check || !mx_found) {
+        console.warn('이메일 유효성 검증 실패, 하지만 회원가입은 성공');
+      }
     }
 
     if (data.user && !data.session) {
@@ -331,25 +392,63 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
 router.get('/check-email/:email', async (req: Request, res: Response<ApiResponse>) => {
   try {
     const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: '이메일 주소를 입력해주세요.'
+      });
+    }
 
-    const { data: existingUser, error } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
+    console.log('=== 이메일 중복 체크 시작 ===');
+    console.log('확인할 이메일:', email);
 
-    if (error) {
-      console.error('이메일 중복 체크 오류:', error);
+    // 1. Supabase Auth에서 사용자 확인
+    const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+    
+    if (authError) {
+      console.error('Supabase Auth 사용자 조회 오류:', authError);
       return res.status(500).json({
         success: false,
         error: '이메일 확인 중 오류가 발생했습니다.'
       });
     }
 
+    // Supabase Auth에서 이메일로 사용자 찾기
+    const authUser = authUsers.users.find(user => 
+      user.email?.toLowerCase() === email.toLowerCase()
+    );
+
+    console.log('Supabase Auth에서 찾은 사용자:', authUser ? '존재함' : '없음');
+
+    // 2. 데이터베이스에서 사용자 확인
+    const { data: dbUser, error: dbError } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (dbError) {
+      console.error('데이터베이스 사용자 조회 오류:', dbError);
+      return res.status(500).json({
+        success: false,
+        error: '이메일 확인 중 오류가 발생했습니다.'
+      });
+    }
+
+    console.log('데이터베이스에서 찾은 사용자:', dbUser ? '존재함' : '없음');
+
+    // 3. 결과 판단
+    const exists = !!(authUser || dbUser);
+    
+    console.log('최종 결과 - 이메일 존재:', exists);
+
     res.json({
       success: true,
       data: {
-        exists: !!existingUser
+        exists,
+        authUser: !!authUser,
+        dbUser: !!dbUser
       }
     });
 
@@ -450,10 +549,83 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 
     console.log('세션 교환 성공, 사용자 ID:', data.user?.id);
 
-    // 프론트엔드로 토큰과 함께 리다이렉트 (fragment 사용)
-    const redirectUrl = `${dynamicConfig.FRONTEND_URL}/login#access_token=${data.session.access_token}&refresh_token=${data.session.refresh_token}&type=google`;
-    console.log('리다이렉트 URL:', redirectUrl);
-    res.redirect(redirectUrl);
+    // 사용자 메타데이터에서 정보 추출
+    const userMetadata = data.user.user_metadata;
+    const name = userMetadata?.name || '';
+    const residentNumber = userMetadata?.resident_number || '';
+    const passwordHash = userMetadata?.password_hash || '';
+
+    // 주민번호 암호화
+    let encryptedResidentNumber = 'not_provided'; // 기본값 설정 (NOT NULL 제약조건 때문)
+    if (residentNumber) {
+      try {
+        encryptedResidentNumber = encryptResidentNumber(residentNumber);
+      } catch (encryptError) {
+        console.error('주민번호 암호화 오류:', encryptError);
+        return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=resident_number_invalid`);
+      }
+    }
+
+    console.log('지갑 생성 시작...');
+    // 지갑 생성
+    let address = '';
+    let encryptedKey = '';
+    
+    try {
+      const { address: walletAddress, privateKey } = await bc.createUserWallet();
+      address = walletAddress;
+      encryptedKey = encrypt(privateKey);
+      console.log('지갑 생성 완료:', address);
+    } catch (walletError) {
+      console.error('지갑 생성 실패:', walletError);
+      console.log('지갑 없이 사용자 정보 저장 진행');
+      // 지갑 생성 실패 시에도 사용자 정보는 저장
+      address = 'wallet_creation_failed';
+      encryptedKey = 'wallet_creation_failed';
+    }
+
+    // 이미 사용자가 데이터베이스에 있는지 확인
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('사용자 확인 오류:', checkError);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_check_failed`);
+    }
+
+    console.log('기존 사용자 확인:', existingUser ? '존재함' : '존재하지 않음');
+
+    // 사용자가 없으면 데이터베이스에 사용자 정보 저장
+    if (!existingUser) {
+      console.log('사용자 정보 저장 시작...');
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert([{
+          id: data.user.id,
+          email: data.user.email,
+          name,
+          resident_number_encrypted: encryptedResidentNumber,
+          wallet_address: address,
+          private_key_encrypted: encryptedKey,
+          password_hash: passwordHash,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (insertError) {
+        console.error('사용자 정보 저장 오류:', insertError);
+        return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_creation_failed`);
+      }
+
+      console.log('사용자 정보 저장 성공');
+    } else {
+      console.log('사용자가 이미 존재하므로 저장 건너뜀');
+    }
+
+    // 인증 성공 후 로그인 페이지로 리다이렉트
+    res.redirect(`${dynamicConfig.FRONTEND_URL}/login?message=email_confirmed`);
 
   } catch (error) {
     const dynamicConfig = getDynamicConfig(req);
@@ -590,148 +762,126 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
   }
 });
 
-// 이메일 인증 완료 후 사용자, 지갑 생성 및 DB 저장
-router.post('/create-user', async (req: Request, res: Response<ApiResponse>) => {
-  try {
-    // 인증 토큰 검사
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({
-        success: false,
-        error: '인증 토큰이 필요합니다.'
-      });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const { name, resident_number, password_hash, password } = req.body;
-
-    console.log('=== 사용자 생성 시작 ===');
-    console.log('요청 데이터:', { name, resident_number: !!resident_number, password_hash, password: !!password });
-
-    // Supabase Auth에서 토큰으로 사용자 정보 조회
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      console.error('토큰 인증 오류:', authError);
-      return res.status(401).json({
-        success: false,
-        error: '유효하지 않은 토큰입니다.'
-      });
-    }
-
-    console.log('사용자 인증 성공:', user.id);
-
-    // 주민번호 암호화
-    let encryptedResidentNumber = 'not_provided'; // 기본값 설정 (NOT NULL 제약조건 때문)
-    if (resident_number) {
-      try {
-        encryptedResidentNumber = encryptResidentNumber(resident_number);
-        console.log('주민번호 암호화 성공');
-      } catch (encryptError) {
-        console.error('주민번호 암호화 오류:', encryptError);
-        return res.status(400).json({
-          success: false,
-          error: '주민번호 형식이 올바르지 않습니다.'
-        });
-      }
-    }
-
-    // 비밀번호 해시 생성 (실제 비밀번호가 전달된 경우)
-    let passwordHash = password_hash || 'email_signup';
-    if (password && password !== 'email_signup') {
-      try {
-        const crypto = require('crypto');
-        passwordHash = crypto.createHash('sha256').update(password).digest('hex');
-      } catch (hashError) {
-        console.error('비밀번호 해시 생성 오류:', hashError);
-        passwordHash = 'email_signup';
-      }
-    }
-
-    // on-demand 지갑 생성 (Hardhat Localhost 에 10 000 ETH 충전된 계정)
-    const { address, privateKey } = await bc.createUserWallet();
-    // 개인키 AES 암호화
-    const encryptedKey = encrypt(privateKey);
-
-    // 이미 사용자가 데이터베이스에 있는지 확인
-    const { data: existingUser, error: checkError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (checkError) {
-      console.error('사용자 확인 오류:', checkError);
-      return res.status(500).json({
-        success: false,
-        error: '사용자 확인 중 오류가 발생했습니다.'
-      });
-    }
-
-    console.log('기존 사용자 확인:', existingUser ? '존재함' : '존재하지 않음');
-
-    // 사용자가 없으면 데이터베이스에 사용자 정보 저장
-    if (!existingUser) {
-      const userData = {
-        id: user.id,
-        email: user.email,
-        name,
-        resident_number_encrypted: encryptedResidentNumber,
-        wallet_address:             address,
-        private_key_encrypted:      encryptedKey,
-        password_hash: passwordHash,
-        created_at: new Date().toISOString()
-      };
-
-      console.log('저장할 사용자 데이터:', { ...userData, resident_number_encrypted: userData.resident_number_encrypted });
-
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert([userData]);
-
-      if (insertError) {
-        console.error('사용자 정보 저장 오류:', insertError);
-        console.error('오류 상세:', {
-          code: insertError.code,
-          message: insertError.message,
-          details: insertError.details,
-          hint: insertError.hint
-        });
-        return res.status(500).json({
-          success: false,
-          error: '사용자 정보 저장 중 오류가 발생했습니다.'
-        });
-      }
-
-      console.log('사용자 정보 저장 성공');
-    } else {
-      console.log('사용자가 이미 존재하므로 저장 건너뜀');
-    }
-
-    res.json({
-      success: true,
-      message: '사용자 정보가 생성되었습니다.'
-    });
-
-  } catch (error) {
-    console.error('사용자 생성 오류:', error);
-    res.status(500).json({
-      success: false,
-      error: '사용자 정보 생성 중 오류가 발생했습니다.'
-    });
-  }
-});
-
 // 이메일 인증 확인
 router.get('/confirm-email', async (req: Request, res: Response) => {
   try {
+    console.log('=== 이메일 인증 확인 시작 ===');
+    console.log('Query parameters:', req.query);
+    console.log('Headers:', req.headers);
+    
     const dynamicConfig = getDynamicConfig(req);
-    const { token_hash, type } = req.query;
+    const { token_hash, type, already_verified } = req.query;
+    
+    console.log('Token hash:', token_hash);
+    console.log('Type:', type);
+    console.log('Already verified:', already_verified);
+    
+    // 이미 인증된 경우 (access_token이 전달된 경우)
+    if (already_verified === 'true' && token_hash) {
+      console.log('이미 인증된 사용자 처리 시작...');
+      
+      // access_token으로 사용자 정보 조회
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token_hash as string);
+      
+      if (authError || !user) {
+        console.error('이미 인증된 사용자 정보 조회 오류:', authError);
+        return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_not_found`);
+      }
+      
+      console.log('이미 인증된 사용자 발견:', user.id);
+      
+      // 사용자 메타데이터에서 정보 추출
+      const userMetadata = user.user_metadata;
+      console.log('사용자 메타데이터:', userMetadata);
+      
+      const name = userMetadata?.name || '';
+      const residentNumber = userMetadata?.resident_number || '';
+      const passwordHash = userMetadata?.password_hash || '';
+
+      console.log('추출된 정보:', { name, residentNumber: residentNumber ? '있음' : '없음', passwordHash: passwordHash ? '있음' : '없음' });
+
+      // 주민번호 암호화
+      let encryptedResidentNumber = 'not_provided';
+      if (residentNumber) {
+        try {
+          encryptedResidentNumber = encryptResidentNumber(residentNumber);
+          console.log('주민번호 암호화 성공');
+        } catch (encryptError) {
+          console.error('주민번호 암호화 오류:', encryptError);
+          return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=resident_number_invalid`);
+        }
+      }
+
+      console.log('지갑 생성 시작...');
+      // 지갑 생성
+      let address = '';
+      let encryptedKey = '';
+      
+      try {
+        const { address: walletAddress, privateKey } = await bc.createUserWallet();
+        address = walletAddress;
+        encryptedKey = encrypt(privateKey);
+        console.log('지갑 생성 완료:', address);
+      } catch (walletError) {
+        console.error('지갑 생성 실패:', walletError);
+        console.log('지갑 없이 사용자 정보 저장 진행');
+        // 지갑 생성 실패 시에도 사용자 정보는 저장
+        address = 'wallet_creation_failed';
+        encryptedKey = 'wallet_creation_failed';
+      }
+
+      // 이미 사용자가 데이터베이스에 있는지 확인
+      console.log('기존 사용자 확인 중...');
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('사용자 확인 오류:', checkError);
+        return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_check_failed`);
+      }
+
+      console.log('기존 사용자 확인:', existingUser ? '존재함' : '존재하지 않음');
+
+      // 사용자가 없으면 데이터베이스에 사용자 정보 저장
+      if (!existingUser) {
+        console.log('사용자 정보 저장 시작...');
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert([{
+            id: user.id,
+            email: user.email,
+            name,
+            resident_number_encrypted: encryptedResidentNumber,
+            wallet_address: address,
+            private_key_encrypted: encryptedKey,
+            password_hash: passwordHash,
+            created_at: new Date().toISOString()
+          }]);
+
+        if (insertError) {
+          console.error('사용자 정보 저장 오류:', insertError);
+          return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_creation_failed`);
+        }
+
+        console.log('사용자 정보 저장 성공');
+      } else {
+        console.log('사용자가 이미 존재하므로 저장 건너뜀');
+      }
+
+      console.log('인증 성공, 로그인 페이지로 리다이렉트');
+      res.redirect(`${dynamicConfig.FRONTEND_URL}/login?message=email_confirmed`);
+      return;
+    }
     
     if (!token_hash || type !== 'signup') {
+      console.log('토큰 해시 또는 타입이 유효하지 않음');
       return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=invalid_confirmation`);
     }
 
+    console.log('이메일 인증 처리 시작...');
     // 이메일 인증 처리
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash: token_hash as string,
@@ -743,50 +893,95 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
       return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=confirmation_failed`);
     }
 
+    console.log('이메일 인증 성공, 사용자 데이터:', data.user ? '존재함' : '없음');
+
     if (!data.user) {
+      console.log('사용자 데이터가 없음');
       return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=no_user`);
     }
 
     // 사용자 메타데이터에서 정보 추출
     const userMetadata = data.user.user_metadata;
+    console.log('사용자 메타데이터:', userMetadata);
+    
     const name = userMetadata?.name || '';
     const residentNumber = userMetadata?.resident_number || '';
     const passwordHash = userMetadata?.password_hash || '';
+
+    console.log('추출된 정보:', { name, residentNumber: residentNumber ? '있음' : '없음', passwordHash: passwordHash ? '있음' : '없음' });
 
     // 주민번호 암호화
     let encryptedResidentNumber = 'not_provided'; // 기본값 설정 (NOT NULL 제약조건 때문)
     if (residentNumber) {
       try {
         encryptedResidentNumber = encryptResidentNumber(residentNumber);
+        console.log('주민번호 암호화 성공');
       } catch (encryptError) {
         console.error('주민번호 암호화 오류:', encryptError);
         return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=resident_number_invalid`);
       }
     }
 
+    console.log('지갑 생성 시작...');
     // 지갑 생성
-    const { address, privateKey } = await bc.createUserWallet();
-    const encryptedKey = encrypt(privateKey);
-
-    // 데이터베이스에 사용자 정보 저장
-    const { error: insertError } = await supabase
-      .from('users')
-      .insert([{
-        id: data.user.id,
-        email: data.user.email,
-        name,
-        resident_number_encrypted: encryptedResidentNumber,
-        wallet_address: address,
-        private_key_encrypted: encryptedKey,
-        password_hash: passwordHash,
-        created_at: new Date().toISOString()
-      }]);
-
-    if (insertError) {
-      console.error('사용자 정보 저장 오류:', insertError);
-      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_creation_failed`);
+    let address = '';
+    let encryptedKey = '';
+    
+    try {
+      const { address: walletAddress, privateKey } = await bc.createUserWallet();
+      address = walletAddress;
+      encryptedKey = encrypt(privateKey);
+      console.log('지갑 생성 완료:', address);
+    } catch (walletError) {
+      console.error('지갑 생성 실패:', walletError);
+      console.log('지갑 없이 사용자 정보 저장 진행');
+      // 지갑 생성 실패 시에도 사용자 정보는 저장
+      address = 'wallet_creation_failed';
+      encryptedKey = 'wallet_creation_failed';
     }
 
+    // 이미 사용자가 데이터베이스에 있는지 확인
+    console.log('기존 사용자 확인 중...');
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('사용자 확인 오류:', checkError);
+      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_check_failed`);
+    }
+
+    console.log('기존 사용자 확인:', existingUser ? '존재함' : '존재하지 않음');
+
+    // 사용자가 없으면 데이터베이스에 사용자 정보 저장
+    if (!existingUser) {
+      console.log('사용자 정보 저장 시작...');
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert([{
+          id: data.user.id,
+          email: data.user.email,
+          name,
+          resident_number_encrypted: encryptedResidentNumber,
+          wallet_address: address,
+          private_key_encrypted: encryptedKey,
+          password_hash: passwordHash,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (insertError) {
+        console.error('사용자 정보 저장 오류:', insertError);
+        return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_creation_failed`);
+      }
+
+      console.log('사용자 정보 저장 성공');
+    } else {
+      console.log('사용자가 이미 존재하므로 저장 건너뜀');
+    }
+
+    console.log('인증 성공, 로그인 페이지로 리다이렉트');
     // 인증 성공 후 로그인 페이지로 리다이렉트
     res.redirect(`${dynamicConfig.FRONTEND_URL}/login?message=email_confirmed`);
 
