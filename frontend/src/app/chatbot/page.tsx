@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { apiClient } from '@/lib/apiClient';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -56,9 +57,7 @@ export default function ChatbotPage() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // 김민수 사용자 ID (테스트용)
-  const userId = '550e8400-e29b-41d4-a716-446655440001';
+  const [userId, setUserId] = useState<string | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -68,8 +67,50 @@ export default function ChatbotPage() {
     scrollToBottom();
   }, [messages]);
 
+  // intent 분석 함수 (간단 버전)
+  const analyzeIntent = (message: string): 'my_tickets' | 'concert_inquiry' | 'general' => {
+    const lower = message.toLowerCase();
+    if (lower.includes('내 티켓') || lower.includes('예매 내역') || lower.includes('구매한') || lower.includes('마이페이지') || lower.includes('티켓 목록')) {
+      return 'my_tickets';
+    }
+    if (lower.includes('콘서트') || lower.includes('공연') || lower.includes('예매') || lower.includes('티켓')) {
+      return 'concert_inquiry';
+    }
+    return 'general';
+  };
+
+  // 로그인한 사용자 정보 불러오기
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await apiClient.getUser();
+        if (res.success && res.data?.user) {
+          setUserId(res.data.user.id);
+        }
+      } catch (e) {
+        setUserId(null);
+      }
+    };
+    fetchUser();
+  }, []);
+
   const sendMessage = async (message: string) => {
     if (!message.trim() || isLoading) return;
+
+    // intent 분석
+    const intent = analyzeIntent(message);
+
+    // 사용자 id가 필요한 intent인데 로그인 안 한 경우 안내
+    if (!userId && intent === 'my_tickets') {
+      const assistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: '이 기능을 이용하려면 로그인이 필요합니다. 로그인 후 다시 시도해 주세요.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, { role: 'user', content: message, timestamp: new Date() }, assistantMessage]);
+      setInputMessage('');
+      return;
+    }
 
     // 사용자 메시지 추가
     const userMessage: ChatMessage = {
@@ -89,7 +130,7 @@ export default function ChatbotPage() {
         },
         body: JSON.stringify({
           message,
-          userId
+          userId: userId || undefined,
         }),
       });
 
@@ -156,10 +197,8 @@ export default function ChatbotPage() {
                       ? 'bg-blue-500 text-white'
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
                   }`}>
-                    <div 
-                      className="whitespace-pre-wrap"
-                      dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
-                    />
+                    {/* HTML 메시지(표 등) 렌더링 */}
+                    <div className="overflow-x-auto" dangerouslySetInnerHTML={{ __html: message.content }} />
                     <TimeDisplay timestamp={message.timestamp} />
                     
                     {/* 추천 질문 버튼 */}
@@ -217,11 +256,6 @@ export default function ChatbotPage() {
                 </button>
               </form>
             </div>
-          </div>
-
-          {/* 사용자 정보 (테스트용) */}
-          <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
-            테스트 사용자: 김민수 ({userId})
           </div>
         </div>
       </div>
