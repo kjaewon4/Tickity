@@ -19,6 +19,7 @@ export default function SignupPage() {
   // 이메일 중복 체크 관련 상태
   const [emailStatus, setEmailStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'error'>('idle');
   const [emailMessage, setEmailMessage] = useState<string>('');
+  const [emailToCheck, setEmailToCheck] = useState<string>(''); // 검증할 이메일 저장
 
   // 주민번호 형식 검증
   const validateResidentNumber = (number: string): boolean => {
@@ -37,27 +38,40 @@ export default function SignupPage() {
     setEmailMessage('이메일 확인 중...');
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/check-email/${encodeURIComponent(emailToCheck.trim())}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      // 1. 이메일 중복 체크
+      const duplicateResult = await apiClient.checkEmail(emailToCheck.trim());
 
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        if (result.data.exists) {
-          setEmailStatus('taken');
-          setEmailMessage('이미 가입된 이메일입니다.');
-        } else {
-          setEmailStatus('available');
-          setEmailMessage('사용 가능한 이메일입니다.');
-        }
-      } else {
+      if (!duplicateResult.success) {
         setEmailStatus('error');
         setEmailMessage('이메일 확인 중 오류가 발생했습니다.');
+        return;
       }
+
+      if (duplicateResult.data?.exists) {
+        setEmailStatus('taken');
+        setEmailMessage('이미 가입된 이메일입니다.');
+        return;
+      }
+
+      // 2. 이메일 유효성 검증 (중복되지 않은 경우에만)
+      const validationResult = await apiClient.validateEmail(emailToCheck.trim());
+
+      if (!validationResult.success) {
+        setEmailStatus('error');
+        setEmailMessage('이메일 유효성 검증 중 오류가 발생했습니다.');
+        return;
+      }
+
+      if (!validationResult.data?.valid) {
+        setEmailStatus('error');
+        setEmailMessage(validationResult.data?.message || '유효하지 않은 이메일 주소입니다.');
+        return;
+      }
+
+      // 중복되지 않고 유효한 이메일
+      setEmailStatus('available');
+      setEmailMessage('사용 가능한 이메일입니다.');
+
     } catch (error) {
       console.error('이메일 중복 체크 오류:', error);
       setEmailStatus('error');
@@ -65,19 +79,32 @@ export default function SignupPage() {
     }
   };
 
-  // 이메일 변경 시 디바운스된 중복 체크
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (email) {
-        checkEmailAvailability(email);
-      } else {
-        setEmailStatus('idle');
-        setEmailMessage('');
-      }
-    }, 500); // 500ms 디바운스
+  // 이메일 확인 버튼 클릭 핸들러
+  const handleEmailCheck = (): void => {
+    if (email && email.includes('@')) {
+      checkEmailAvailability(email);
+    } else {
+      setEmailStatus('error');
+      setEmailMessage('올바른 이메일 형식을 입력해주세요.');
+    }
+  };
 
-    return () => clearTimeout(timeoutId);
-  }, [email]);
+  // 이메일 변경 시 상태 초기화
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+    
+    // 이메일이 변경되면 검증 상태 초기화
+    if (emailStatus !== 'idle') {
+      setEmailStatus('idle');
+      setEmailMessage('');
+    }
+    
+    // 이메일 변경 시 에러 메시지 초기화
+    if (error && error.includes('이메일')) {
+      setError('');
+    }
+  };
 
   // 일반 이메일 회원가입
   const handleSignup = async (): Promise<void> => {
@@ -168,14 +195,6 @@ export default function SignupPage() {
   };
 
   // 이벤트 핸들러 타입 정의
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    setEmail(e.target.value);
-    // 이메일 변경 시 에러 메시지 초기화
-    if (error && error.includes('이메일')) {
-      setError('');
-    }
-  };
-
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setPassword(e.target.value);
   };
@@ -247,6 +266,10 @@ export default function SignupPage() {
         
         <div className="text-center text-gray-400 my-2">이메일로 회원가입</div>
         
+        <div className="text-sm text-gray-600 mb-2">
+          이메일을 입력하고 확인 버튼을 눌러주세요
+        </div>
+        
         <input
           className="w-full mb-2 p-2 border rounded"
           placeholder="이름"
@@ -254,32 +277,48 @@ export default function SignupPage() {
           onChange={handleNameChange}
         />
         <div className="relative">
-          <input
-            className={getEmailInputClass()}
-            type="email"
-            placeholder="이메일"
-            value={email}
-            onChange={handleEmailChange}
-          />
-          {emailStatus === 'checking' && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <input
+                className={getEmailInputClass()}
+                type="email"
+                placeholder="이메일"
+                value={email}
+                onChange={handleEmailChange}
+              />
+              {emailStatus === 'checking' && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+                </div>
+              )}
+              {emailStatus === 'available' && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              )}
+              {emailStatus === 'taken' && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <svg className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+              )}
             </div>
-          )}
-          {emailStatus === 'available' && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-          )}
-          {emailStatus === 'taken' && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              <svg className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={handleEmailCheck}
+              disabled={!email || emailStatus === 'checking'}
+              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                !email || emailStatus === 'checking'
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+              {emailStatus === 'checking' ? '확인 중...' : '확인'}
+            </button>
+          </div>
         </div>
         {emailMessage && (
           <div className={getEmailMessageClass()}>
@@ -313,12 +352,12 @@ export default function SignupPage() {
         />
         <button
           className={`w-full py-2 rounded font-semibold ${
-            isSigningUp || emailStatus === 'taken' || emailStatus === 'checking'
+            isSigningUp || emailStatus !== 'available'
               ? 'bg-gray-400 cursor-not-allowed' 
               : 'bg-blue-600 hover:bg-blue-700'
           } text-white`}
           onClick={handleSignup}
-          disabled={isSigningUp || emailStatus === 'taken' || emailStatus === 'checking'}
+          disabled={isSigningUp || emailStatus !== 'available'}
         >
           {isSigningUp ? '회원가입 중...' : '회원가입'}
         </button>
