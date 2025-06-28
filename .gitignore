@@ -19,8 +19,6 @@ ignition/deployments/chain-31337
 
 # Python 가상환경
 venv/
-<<<<<<< main
-=======
 
 # Python 캐시 파일
 __pycache__/
@@ -33,4 +31,3 @@ blockchain/.deployed
 dist/                   
 build/
 
->>>>>>> main
