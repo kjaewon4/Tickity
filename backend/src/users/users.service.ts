@@ -42,7 +42,7 @@ export const getUserProfile = async (userId: string): Promise<UserInfo | null> =
       id: userData.id,
       email: userData.email,
       name: userData.name,
-      dateOfBirth: userData.resident_number_encrypted || '',
+      residentNumber: userData.resident_number_encrypted || '',
       walletAddress: userData.wallet_address || '',
       createdAt: userData.created_at
     };
@@ -95,7 +95,7 @@ export const updateUserProfile = async (
       id: userData.id,
       email: userData.email,
       name: userData.name,
-      dateOfBirth: userData.resident_number_encrypted || '',
+      residentNumber: userData.resident_number_encrypted || '',
       walletAddress: userData.wallet_address || '',
       createdAt: userData.created_at
     };

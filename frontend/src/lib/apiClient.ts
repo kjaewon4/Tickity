@@ -93,7 +93,7 @@ class ApiClient {
   }
 
   // 사용자 정보 업데이트
-  async updateUser(userData: { name: string; date_of_birth: string }): Promise<ApiResponse<{ success: boolean }>> {
+  async updateUser(userData: { name: string; resident_number: string }): Promise<ApiResponse<{ success: boolean }>> {
     return this.request<{ success: boolean }>('/auth/user', {
       method: 'PUT',
       body: JSON.stringify(userData),
@@ -101,7 +101,7 @@ class ApiClient {
   }
 
   // Google OAuth 사용자 생성
-  async createGoogleUser(userData: { name: string; date_of_birth: string }): Promise<ApiResponse<{ success: boolean }>> {
+  async createGoogleUser(userData: { name: string; resident_number: string }): Promise<ApiResponse<{ success: boolean }>> {
     return this.request<{ success: boolean }>('/auth/google-user', {
       method: 'POST',
       body: JSON.stringify(userData),

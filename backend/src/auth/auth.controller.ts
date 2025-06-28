@@ -239,7 +239,7 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
       id: userData.id,
       email: userData.email,
       name: userData.name,
-      dateOfBirth: userData.resident_number_encrypted || '',
+      residentNumber: userData.resident_number_encrypted || '',
       walletAddress: userData.wallet_address,
       createdAt: userData.created_at
     };
@@ -344,7 +344,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
           id: user.id,
           email: user.email!,
           name: '', // 빈 문자열로 설정하여 사용자가 직접 입력하도록
-          dateOfBirth: '', // 빈 문자열로 설정하여 회원가입 완료 페이지로 이동
+          residentNumber: '', // 빈 문자열로 설정하여 회원가입 완료 페이지로 이동
           walletAddress: '',
           createdAt: new Date().toISOString()
         };
@@ -368,7 +368,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
       id: userData.id,
       email: userData.email,
       name: userData.name,
-      dateOfBirth: userData.resident_number_encrypted || '',
+      residentNumber: userData.resident_number_encrypted || '',
       walletAddress: userData.wallet_address,
       createdAt: userData.created_at
     };
@@ -721,7 +721,23 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { name, date_of_birth } = req.body;
+    const { name, resident_number } = req.body;
+
+    // 입력 검증
+    if (!name || !resident_number) {
+      return res.status(400).json({
+        success: false,
+        error: '이름과 주민번호를 입력해주세요.'
+      });
+    }
+
+    // 주민번호 형식 검증
+    if (!/^[0-9]{7}$/.test(resident_number)) {
+      return res.status(400).json({
+        success: false,
+        error: '주민번호는 7자리 숫자로 입력해주세요.'
+      });
+    }
 
     // 토큰으로 사용자 정보 조회
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -730,6 +746,19 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
       return res.status(401).json({
         success: false,
         error: '유효하지 않은 토큰입니다.'
+      });
+    }
+
+    // 주민번호 암호화
+    let encryptedResidentNumber = 'not_provided';
+    try {
+      encryptedResidentNumber = encryptResidentNumber(resident_number);
+      console.log('주민번호 암호화 성공');
+    } catch (encryptError) {
+      console.error('주민번호 암호화 오류:', encryptError);
+      return res.status(400).json({
+        success: false,
+        error: '주민번호 형식이 올바르지 않습니다.'
       });
     }
 
@@ -757,7 +786,7 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
         id: user.id,
         email: user.email,
         name,
-        resident_number_encrypted: 'not_provided', // 기본값 설정 (NOT NULL 제약조건 때문)
+        resident_number_encrypted: encryptedResidentNumber,
         wallet_address: address,
         private_key_encrypted: encryptedKey, // 지갑 개인키 암호화
         password_hash: 'google_oauth', // Google OAuth 사용자임을 명시

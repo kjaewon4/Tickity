@@ -56,7 +56,7 @@ export default function LoginPage() {
               const user = response.data.user;
               
               // 사용자 정보가 완전한지 확인
-              if (user.name && user.dateOfBirth && user.dateOfBirth !== '1900-01-01' && user.dateOfBirth !== '') {
+              if (user.name && user.residentNumber && user.residentNumber !== '1900-01-01' && user.residentNumber !== '') {
                 // 기존 사용자 - 메인 페이지로
                 console.log('기존 사용자, 메인 페이지로 이동');
                 router.replace('/');
