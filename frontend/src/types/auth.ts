@@ -3,7 +3,7 @@ export interface SignupRequest {
   email: string;
   password: string;
   name: string;
-  dateOfBirth: string;
+  residentNumber: string;
 }
 
 // 로그인 요청 타입
@@ -16,7 +16,7 @@ export interface LoginRequest {
 export interface UserMetadata {
   name?: string;
   full_name?: string;
-  date_of_birth?: string;
+  resident_number?: string;
 }
 
 // 사용자 정보 타입
@@ -24,7 +24,7 @@ export interface UserInfo {
   id: string;
   email: string;
   name: string;
-  dateOfBirth: string;
+  residentNumber: string;
   walletAddress: string;
   createdAt: string;
 }

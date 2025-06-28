@@ -3,7 +3,6 @@ export interface SignupRequest {
   email: string;
   password: string;
   name: string;
-  dateOfBirth: string;
   resident_number: string;
 }
 
@@ -18,7 +17,7 @@ export interface UserInfo {
   id: string;
   email: string;
   name: string;
-  dateOfBirth: string;
+  residentNumber: string;
   walletAddress: string;
   createdAt: string;
 }

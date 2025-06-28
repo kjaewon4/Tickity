@@ -14,10 +14,15 @@ export default function CompleteSignupPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [realName, setRealName] = useState<string>('');
-  const [dateOfBirth, setDateOfBirth] = useState<string>('');
+  const [residentNumber, setResidentNumber] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+
+  // 주민번호 형식 검증
+  const validateResidentNumber = (number: string): boolean => {
+    return /^\d{7}$/.test(number);
+  };
 
   useEffect(() => {
     // 로컬 스토리지에서 토큰 확인 (Google OAuth 또는 일반 로그인)
@@ -34,7 +39,7 @@ export default function CompleteSignupPage() {
             const user = response.data.user;
             
             // 기존 사용자인지 확인
-            if (user.name && user.date_of_birth) {
+            if (user.name && user.residentNumber && user.residentNumber !== '1900-01-01' && user.residentNumber !== '') {
               // 기존 사용자이고 정보가 완전하면 바로 메인 페이지로
               console.log('기존 사용자 발견. 메인 페이지로 이동');
               router.replace('/');
@@ -68,8 +73,12 @@ export default function CompleteSignupPage() {
       setError('이름을 입력해주세요.');
       return;
     }
-    if (!dateOfBirth) {
-      setError('생년월일을 입력해주세요.');
+    if (!residentNumber) {
+      setError('주민번호를 입력해주세요.');
+      return;
+    }
+    if (!validateResidentNumber(residentNumber)) {
+      setError('주민번호는 7자리 숫자로 입력해주세요.');
       return;
     }
 
@@ -91,24 +100,24 @@ export default function CompleteSignupPage() {
         id: user.id,
         name: realName.trim(),
         email: userInfo?.email || user.email || '',
-        date_of_birth: dateOfBirth
+        resident_number: residentNumber
       });
 
       // 사용자가 데이터베이스에 있는지 확인
       const userCheckResponse = await apiClient.getUser();
       
       let updateResponse;
-      if (userCheckResponse.data?.user && userCheckResponse.data.user.dateOfBirth) {
+      if (userCheckResponse.data?.user && userCheckResponse.data.user.residentNumber) {
         // 기존 사용자 - 정보 업데이트
         updateResponse = await apiClient.updateUser({
           name: realName.trim(),
-          date_of_birth: dateOfBirth
+          resident_number: residentNumber
         });
       } else {
         // 신규 사용자 - 사용자 생성
         updateResponse = await apiClient.createGoogleUser({
           name: realName.trim(),
-          date_of_birth: dateOfBirth
+          resident_number: residentNumber
         });
       }
 
@@ -138,8 +147,11 @@ export default function CompleteSignupPage() {
     setRealName(e.target.value);
   };
 
-  const handleDateOfBirthChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    setDateOfBirth(e.target.value);
+  const handleResidentNumberChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    // 숫자만 입력 허용
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    // 7자리로 제한
+    setResidentNumber(value.slice(0, 7));
   };
 
   return (
@@ -171,17 +183,22 @@ export default function CompleteSignupPage() {
           </div>
 
           <div>
-            <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-1">
-              생년월일 *
+            <label htmlFor="residentNumber" className="block text-sm font-medium text-gray-700 mb-1">
+              주민번호 *
             </label>
             <input
-              type="date"
-              id="dateOfBirth"
-              value={dateOfBirth}
-              onChange={handleDateOfBirthChange}
+              type="text"
+              id="residentNumber"
+              value={residentNumber}
+              onChange={handleResidentNumberChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="주민번호 7자리 (예: 9501013)"
+              maxLength={7}
               required
             />
+            <div className="text-xs text-gray-500 mt-1">
+              생년월일 6자리 + 성별 1자리 (예: 9501013)
+            </div>
           </div>
 
           {error && (
