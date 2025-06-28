@@ -36,12 +36,17 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
-      
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        data = { success: false, error: text || 'API 응답이 JSON이 아닙니다.' };
+      }
       if (!response.ok) {
         throw new Error(data.error || 'API 요청 실패');
       }
-      
       return data;
     } catch (error) {
       console.error('API 요청 오류:', error);
@@ -112,14 +117,6 @@ class ApiClient {
   async checkEmail(email: string): Promise<ApiResponse<{ exists: boolean }>> {
     return this.request<{ exists: boolean }>(`/auth/check-email/${email}`, {
       method: 'GET',
-    });
-  }
-
-  // 이메일 유효성 검증 (MailboxLayer API 사용)
-  async validateEmail(email: string): Promise<ApiResponse<{ valid: boolean; message?: string }>> {
-    return this.request<{ valid: boolean; message?: string }>('/auth/validate-email', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
     });
   }
 }
