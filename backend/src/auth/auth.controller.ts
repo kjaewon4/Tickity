@@ -733,6 +733,23 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
       });
     }
 
+    // 지갑 생성
+    let address = '';
+    let encryptedKey = '';
+    
+    try {
+      const { address: walletAddress, privateKey } = await bc.createUserWallet();
+      address = walletAddress;
+      encryptedKey = encrypt(privateKey);
+      console.log('지갑 생성 완료:', address);
+    } catch (walletError) {
+      console.error('지갑 생성 실패:', walletError);
+      console.log('지갑 없이 사용자 정보 저장 진행');
+      // 지갑 생성 실패 시에도 사용자 정보는 저장
+      address = 'wallet_creation_failed';
+      encryptedKey = 'wallet_creation_failed';
+    }
+
     // Google OAuth 사용자 정보 생성
     const { error: insertError } = await supabase
       .from('users')
@@ -741,7 +758,8 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
         email: user.email,
         name,
         resident_number_encrypted: 'not_provided', // 기본값 설정 (NOT NULL 제약조건 때문)
-        wallet_address: '',
+        wallet_address: address,
+        private_key_encrypted: encryptedKey, // 지갑 개인키 암호화
         password_hash: 'google_oauth', // Google OAuth 사용자임을 명시
         created_at: new Date().toISOString()
       }]);
