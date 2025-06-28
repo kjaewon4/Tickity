@@ -3,6 +3,55 @@ import crypto from 'crypto';
 // 환경변수에서 암호화 키 가져오기 (실제 운영시에는 더 복잡한 키 사용)
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'tickity-encryption-key-32-chars-long!!';
 const ALGORITHM = 'aes-256-cbc';
+const KEY_LENGTH = 32;      // 256비트
+const IV_LENGTH  = 16;      // 128비트
+
+
+// ───────────────────────────────────────────────────────────
+// 범용 AES 암호화·복호화 (privateKey 등)
+// ───────────────────────────────────────────────────────────
+
+/**
+ * 텍스트를 AES-256-CBC로 암호화
+ * @param text 평문 문자열
+ * @returns "iv:암호문" 형태의 hex 문자열
+ */
+export function encrypt(text: string): string {
+  // 키 파생: scrypt(salt 포함) → 32바이트 버퍼
+  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', KEY_LENGTH);
+  const iv  = crypto.randomBytes(IV_LENGTH);
+
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+/**
+ * AES-256-CBC로 암호화된 데이터를 복호화
+ * @param data "iv:암호문" 형태의 hex 문자열
+ * @returns 원문 문자열
+ */
+export function decrypt(data: string): string {
+  const [ivHex, encrypted] = data.split(':');
+  if (!ivHex || !encrypted) {
+    throw new Error('암호화된 데이터 형식이 올바르지 않습니다.');
+  }
+
+  const iv  = Buffer.from(ivHex, 'hex');
+  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', KEY_LENGTH);
+
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+
+  return decrypted;
+}
+
+// ───────────────────────────────────────────────────────────
+// 주민번호 전용 암호화·검증 유틸
+// ───────────────────────────────────────────────────────────
 
 /**
  * 주민번호를 AES로 암호화 (양방향)

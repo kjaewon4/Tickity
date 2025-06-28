@@ -57,54 +57,10 @@ export default function ConfirmEmail() {
       localStorage.setItem('accessToken', finalAccessToken!);
       localStorage.setItem('refreshToken', finalRefreshToken!);
       
-      // 이미 인증된 경우에도 사용자 정보를 users 테이블에 저장
-      const saveUserData = async () => {
-        try {
-          // 현재 사용자 정보 가져오기
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
-          
-          if (userError || !user) {
-            setStatus('error');
-            setMessage('사용자 정보를 찾을 수 없습니다.');
-            return;
-          }
-
-          // 사용자 메타데이터에서 정보 추출
-          const userMetadata = user.user_metadata;
-          const name = userMetadata?.name || '';
-          const residentNumber = userMetadata?.resident_number || '';
-
-          // 백엔드에 사용자 정보 저장 요청
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/create-user`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${finalAccessToken}`
-            },
-            body: JSON.stringify({
-              name,
-              resident_number: residentNumber,
-              password_hash: 'email_signup'
-            })
-          });
-
-          if (response.ok) {
-            setStatus('success');
-            setMessage('이메일 인증이 완료되었습니다! 로그인 페이지로 이동합니다.');
-            setTimeout(() => {
-              router.push('/login?message=email_confirmed');
-            }, 3000);
-          } else {
-            setStatus('error');
-            setMessage('사용자 정보 저장에 실패했습니다.');
-          }
-        } catch (error) {
-          setStatus('error');
-          setMessage('사용자 정보 저장 중 오류가 발생했습니다.');
-        }
-      };
-
-      saveUserData();
+      // 이미 인증된 경우에도 백엔드에서 사용자 정보 저장을 위해 백엔드로 리다이렉트
+      console.log('이미 인증됨, 백엔드에서 사용자 정보 저장 처리');
+      const backendUrl = `${process.env.NEXT_PUBLIC_API_URL}/auth/confirm-email?token_hash=${finalAccessToken}&type=signup&already_verified=true`;
+      window.location.href = backendUrl;
       return;
     }
 
@@ -113,63 +69,10 @@ export default function ConfirmEmail() {
     const finalType = type || fragmentType;
     
     if (finalToken && finalType === 'signup') {
-      // Supabase로 직접 이메일 인증 처리
-      const confirmEmail = async () => {
-        try {
-          const { data, error } = await supabase.auth.verifyOtp({
-            token_hash: finalToken,
-            type: 'signup'
-          });
-
-          if (error) {
-            setStatus('error');
-            setMessage('이메일 인증에 실패했습니다.');
-            return;
-          }
-
-          if (!data.user) {
-            setStatus('error');
-            setMessage('사용자 정보를 찾을 수 없습니다.');
-            return;
-          }
-
-          // 사용자 메타데이터에서 정보 추출
-          const userMetadata = data.user.user_metadata;
-          const name = userMetadata?.name || '';
-          const residentNumber = userMetadata?.resident_number || '';
-
-          // 백엔드에 사용자 정보 저장 요청
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/create-user`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${data.session?.access_token}`
-            },
-            body: JSON.stringify({
-              name,
-              resident_number: residentNumber,
-              password_hash: 'email_signup'
-            })
-          });
-
-          if (response.ok) {
-            setStatus('success');
-            setMessage('이메일 인증이 완료되었습니다! 로그인 페이지로 이동합니다.');
-            setTimeout(() => {
-              router.push('/login?message=email_confirmed');
-            }, 3000);
-          } else {
-            setStatus('error');
-            setMessage('사용자 정보 저장에 실패했습니다.');
-          }
-
-        } catch (error) {
-          setStatus('error');
-          setMessage('이메일 인증 중 오류가 발생했습니다.');
-        }
-      };
-
-      confirmEmail();
+      // 백엔드의 /confirm-email 엔드포인트로 리다이렉트하여 처리
+      const backendUrl = `${process.env.NEXT_PUBLIC_API_URL}/auth/confirm-email?token_hash=${finalToken}&type=${finalType}`;
+      console.log('백엔드로 리다이렉트:', backendUrl);
+      window.location.href = backendUrl;
     } else {
       setStatus('error');
       setMessage('유효하지 않은 인증 링크입니다.');

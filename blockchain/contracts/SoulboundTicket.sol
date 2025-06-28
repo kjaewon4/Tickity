@@ -32,6 +32,9 @@ contract SoulboundTicket is ERC721, Ownable {
     /// @notice 토큰ID → tokenURI
     mapping(uint256 => string) private _tokenURIs;
 
+    /// @notice 토큰이 취소되었는지 여부 (영구 상태)
+    mapping(uint256 => bool) public isCancelled;
+
     /// @param _admin 배포 시점에 지정할 관리자 지갑주소
     constructor(address _admin) ERC721("SBTicket", "SBT") Ownable(_admin) {
         nextTokenId = 1;
@@ -132,6 +135,46 @@ contract SoulboundTicket is ERC721, Ownable {
             unicode"🧑‍💻 얼굴 인증이 필요합니다"
         );
         tickets[tokenId].isUsed = true;
+    }
+
+    /// @notice 티켓이 취소될 때 발생시키는 이벤트
+    /// @param tokenId     취소된 토큰 ID
+    /// @param reopenTime  다시 오픈 가능한 Unix timestamp
+    event TicketCancelled(uint256 indexed tokenId, uint256 reopenTime);
+
+    /// @notice 티켓 취소 (관리자 전용), 12시간 이내 랜덤 재오픈
+    function cancelTicket(uint256 tokenId) external onlyOwner {
+        require(tickets[tokenId].issuedAt != 0, unicode"❌ 존재하지 않는 티켓");
+        require(!isCancelled[tokenId], unicode"⛔ 이미 취소된 티켓");
+        // 1) 상태 변경
+        isCancelled[tokenId] = true;
+
+         // 2) 0 ~ 12시간(43 200초) 내 랜덤 offset 계산
+        uint256 maxDelay = 12 hours; // solidity 단위 사용 가능 (12 * 3600)
+        // keccak256(블록타임, 토큰ID, 블록난이도) → uint256 해시 → 모듈러
+        uint256 randOffset = uint256(
+            keccak256(
+                abi.encodePacked(
+                    block.timestamp,
+                    tokenId,
+                    block.difficulty,
+                    blockhash(block.number - 1)
+                )
+            )
+        ) % maxDelay;
+
+        // 3) 재오픈 시점
+        uint256 reopenTime = block.timestamp + randOffset;
+
+        // 4) 이벤트 발행
+        emit TicketCancelled(tokenId, reopenTime);
+    }
+
+    /// @notice 티켓 재오픈 (관리자 전용)
+    function reopenTicket(uint256 tokenId) external onlyOwner {
+        require(tickets[tokenId].issuedAt != 0, unicode"❌ 존재하지 않는 티켓");
+        require(isCancelled[tokenId], unicode"⛔ 취소된 티켓이 아닙니다");
+        isCancelled[tokenId] = false;
     }
 
     // ────────────────────────────────────────────
