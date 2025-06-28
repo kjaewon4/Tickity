@@ -102,7 +102,8 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
       options: {
         data: {
           name: name.trim(),
-          resident_number: resident_number
+          resident_number: resident_number,
+          password_hash: 'email_signup' // 가입자 유형 저장
         },
         emailRedirectTo: `${dynamicConfig.FRONTEND_URL}/confirm-email`
       }
@@ -551,9 +552,13 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 
     // 사용자 메타데이터에서 정보 추출
     const userMetadata = data.user.user_metadata;
+    console.log('사용자 메타데이터:', userMetadata);
+    
     const name = userMetadata?.name || '';
     const residentNumber = userMetadata?.resident_number || '';
-    const passwordHash = userMetadata?.password_hash || '';
+    const passwordHash = userMetadata?.password_hash || 'email_signup'; // 기본값을 email_signup으로 설정
+
+    console.log('추출된 정보:', { name, residentNumber: residentNumber ? '있음' : '없음', passwordHash: passwordHash ? '있음' : '없음' });
 
     // 주민번호 암호화
     let encryptedResidentNumber = 'not_provided'; // 기본값 설정 (NOT NULL 제약조건 때문)
@@ -585,6 +590,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
     }
 
     // 이미 사용자가 데이터베이스에 있는지 확인
+    console.log('기존 사용자 확인 중...');
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
       .select('id')
@@ -610,7 +616,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
           resident_number_encrypted: encryptedResidentNumber,
           wallet_address: address,
           private_key_encrypted: encryptedKey,
-          password_hash: passwordHash,
+          password_hash: 'google_oauth',
           created_at: new Date().toISOString()
         }]);
 
@@ -736,7 +742,7 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
         name,
         resident_number_encrypted: 'not_provided', // 기본값 설정 (NOT NULL 제약조건 때문)
         wallet_address: '',
-        password_hash: 'google_oauth',
+        password_hash: 'google_oauth', // Google OAuth 사용자임을 명시
         created_at: new Date().toISOString()
       }]);
 
@@ -796,7 +802,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
       
       const name = userMetadata?.name || '';
       const residentNumber = userMetadata?.resident_number || '';
-      const passwordHash = userMetadata?.password_hash || '';
+      const passwordHash = userMetadata?.password_hash || 'email_signup'; // 기본값을 email_signup으로 설정
 
       console.log('추출된 정보:', { name, residentNumber: residentNumber ? '있음' : '없음', passwordHash: passwordHash ? '있음' : '없음' });
 
@@ -906,7 +912,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
     
     const name = userMetadata?.name || '';
     const residentNumber = userMetadata?.resident_number || '';
-    const passwordHash = userMetadata?.password_hash || '';
+    const passwordHash = userMetadata?.password_hash || 'email_signup'; // 기본값을 email_signup으로 설정
 
     console.log('추출된 정보:', { name, residentNumber: residentNumber ? '있음' : '없음', passwordHash: passwordHash ? '있음' : '없음' });
 
@@ -915,7 +921,6 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
     if (residentNumber) {
       try {
         encryptedResidentNumber = encryptResidentNumber(residentNumber);
-        console.log('주민번호 암호화 성공');
       } catch (encryptError) {
         console.error('주민번호 암호화 오류:', encryptError);
         return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=resident_number_invalid`);
