@@ -24,10 +24,9 @@ solidity-files-cache/
 ignition/deployments/chain-31337
 
 # Python 가상환경
-venv/
-
-# Python 캐시 파일
+venv310/
 __pycache__/
+*.pyc
 *.py[cod]
 
 # deployed 스크립트가 생성하는 주소 파일
