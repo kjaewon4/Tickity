@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getAllConcerts, createConcert, getConcertById } from './concerts.service';
+import { getAllConcerts, createConcert, getConcertById, deleteConcert } from './concerts.service';
 import { ApiResponse } from '../types/auth';
 
 const router = Router();
@@ -102,6 +102,53 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
     res.status(500).json({
       success: false,
       error: '콘서트 생성 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+/**
+ * 콘서트 삭제 (관리자용)
+ * DELETE /concerts/:concertId
+ */
+router.delete('/:concertId', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const { concertId } = req.params;
+
+    if (!concertId) {
+      return res.status(400).json({
+        success: false,
+        error: '콘서트 ID가 필요합니다.'
+      });
+    }
+
+    // 콘서트 존재 여부 확인
+    const existingConcert = await getConcertById(concertId);
+    if (!existingConcert) {
+      return res.status(404).json({
+        success: false,
+        error: '콘서트를 찾을 수 없습니다.'
+      });
+    }
+
+    const deleted = await deleteConcert(concertId);
+
+    if (!deleted) {
+      return res.status(500).json({
+        success: false,
+        error: '콘서트 삭제에 실패했습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: null,
+      message: '콘서트 삭제 성공'
+    });
+  } catch (error) {
+    console.error('콘서트 삭제 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '콘서트 삭제 중 오류가 발생했습니다.'
     });
   }
 });

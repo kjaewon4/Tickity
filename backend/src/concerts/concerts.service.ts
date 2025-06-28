@@ -72,4 +72,28 @@ export const createConcert = async (concert: Omit<Concert, 'id' | 'created_at'>)
     console.error('createConcert 오류:', error);
     return null;
   }
+};
+
+/**
+ * 콘서트 삭제 (관리자용)
+ * @param concertId - 삭제할 콘서트 ID
+ * @returns 삭제 성공 여부
+ */
+export const deleteConcert = async (concertId: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('concerts')
+      .delete()
+      .eq('id', concertId);
+
+    if (error) {
+      console.error('콘서트 삭제 오류:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('deleteConcert 오류:', error);
+    return false;
+  }
 }; 
