@@ -127,3 +127,15 @@ export const deleteVenue = async (venueId: string): Promise<boolean> => {
     return false;
   }
 }; 
+
+// 특정 공연장의 구역(section) 정보 조회
+export const getSectionsByVenueId = async (venueId: string) => {
+  const { data, error } = await supabase
+    .from('sections')
+    .select('*')
+    .eq('venue_id', venueId);
+
+  if (error) throw error;
+
+  return data;
+};

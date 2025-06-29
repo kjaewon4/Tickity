@@ -4,7 +4,8 @@ import {
   getVenueById, 
   createVenue, 
   updateVenue, 
-  deleteVenue
+  deleteVenue,
+  getSectionsByVenueId  
 } from './venues.service';
 import { ApiResponse } from '../types/auth';
 
@@ -156,5 +157,22 @@ router.delete('/:venueId', async (req: Request, res: Response) => {
     res.status(500).json(response);
   }
 });
+
+/**
+ * @route GET /venues/:venueId/sections
+ * @desc 특정 공연장의 구역(section) 정보 조회
+ */
+router.get('/:venueId/sections', async (req: Request, res: Response) => {
+  const { venueId } = req.params;
+
+  try {
+    const sections = await getSectionsByVenueId(venueId);
+    res.status(200).json({ success: true, data: sections });
+  } catch (error) {
+    console.error('섹션 조회 오류:', error);
+    res.status(500).json({ success: false, message: '공연장 섹션 조회 실패' });
+  }
+});
+
 
 export default router; 
