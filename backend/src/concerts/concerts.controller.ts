@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts } from './concerts.service';
+import { getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts, getConcertDetail } from './concerts.service';
 import { ApiResponse } from '../types/auth';
 import { supabase } from '../lib/supabaseClient';
 
@@ -60,11 +60,14 @@ router.get('/upcoming', async (_req: Request, res: Response<ApiResponse>) => {
 /**
  * 특정 콘서트 상세 정보 조회
  * GET /concerts/:concertId
+ * 콘서트 정보 (제목, 날짜, 공연장 이름 및 주소 등)
+ * 좌석 등급 + 가격 + 총 좌석 수
+ * 취소 수수료 정책
  */
 router.get('/:concertId', async (req: Request, res: Response<ApiResponse>) => {
-  try {
-    const { concertId } = req.params;
+  const { concertId } = req.params;
 
+  try {
     if (!concertId) {
       return res.status(400).json({
         success: false,
@@ -72,22 +75,15 @@ router.get('/:concertId', async (req: Request, res: Response<ApiResponse>) => {
       });
     }
 
-    const concert = await getConcertById(concertId);
-
-    if (!concert) {
-      return res.status(404).json({
-        success: false,
-        error: '콘서트 정보를 찾을 수 없습니다.'
-      });
-    }
+    const detail = await getConcertDetail(concertId);
 
     res.json({
       success: true,
-      data: concert,
+      data: detail,
       message: '콘서트 상세 정보 조회 성공'
     });
-  } catch (error) {
-    console.error('콘서트 상세 조회 오류:', error);
+  } catch (err: any) {
+    console.error('콘서트 조회 오류:', err.message);
     res.status(500).json({
       success: false,
       error: '콘서트 상세 조회 중 오류가 발생했습니다.'

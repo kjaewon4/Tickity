@@ -167,3 +167,78 @@ export const getUpcomingConcerts = async () => {
     venue_name: c.venues?.name || '',
   }));
 };
+
+/**
+ * 콘서트 상세 정보 조회 함수
+ * 
+ * 주어진 concertId에 대해 다음 정보를 통합 조회:
+ * 1. 콘서트 기본 정보 및 공연장(venue)의 전체 정보 (좌석 조회용)
+ * 2. concert_seat_prices + 해당 좌석 등급의 총 좌석 수
+ * 3. 취소 수수료 정책 목록
+ *
+ * 반환 형태:
+ * {
+ *   concert: 콘서트 메타데이터,
+ *   seat_prices: 좌석 등급별 가격 및 좌석 수,
+ *   cancellation_policies: 취소 정책 배열
+ * }
+ */
+export const getConcertDetail = async (concertId: string) => {
+  // 1. concerts + venue 전체 정보 조회
+  const { data: concertData, error: concertError } = await supabase
+    .from('concerts')
+    .select(`
+      *,
+      venues ( id, name, address, capacity )
+    `)
+    .eq('id', concertId)
+    .single();
+
+  if (concertError || !concertData) throw concertError;
+
+  const venueId = concertData.venues?.id;
+
+
+  // 2. seat 가격 정보 → RPC 함수로 가져오기 + 좌석 수 조회
+  const { data: seatPriceRaw, error: seatPriceError } = await supabase
+      .rpc('get_seat_grade_prices', {
+        p_concert_id: concertId,
+        p_venue_id: venueId,
+      });
+
+  if (seatPriceError) throw seatPriceError;
+
+  // 3. 좌석 수 포함해서 seat_prices 구성
+  const seat_prices = await Promise.all(
+    (seatPriceRaw || []).map(async (item: any) => {
+      const { count, error: countError } = await supabase
+        .from('seats')
+        .select('*', { count: 'exact', head: true })
+        .eq('seat_grade_id', item.id);
+
+      if (countError) throw countError;
+
+      return {
+        seat_grade_id: item.id,
+        grade_name: item.grade_name,
+        price: item.price,
+        total_seats: count ?? 0
+      };
+    })
+  );
+
+  // 3. 취소 정책 조회
+  const { data: policiesData, error: policyError } = await supabase
+    .from('cancellation_policies')
+    .select('period_desc, fee_desc')
+    .eq('concert_id', concertId);
+
+  if (policyError) throw policyError;
+
+  return {
+    concert: concertData,
+    seat_prices,
+    cancellation_policies: policiesData || []
+  };
+
+};
