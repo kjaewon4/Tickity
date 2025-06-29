@@ -124,10 +124,9 @@ export default function HomePage() {
                 <Image
                   src={
                     concert.poster_url &&
-                    !concert.poster_url.startsWith('http') &&
                     concert.poster_url.trim() !== ''
                       ? concert.poster_url
-                      : '/default-poster.png'
+                      : '/images/default-poster.png'
                   }
                   alt={concert.title}
                   fill
@@ -154,9 +153,10 @@ export default function HomePage() {
             <div className="w-full h-[250px] bg-gray-200 rounded-md overflow-hidden mb-2 relative">
               <Image
                 src={
-                  concert.poster_url && !concert.poster_url.startsWith('http') && concert.poster_url.trim() !== ''
+                  concert.poster_url &&
+                  concert.poster_url.trim() !== ''
                     ? concert.poster_url
-                    : '/default-poster.png'
+                    : '/images/default-poster.png'
                 }
                 alt={concert.title}
                 fill
