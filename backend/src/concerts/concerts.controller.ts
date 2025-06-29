@@ -1,30 +1,58 @@
 import { Router, Request, Response } from 'express';
-import { getAllConcerts, createConcert, getConcertById, deleteConcert } from './concerts.service';
+import { getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts } from './concerts.service';
 import { ApiResponse } from '../types/auth';
+import { supabase } from '../lib/supabaseClient';
 
 const router = Router();
 
 /**
- * 전체 콘서트 목록 조회
+ * 전체 또는 카테고리별 콘서트 목록 조회
  * GET /concerts
+ * GET /concerts?category=여자아이돌
  */
 router.get('/', async (req: Request, res: Response<ApiResponse>) => {
+  const category = req.query.category as string | undefined;
+
   try {
-    const concerts = await getAllConcerts();
+    const concerts = await getConcerts(category);
 
     res.json({
       success: true,
       data: {
         concerts,
-        total: concerts.length
+        total: concerts.length,
       },
-      message: '콘서트 목록 조회 성공'
+      message: category
+        ? `'${category}' 카테고리 콘서트 목록 조회 성공`
+        : '전체 콘서트 목록 조회 성공',
     });
-  } catch (error) {
-    console.error('콘서트 목록 조회 오류:', error);
+  } catch (err: any) {
+    console.error('콘서트 목록 조회 오류:', err.message);
     res.status(500).json({
       success: false,
-      error: '콘서트 목록 조회 중 오류가 발생했습니다.'
+      error: '콘서트 목록 조회 중 오류가 발생했습니다.',
+    });
+  }
+});
+
+/**
+ * [GET] /concerts/upcoming
+ * 다가오는 콘서트 중 가까운 날짜 순 8개 조회 (슬라이더용)
+ */
+router.get('/upcoming', async (_req: Request, res: Response<ApiResponse>) => {
+  try {
+    const concerts = await getUpcomingConcerts();
+
+    res.json({
+      success: true,
+      data: { concerts },
+      message: '다가오는 콘서트 8개 조회 성공',
+    });
+  } catch (err: any) {
+    console.error('[GET] /concerts/upcoming 오류:', err.message);
+    res.status(500).json({
+      success: false,
+      error: '다가오는 콘서트 조회 중 서버 오류 발생',
     });
   }
 });

@@ -97,3 +97,73 @@ export const deleteConcert = async (concertId: string): Promise<boolean> => {
     return false;
   }
 }; 
+
+
+// 전체 또는 카테고리별 콘서트 조회
+export const getConcerts = async (category?: string) => {
+  let query = supabase
+    .from('concerts')
+    .select(`
+      id,
+      title,
+      main_performer,
+      start_date,
+      start_time,
+      poster_url,
+      category,
+      venues (
+        name
+      )
+    `)
+    .order('ticket_open_at', { ascending: true });
+
+  if (category) {
+    query = query.eq('category', category);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return data.map((c: any) => ({
+    id: c.id,
+    title: c.title,
+    main_performer: c.main_performer,
+    start_date: c.start_date,
+    start_time: c.start_time,
+    poster_url: c.poster_url,
+    category: c.category,
+    venue_name: c.venues?.name || '',
+  }));
+};
+
+// 슬라이더용 다가오는 콘서트 8개 조회
+export const getUpcomingConcerts = async () => {
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('concerts')
+    .select(`
+      id,
+      title,
+      main_performer,
+      date,
+      poster_url,
+      venues (
+        name
+      )
+    `)
+    .gte('date', now)
+    .order('date', { ascending: true })
+    .limit(8);
+
+  if (error) throw error;
+
+  return data.map((c: any) => ({
+    id: c.id,
+    title: c.title,
+    main_performer: c.main_performer,
+    date: c.date,
+    poster_url: c.poster_url,
+    venue_name: c.venues?.name || '',
+  }));
+};
