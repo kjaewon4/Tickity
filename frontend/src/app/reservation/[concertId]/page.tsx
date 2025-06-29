@@ -114,6 +114,7 @@ const ReservationDetail = () => {
   const handleReservation = () => {
     if (!concert) return;
     localStorage.setItem('concertId', concert.id);
+    localStorage.setItem('concertTitle', concert.title); // 상세 페이지에서 저장
     localStorage.setItem('venueId', concert.venue_id);
     localStorage.setItem('selectedDate', selectedDate);
     localStorage.setItem('selectedTime', selectedTime);
