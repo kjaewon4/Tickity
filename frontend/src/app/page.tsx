@@ -14,10 +14,21 @@ import ChatbotModal from "./layout/ChatbotModal";
 interface Concert {
   id: string;
   title: string;
-  date: string;
-  location: string;
+  main_performer: string;
+  start_date: string;     // ex: '2025-08-23'
+  // end_date: string;       // 공연 끝나는 날짜 (넣지말까)
   poster_url: string;
+  venue_name: string;
 }
+
+const formatStartDate = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  // const weekday = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
+  return `${year}.${month}.${day}`;
+};
 
 function SampleNextArrow({ onClick }: { onClick?: () => void }) {
   return (
@@ -163,9 +174,19 @@ export default function HomePage() {
                   className="object-cover"
                 />
               </div>
-              <div className="p-2 text-sm font-medium text-gray-800 dark:text-white truncate">
+              {/* 콘서트 제목 */}
+              <div className="text-sm text-gray-900 dark:text-white font-semibold leading-snug truncate">
                 {concert.title}
               </div>
+
+              {/* 공연장 이름 */}
+              <div className="text-xs text-gray-500 dark:text-gray-400">{concert.venue_name}</div>
+
+              {/* 시작일만 표시 */}
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {formatStartDate(concert.start_date)}
+              </div>
+
             </div>
           </div>
         ))}
@@ -198,23 +219,27 @@ export default function HomePage() {
           >
             <div className="w-full h-[250px] bg-gray-200 rounded-md overflow-hidden mb-2 relative">
               <Image
-                src={
-                  concert.poster_url &&
-                  concert.poster_url.trim() !== ''
-                    ? concert.poster_url
-                    : '/images/default-poster.png'
-                }
+                src={concert.poster_url?.trim() !== '' ? concert.poster_url : '/images/default-poster.png'}
                 alt={concert.title}
                 fill
                 className="object-cover"
               />
             </div>
-            <div className="text-sm text-gray-800 dark:text-white font-semibold truncate">
+
+            {/* 타이틀 */}
+            <div className="text-sm text-gray-900 dark:text-white font-semibold leading-snug truncate">
               {concert.title}
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">{concert.date}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">{concert.location}</div>
+
+            {/* 공연장 */}
+            <div className="text-xs text-gray-500 dark:text-gray-400">{concert.venue_name}</div>
+
+            {/* 시작일만 표시 */}
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {formatStartDate(concert.start_date)}
+            </div>
           </div>
+
         ))}
       </div>
 
