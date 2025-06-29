@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts, getConcertDetail } from './concerts.service';
+import { getSeatSummary, getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts, getConcertDetail, listSectionAvailability } from './concerts.service';
 import { ApiResponse } from '../types/auth';
 import { supabase } from '../lib/supabaseClient';
 
@@ -88,6 +88,43 @@ router.get('/:concertId', async (req: Request, res: Response<ApiResponse>) => {
       success: false,
       error: '콘서트 상세 조회 중 오류가 발생했습니다.'
     });
+  }
+});
+
+/**
+ * GET /concerts/:concertId/seat-summary
+ * → [
+ *   { grade_name:"VIP", price:165000, zones:[{code:"F1",available:50}, …] },
+ *   { grade_name:"일반석", price:132000, zones:[{code:"43",available:120}, …] }
+ * ]
+ */
+router.get('/:concertId/seat-summary', async (req, res) => {
+  const { concertId } = req.params;
+  const { withTotal } = req.query; // ?withTotal=true
+
+  try {
+    const data = await getSeatSummary(
+      concertId,
+      withTotal === 'true',
+    );
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /concerts/:concertId/section-status
+ * → [{ code:"43", available:123 }, …]
+ * 섹션별 남은 좌석 수
+ */
+router.get('/:concertId/section-status', async (req, res) => {
+  const { concertId } = req.params;
+  try {
+    const data = await listSectionAvailability(concertId);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

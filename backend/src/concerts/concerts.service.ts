@@ -1,6 +1,37 @@
 import { Concert } from './concerts.model';
 import { supabase } from '../lib/supabaseClient';
 
+/* ─────────────────────── 공통 헬퍼 ─────────────────────── */
+
+/** ★ concerts.id → venues.id 가져오기 (1줄짜리 공용 헬퍼) */
+export const getConcertVenue = async (concertId: string): Promise<string> => {
+  const { data, error } = await supabase
+    .from('concerts')
+    .select('venue_id')
+    .eq('id', concertId)
+    .single();
+
+  if (error || !data?.venue_id) throw error ?? new Error('venue_id 없음');
+  return data.venue_id as string;
+};
+
+/**
+ * ★ 좌석 가격(+선택적 총 좌석 수) 1회 호출 헬퍼
+ *   withCount = true → total_seats 포함
+ */
+export async function fetchSeatPrices(concertId: string, withCount = false) {
+  const venueId = await getConcertVenue(concertId);
+
+  const { data, error } = await supabase.rpc('get_seat_grade_prices', {
+    p_concert_id: concertId,
+    p_venue_id:   venueId,
+    p_with_count: withCount,   // true 면 total_seats 포함
+  });
+  if (error) throw error;
+
+  return data;   // [{ id, grade_name, price, total_seats? }, …]
+}
+
 /**
  * 모든 콘서트 목록 조회
  * @returns 콘서트 목록
@@ -168,66 +199,34 @@ export const getUpcomingConcerts = async () => {
   }));
 };
 
+
+/* ─────────────────────── 상세 조회 ─────────────────────── */
+
 /**
- * 콘서트 상세 정보 조회 함수
- * 
- * 주어진 concertId에 대해 다음 정보를 통합 조회:
- * 1. 콘서트 기본 정보 및 공연장(venue)의 전체 정보 (좌석 조회용)
- * 2. concert_seat_prices + 해당 좌석 등급의 총 좌석 수
- * 3. 취소 수수료 정책 목록
- *
- * 반환 형태:
- * {
- *   concert: 콘서트 메타데이터,
- *   seat_prices: 좌석 등급별 가격 및 좌석 수,
- *   cancellation_policies: 취소 정책 배열
- * }
+ * 콘서트 상세:
+ * 1) concerts + venues
+ * 2) seat_prices (가격+총석수)
+ * 3) 취소 정책
  */
 export const getConcertDetail = async (concertId: string) => {
-  // 1. concerts + venue 전체 정보 조회
+  /* 1) 콘서트 + 공연장 메타 */
   const { data: concertData, error: concertError } = await supabase
     .from('concerts')
-    .select(`
+    .select(
+      `
       *,
       venues ( id, name, address, capacity )
-    `)
+    `,
+    )
     .eq('id', concertId)
     .single();
 
   if (concertError || !concertData) throw concertError;
 
-  const venueId = concertData.venues?.id;
+  /* 2) 가격 + 총석수 */
+  const seat_prices = await fetchSeatPrices(concertId, true);
 
-
-  // 2. seat 가격 정보 → RPC 함수로 가져오기 + 좌석 수 조회
-  const { data: seatPriceRaw, error: seatPriceError } = await supabase
-      .rpc('get_seat_grade_prices', {
-        p_concert_id: concertId,
-        p_venue_id: venueId,
-      });
-
-  if (seatPriceError) throw seatPriceError;
-
-  // 3. 좌석 수 포함해서 seat_prices 구성
-  const seat_prices = await Promise.all(
-    (seatPriceRaw || []).map(async (item: any) => {
-      const { count, error: countError } = await supabase
-        .from('seats')
-        .select('*', { count: 'exact', head: true })
-        .eq('seat_grade_id', item.id);
-
-      if (countError) throw countError;
-
-      return {
-        seat_grade_id: item.id,
-        grade_name: item.grade_name,
-        price: item.price,
-        total_seats: count ?? 0
-      };
-    })
-  );
-
-  // 3. 취소 정책 조회
+  /* 3) 취소 정책 */
   const { data: policiesData, error: policyError } = await supabase
     .from('cancellation_policies')
     .select('period_desc, fee_desc')
@@ -238,7 +237,64 @@ export const getConcertDetail = async (concertId: string) => {
   return {
     concert: concertData,
     seat_prices,
-    cancellation_policies: policiesData || []
+    cancellation_policies: policiesData ?? [],
   };
-
 };
+
+/** 섹션별 남은 좌석 수 */
+export async function listSectionAvailability(concertId: string) {
+  const venueId = await getConcertVenue(concertId);
+
+  const { data, error } = await supabase.rpc('get_section_availability', {
+    p_concert_id: concertId,
+    p_venue_id:   venueId,
+  });
+  if (error) throw error;
+
+  /* data = [{ code:"43", available:123 }, …] */
+  return data;
+}
+
+export interface ZoneInfo {
+  code: string;
+  available: number;
+  total?: number;
+}
+export interface GradeSummary {
+  grade_name: string;
+  price: number;
+  zones: ZoneInfo[];
+}
+/** 콘서트용 “등급→구역→잔여석” 요약 반환 */
+export async function getSeatSummary(
+  concertId: string,
+  withTotal = false,
+): Promise<GradeSummary[]> {
+  const venueId = await getConcertVenue(concertId);
+
+  const { data, error } = await supabase.rpc('get_grade_zone_availability', {
+    p_concert_id: concertId,
+    p_venue_id: venueId,
+    p_with_total: withTotal,
+  });
+  if (error) throw error;
+
+  /* 평면(행) → 계층(등급별 배열)으로 변환 */
+  const map: Record<string, GradeSummary> = {};
+  (data ?? []).forEach((row: any) => {
+    if (!map[row.grade_name]) {
+      map[row.grade_name] = {
+        grade_name: row.grade_name,
+        price: row.price,
+        zones: [],
+      };
+    }
+    map[row.grade_name].zones.push({
+      code: row.zone_code,
+      available: row.available,
+      total: row.total ?? undefined,
+    });
+  });
+
+  return Object.values(map);
+}
