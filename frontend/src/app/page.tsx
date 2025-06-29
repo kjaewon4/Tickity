@@ -50,6 +50,8 @@ export default function HomePage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('전체');
+  const [upcomingConcerts, setUpcomingConcerts] = useState<Concert[]>([]); // 슬라이더용
 
   const router = useRouter(); 
 
@@ -76,17 +78,43 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    const fetchConcerts = async () => {
+    const fetchUpcomingConcerts = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/upcoming`);
         const data = await res.json();
-        if (data.success && data.data?.concerts) setConcerts(data.data.concerts);
+        if (data.success && data.data?.concerts) {
+          setUpcomingConcerts(data.data.concerts); // 슬라이더용
+        }
+      } catch {
+        setUpcomingConcerts([]);
+      }
+    };
+
+    fetchUpcomingConcerts();
+  }, []);
+
+
+  useEffect(() => {
+  const fetchConcerts = async () => {
+      try {
+        const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/concerts`);
+        if (selectedCategory !== '전체') {
+          url.searchParams.set('category', selectedCategory);
+        }
+
+        const res = await fetch(url.toString());
+        const data = await res.json();
+
+        if (data.success && data.data?.concerts) {
+          setConcerts(data.data.concerts);
+        }
       } catch {
         setConcerts([]);
       }
     };
+
     fetchConcerts();
-  }, []);
+  }, [selectedCategory]);
 
   const getUserDisplayName = (user: UserInfo): string => {
     return user.name || user.email || '사용자';
@@ -109,11 +137,13 @@ export default function HomePage() {
     ]
   };
 
+  const categories = ['전체', '여자아이돌', '남자아이돌', '솔로 가수', '내한공연', '랩/힙합'];
+
   return (
     <main className="px-6 py-10 bg-white min-h-screen max-w-7xl mx-auto">
     <div className="mb-10 relative -mx-4">
       <Slider {...sliderSettings}>
-        {concerts.slice(0, 8).map((concert) => (
+        {upcomingConcerts.map((concert) => (
           <div
             key={concert.id}
             className="px-4 cursor-pointer"
@@ -141,6 +171,22 @@ export default function HomePage() {
         ))}
       </Slider>
     </div>
+
+
+      <div className="flex flex-wrap gap-2 mb-6">
+        {categories.map((category) => (
+          <button
+            key={category}
+            onClick={() => setSelectedCategory(category)}
+            className={`px-4 py-1 border rounded-full text-sm ${
+              selectedCategory === category ? 'bg-black text-white' : 'bg-white text-black'
+            }`}
+          >
+            {category}
+          </button>
+        ))}
+      </div>
+
 
     <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">콘서트 둘러보기</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-8">
@@ -171,6 +217,7 @@ export default function HomePage() {
           </div>
         ))}
       </div>
+
       <ChatbotModal />
     </main>
   );
