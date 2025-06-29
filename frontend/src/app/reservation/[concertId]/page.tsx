@@ -52,15 +52,27 @@ const ReservationDetail = () => {
   const [selectedTime, setSelectedTime] = useState('');
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [liked, setLiked] = useState(false);
+  const [rounds, setRounds] = useState<{ round: number; time: string }[]>([]);
 
-  const year = 2025, month = 7, totalDays = 31;
-  const firstDay = new Date(year, month, 1).getDay();
   const calendarDays = useMemo(() => {
+    if (!concert?.start_date) return [];
+    const start = new Date(concert?.start_date);
+    const year = start.getFullYear();
+    const month = start.getMonth(); // 0-based
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const firstDay = new Date(year, month, 1).getDay();
+  console.log('month', start.getMonth());
     const days: Array<number | null> = [];
     for (let i = 0; i < firstDay; i++) days.push(null);
     for (let i = 1; i <= totalDays; i++) days.push(i);
     return days;
-  }, []);
+  }, [concert?.start_date]);
+
+  useEffect(() => {
+    if (concert?.start_date) {
+      setSelectedDate(concert.start_date);
+    }
+  }, [concert]);
 
   useEffect(() => {
     if (!concertId) return;
@@ -71,6 +83,7 @@ const ReservationDetail = () => {
         setConcert(json.data.concert);
         setSeatPrices(json.data.seat_prices);
         setPolicies(json.data.cancellation_policies);
+        setRounds(json.data.rounds);
       }
     };
     fetchConcert();
@@ -286,41 +299,52 @@ const ReservationDetail = () => {
             <div key={d} className={i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-800'}>{d}</div>
           ))}
           {calendarDays.map((day, idx) => {
-            const date = `2025-08-${String(day).padStart(2, '0')}`;
-            const isAvailable = ['2025-08-01', '2025-08-02'].includes(date);
+            if (!day) return <div key={`empty-${idx}`} className="w-8 h-8" />;
+
+            const baseDate = new Date(concert.start_date);
+            const year = baseDate.getFullYear();
+            const month = baseDate.getMonth() + 1; // 0-based → 1-based
+            const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+            const isAvailable = date === concert.start_date;
+            const isSelected = selectedDate === date;
+
             const baseStyle = "w-8 h-8 flex items-center justify-center rounded-full text-sm leading-none";
 
-            return day ? (
+            return (
               <button
                 key={day}
-                className={`${baseStyle} ${selectedDate === date ? 'bg-blue-500 text-white' : isAvailable ? 'hover:bg-gray-200 text-black' : 'text-gray-300 cursor-not-allowed'}`}
+                className={`${baseStyle} ${isSelected ? 'bg-blue-500 text-white' : isAvailable ? 'hover:bg-gray-200 text-black' : 'text-gray-300 cursor-not-allowed'}`}
                 onClick={() => isAvailable && setSelectedDate(date)}
                 disabled={!isAvailable}
               >
                 {day}
               </button>
-            ) : (
-              <div key={`empty-${idx}`} className="w-8 h-8" />
             );
           })}
         </div>
 
-        <h3 className="text-base font-semibold mb-2">회차 선택</h3>
-        <div className="space-y-2 mb-4">
-          {['1회 19:30', '2회 16:00'].map((time) => {
-            const isSelected = selectedTime === time;
-            return (
-              <button
-                key={time}
-                className={`w-full rounded-md px-4 py-2 flex justify-between items-center text-sm ${isSelected ? 'bg-blue-400' : 'bg-gray-100 hover:bg-blue-100'}`}
-                onClick={() => setSelectedTime(time)}
-              >
-                <span className="text-black">{time}</span>
-                <span className={`text-xs ${isSelected ? 'text-white' : 'text-gray-500'}`}>{isSelected ? '선택됨' : '예매 가능'}</span>
-              </button>
-            );
-          })}
-        </div>
+  <h3 className="text-base font-semibold mb-2">회차 선택</h3>
+<div className="space-y-2 mb-4">
+  {concert.round && (
+    (() => {
+      const label = `${concert.round}회 ${concert.start_time.slice(0, 5)}`;
+      const isSelected = selectedTime === label;
+      return (
+        <button
+          className={`w-full rounded-md px-4 py-2 flex justify-between items-center text-sm ${isSelected ? 'bg-blue-400' : 'bg-gray-100 hover:bg-blue-100'}`}
+          onClick={() => setSelectedTime(label)}
+        >
+          <span className="text-black">{label}</span>
+          <span className={`text-xs ${isSelected ? 'text-white' : 'text-gray-500'}`}>
+            {isSelected ? '선택됨' : '예매 가능'}
+          </span>
+        </button>
+      );
+    })()
+  )}
+</div>
+
 
         <div className="text-sm text-gray-600 mb-2">선택 정보</div>
         <div className="text-sm font-medium mb-4">{selectedDate} {selectedTime}</div>
