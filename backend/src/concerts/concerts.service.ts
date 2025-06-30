@@ -259,6 +259,7 @@ export interface ZoneInfo {
   code: string;
   available: number;
   total?: number;
+  section_id: string;
 }
 export interface GradeSummary {
   grade_name: string;
@@ -293,6 +294,7 @@ export async function getSeatSummary(
       code: row.zone_code,
       available: row.available,
       total: row.total ?? undefined,
+      section_id: row.section_id,
     });
   });
 

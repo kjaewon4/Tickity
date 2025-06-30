@@ -7,6 +7,7 @@ import Image from 'next/image';
 interface ZoneInfo {
   code: string;
   available: number;
+  section_id: string;
 }
 interface GradeSummary {
   grade_name: string;      // 'VIP' | '일반석'
@@ -17,7 +18,7 @@ interface GradeSummary {
 interface SidebarProps {
   concertId: string;                 
   onViewAll: () => void;
-  onZoneSelect: (zoneId: string) => void;
+  onSectionSelect: (sectionId: string) => void;
   selectedSeatInfo?: string;
 }
 
@@ -26,7 +27,7 @@ const seatGrades = {
   일반석: Array.from({ length: 43 }, (_, i) => (i + 1).toString()),
 };
 
-const Sidebar: FC<SidebarProps> = ({ concertId, onViewAll, onZoneSelect, selectedSeatInfo }) => {
+const Sidebar: FC<SidebarProps> = ({ concertId, onViewAll, onSectionSelect, selectedSeatInfo }) => {
   /* ▣ API 로드 결과 */
   const [summary, setSummary] = useState<GradeSummary[]>([]);
   /* ▣ 선택 상태 */
@@ -67,11 +68,11 @@ const Sidebar: FC<SidebarProps> = ({ concertId, onViewAll, onZoneSelect, selecte
     setDropdownOpen(dropdownOpen === grade ? null : grade);
   };
 
-  const handleZoneSelect = (zone: string) => {
-    setSelectedZone(zone);
-    onZoneSelect(zone);
+  const handleSectionSelect = (sectionId: string) => {
+     console.log('[DEBUG] 선택된 sectionId:', sectionId); 
+    setSelectedZone(sectionId);
+    onSectionSelect(sectionId);
   };
-
   const isSelected = (zone: string) => selectedZone === zone;
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.2, 2));
@@ -221,11 +222,11 @@ const Sidebar: FC<SidebarProps> = ({ concertId, onViewAll, onZoneSelect, selecte
                         ? a.code.localeCompare(b.code)
                         : Number(a.code) - Number(b.code),
                     )
-                    .map(({ code, available }) => (
+                    .map(({ code, available, section_id }) => (
                       <li
                         key={code}
                         className={`cursor-pointer text-sm mb-1 flex justify-between ${
-                          isSelected(code)
+                          isSelected(section_id)
                             ? 'text-black font-bold'
                             : 'text-gray-600'
                         } ${
@@ -233,7 +234,7 @@ const Sidebar: FC<SidebarProps> = ({ concertId, onViewAll, onZoneSelect, selecte
                             ? 'line-through text-gray-400 cursor-not-allowed'
                             : ''
                         }`}
-                        onClick={() => available > 0 && handleZoneSelect(code)}
+                        onClick={() => available > 0 && handleSectionSelect(section_id)}
                       >
                         <span>
                           {grade_name === 'VIP' ? `FLOOR ${code}` : `${code} 구역`}
