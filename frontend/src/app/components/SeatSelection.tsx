@@ -3,23 +3,17 @@
 import { FC, useEffect, useState } from 'react';
 
 interface MapArea {
-  id: string;
-  code: string;
+  id: string; // 🔹 section_id
+  code: string; // 🔹 구역 코드 (예: '43', 'F1')
   coords: [number, number][];
 }
 
 interface SeatSelectionProps {
   venueId: string | null;
-  onZoneSelect: (id: string) => void;
+  onSectionSelect: (sectionId: string) => void; // 명확한 이름으로 변경
 }
 
-
-// const mapAreas: MapArea[] = [
-//   { id: '43', coords: [[39, 138], [141, 155], [134, 223], [35, 220]] },
-//   { id: '42', coords: [[35, 220], [36, 300], [139, 299], [137, 226]] },
-// ];
-
-const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onZoneSelect }) => {
+const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => {
   const [mapAreas, setMapAreas] = useState<MapArea[]>([]);
   const originalWidth = 1172;
   const originalHeight = 812;
@@ -32,7 +26,7 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onZoneSelect }) => {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/venues/${venueId}/sections`);
         const json = await res.json();
         if (json.success && json.data) {
-          setMapAreas(json.data);
+          setMapAreas(json.data); // 🔹 sections 정보 로드
         }
       } catch (err) {
         console.error('구역 정보 불러오기 실패:', err);
@@ -42,9 +36,8 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onZoneSelect }) => {
     fetchSections();
   }, [venueId]);
 
-
-  const handleAreaClick = (id: string) => {
-    onZoneSelect(id);  // area.id = section.id (UUID)
+  const handleAreaClick = (sectionId: string) => {
+    onSectionSelect(sectionId); // 🔹 클릭된 section_id 전달
   };
 
   return (
@@ -72,6 +65,7 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onZoneSelect }) => {
               zIndex: 0,
             }}
           />
+
           {mapAreas
             .filter((area) => Array.isArray(area.coords) && area.coords.length > 0)
             .map((area) => {
@@ -98,7 +92,7 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onZoneSelect }) => {
                       cursor: 'pointer',
                       zIndex: 1,
                     }}
-                    onClick={() => handleAreaClick(area.id)} 
+                    onClick={() => handleAreaClick(area.id)}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.4)';
                     }}
@@ -122,7 +116,6 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onZoneSelect }) => {
                 </div>
               );
             })}
-
         </div>
       </div>
 

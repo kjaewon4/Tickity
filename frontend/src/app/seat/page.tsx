@@ -6,9 +6,11 @@ import SeatGrid from '../components/SeatGrid';
 import Sidebar from '../components/Sidebar';
 
 export default function SeatPage() {
-  const [zoneNumber, setZoneNumber] = useState<string | null>(null);
+  // 🔹 구역 선택 시 넘어오는 섹션 ID (section_id)
+  const [sectionId, setSectionId] = useState<string | null>(null);
   const [selectedSeatInfo, setSelectedSeatInfo] = useState<string | null>(null); 
 
+  // 🔹 콘서트 관련 정보 (localStorage에서 로드)
   const [concertId, setConcertId] = useState<string | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -22,8 +24,11 @@ export default function SeatPage() {
     setSelectedTime(localStorage.getItem('selectedTime'));
     setConcertTitle(localStorage.getItem('concertTitle'));
   }, []);
-  const handleZoneSelect = (id: string) => {
-    setZoneNumber(id);
+
+  // 🔹 Sidebar, SeatSelection에서 선택된 섹션 ID 처리
+  const handleSectionSelect = (id: string) => {
+     console.log('[DEBUG] 선택된 섹션:', id); 
+    setSectionId(id);
   };
 
   return (
@@ -32,7 +37,9 @@ export default function SeatPage() {
         {/* 좌측: 제목 + 날짜 + 좌석 선택 */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-4 flex-wrap">
-            <h1 className="text-xl font-bold whitespace-nowrap">좌석 선택 {concertTitle}</h1>
+            <h1 className="text-xl font-bold whitespace-nowrap">
+              좌석 선택 {concertTitle}
+            </h1>
             <select className="border rounded px-3 py-1 text-sm mt-2 md:mt-0">
               <option>{selectedDate} {selectedTime}</option>
             </select>
@@ -40,16 +47,19 @@ export default function SeatPage() {
 
           {/* 좌석 영역 */}
           <div className="w-full overflow-hidden">
-            {zoneNumber ? (
+            {sectionId ? (
               <SeatGrid
                 concertId={concertId}
-                sectionId={zoneNumber!}
+                sectionId={sectionId}
                 selectedDate={selectedDate}
                 selectedTime={selectedTime}
-                onSeatSelect={(info) => setSelectedSeatInfo(info)} // SeatGrid에서 선택된 좌석 정보 전달 받음
+                onSeatSelect={setSelectedSeatInfo} // 포도알 선택 시 정보 전달
               />
             ) : (
-              <SeatSelection venueId={venueId} onZoneSelect={handleZoneSelect} />
+              <SeatSelection
+                venueId={venueId}
+                onSectionSelect={handleSectionSelect} // 좌석도 전체 보기 클릭 시
+              />
             )}
           </div>
         </div>
@@ -61,8 +71,8 @@ export default function SeatPage() {
             selectedDate={selectedDate}
             selectedTime={selectedTime}
             selectedSeatInfo={selectedSeatInfo ?? undefined}
-            onViewAll={() => setZoneNumber(null)}
-            onZoneSelect={(zoneId) => setZoneNumber(zoneId)}
+            onViewAll={() => setSectionId(null)}
+            onSectionSelect={(sectionId) => setSectionId(sectionId)} // 섹션 선택 시
           />
         </div>
       </div>
