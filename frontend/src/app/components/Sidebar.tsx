@@ -40,10 +40,27 @@ const Sidebar: FC<SidebarProps> = ({ concertId, onViewAll, onZoneSelect, selecte
 
   /* ───── 1. API 호출 ───── */
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/${concertId}/seat-summary?withTotal=false`)
-      .then(r => r.json())
-      .then(({ data }) => setSummary(data as GradeSummary[]))
-      .catch(console.error);
+    if (!concertId) return;
+
+    const fetchSeatSummary = async () => {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/concerts/${concertId}/seat-summary?withTotal=false`
+        );
+        const result = await res.json();
+        
+        if (result.success && Array.isArray(result.data)) {
+          setSummary(result.data); // ✅ 핵심: result.data만 set
+        } else {
+          console.error('Invalid summary format:', result);
+          setSummary([]); // fallback
+        }
+      } catch (err) {
+        console.error('좌석 요약 정보 조회 실패:', err);
+      }
+    };
+
+    fetchSeatSummary();
   }, [concertId]);
 
   const handleToggleDropdown = (grade: string) => {
