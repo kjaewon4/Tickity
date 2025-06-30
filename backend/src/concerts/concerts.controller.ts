@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getSeatSummary, getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts, getConcertDetail, listSectionAvailability, getConcertDetailByShortId, getConcertByShortId } from './concerts.service';
 import { ApiResponse } from '../types/auth';
 import { supabase } from '../lib/supabaseClient';
+import { requireAdminAuth } from '../auth/auth.middleware';
 
 const router = Router();
 
@@ -152,7 +153,7 @@ router.get('/:concertId/:sectionId/seats', async (req: Request, res: Response) =
   res.json({
     floor: data.length > 0 ? data[0].floor : null,
     zoneCode: data.length > 0 ? data[0].zone_code : null,
-    seatMap: data.map(seat => ({
+    seatMap: data.map((seat: any) => ({
       row: seat.row_number,
       col: seat.column_number,
       status: seat.status,
@@ -165,7 +166,7 @@ router.get('/:concertId/:sectionId/seats', async (req: Request, res: Response) =
  * 새 콘서트 생성 (관리자용)
  * POST /concerts
  */
-router.post('/', async (req: Request, res: Response<ApiResponse>) => {
+router.post('/', requireAdminAuth, async (req: Request, res: Response<ApiResponse>) => {
   try {
     const concertData = req.body;
 
@@ -204,7 +205,7 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
  * 콘서트 삭제 (관리자용)
  * DELETE /concerts/:concertId
  */
-router.delete('/:concertId', async (req: Request, res: Response<ApiResponse>) => {
+router.delete('/:concertId', requireAdminAuth, async (req: Request, res: Response<ApiResponse>) => {
   try {
     const { concertId } = req.params;
 

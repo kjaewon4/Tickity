@@ -36,17 +36,88 @@ export default function AdminConcertsPage() {
   const [concerts, setConcerts] = useState<Concert[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // 콘서트 목록 로드
+  // 로그인 상태 및 권한 확인
   useEffect(() => {
+    const checkAuthAndPermission = async () => {
+      try {
+        setAuthLoading(true);
+        const accessToken = localStorage.getItem('accessToken');
+        
+        if (!accessToken) {
+          setIsLoggedIn(false);
+          setIsAdmin(false);
+          return;
+        }
+
+        // 사용자 정보 조회 및 권한 확인을 한 번에 처리
+        const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/user`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!userResponse.ok) {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          setIsLoggedIn(false);
+          setIsAdmin(false);
+          return;
+        }
+
+        const userData = await userResponse.json();
+        
+        if (userData.success && userData.data?.user) {
+          setIsLoggedIn(true);
+          
+          // 관리자 권한 확인
+          const adminAddress = '0x030fd25c452078627Db888f8B22aF1c0fEcDCf97';
+          const userWalletAddress = userData.data.user.walletAddress;
+          
+          if (userWalletAddress?.toLowerCase() === adminAddress.toLowerCase()) {
+            setIsAdmin(true);
+            // 권한이 있으면 바로 콘서트 목록 로드
+            loadConcerts();
+          } else {
+            setIsAdmin(false);
+          }
+        } else {
+          setIsLoggedIn(false);
+          setIsAdmin(false);
+        }
+      } catch (error) {
+        console.error('인증 상태 확인 오류:', error);
+        setIsLoggedIn(false);
+        setIsAdmin(false);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    // 콘서트 목록 로드 함수
     const loadConcerts = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts`);
+        const accessToken = localStorage.getItem('accessToken');
+        
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/admin`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('콘서트 목록을 불러오는데 실패했습니다.');
+        }
+        
         const data = await response.json();
         
         if (data.success && data.data) {
-          // 백엔드에서 { concerts: [...], total: number } 형태로 반환
           const concerts = data.data.concerts || data.data || [];
           setConcerts(concerts);
         }
@@ -58,7 +129,7 @@ export default function AdminConcertsPage() {
       }
     };
 
-    loadConcerts();
+    checkAuthAndPermission();
   }, []);
 
   // 콘서트 삭제
@@ -129,12 +200,81 @@ export default function AdminConcertsPage() {
     return `${fromDate.toLocaleDateString('ko-KR')} ~ ${toDate.toLocaleDateString('ko-KR')}`;
   };
 
-  if (loading) {
+  // 인증 로딩 중
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">콘서트 목록을 불러오는 중...</p>
+          <p className="mt-4 text-gray-600">관리자 권한을 확인하는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 로그인 안됨
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">로그인이 필요합니다</h1>
+          <p className="text-gray-600 mb-6">관리자 페이지에 접근하려면 로그인해주세요.</p>
+          <button
+            onClick={() => router.push('/login')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            로그인하기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 관리자 권한 없음
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">접근 권한이 없습니다</h1>
+          <p className="text-gray-600 mb-6">관리자 권한이 필요한 페이지입니다.</p>
+          <button
+            onClick={() => router.push('/')}
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+          >
+            홈으로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 콘서트 목록 로딩 중
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white shadow rounded-lg mb-6">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">콘서트 관리</h1>
+                  <p className="mt-1 text-sm text-gray-600">등록된 콘서트 목록을 관리합니다</p>
+                </div>
+                <Link
+                  href="/admin/concert-create"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  새 콘서트 등록
+                </Link>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="px-6 py-12 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">콘서트 목록을 불러오는 중...</p>
+            </div>
+          </div>
         </div>
       </div>
     );

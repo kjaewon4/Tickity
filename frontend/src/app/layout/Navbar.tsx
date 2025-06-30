@@ -5,6 +5,7 @@ import { FiSearch } from 'react-icons/fi';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation'; 
 import { UserInfo } from '@/types/auth';
+import { createPortal } from 'react-dom';
 
 const getUserDisplayName = (user: any) =>
   user?.name || user?.email || '사용자';
@@ -19,7 +20,8 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
   const [showSearch, setShowSearch] = useState(false);
   const [modalOpen, setModalOpen] = useState(false); 
   const router = useRouter();
-  const modalRef = useRef<HTMLDivElement>(null); // ✅ 모달 ref 생성
+  const modalRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   // ✅ 모달 외부 클릭 시 닫히게
   useEffect(() => {
@@ -39,6 +41,18 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [modalOpen]);
+
+  // 팝업 위치 계산
+  const getPopupPosition = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      return {
+        top: rect.bottom + window.scrollY + 8,
+        left: rect.right - 240, // 팝업 너비만큼 왼쪽으로
+      };
+    }
+    return { top: 0, left: 0 };
+  };
 
   return (
     <nav className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white/80 backdrop-blur-md dark:bg-gray-900/80 dark:border-gray-700">
@@ -85,6 +99,7 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
           <div className="relative flex items-center space-x-3">
             <span className="text-sm text-gray-700">환영합니다,</span>
             <button
+              ref={buttonRef}
               onClick={() => setModalOpen(prev => !prev)}
               className="flex items-center gap-1 text-sm focus:outline-none focus:ring-0 active:translate-y-0 border-none p-0 m-0"
             >
@@ -93,10 +108,14 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
               </span>
             </button>
 
-            {modalOpen && (
+            {modalOpen && typeof window !== 'undefined' && createPortal(
               <div
                 ref={modalRef} 
-                className="absolute top-8 right-0 w-60 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-4 space-y-3"
+                className="fixed w-60 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] p-4 space-y-3"
+                style={{
+                  top: getPopupPosition().top,
+                  left: getPopupPosition().left,
+                }}
               >
                 <div className="font-bold text-gray-800">
                   {getUserDisplayName(user)}{' '}
@@ -114,7 +133,8 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
                 >
                   로그아웃
                 </button>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         ) : (
