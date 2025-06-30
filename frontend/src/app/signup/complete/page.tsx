@@ -25,6 +25,17 @@ export default function CompleteSignupPage() {
   };
 
   useEffect(() => {
+    // URL 파라미터에서 토큰 확인 (구글 OAuth에서 전달)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    const urlRefresh = urlParams.get('refresh');
+    
+    if (urlToken && urlRefresh) {
+      // URL에서 받은 토큰을 localStorage에 저장
+      localStorage.setItem('accessToken', urlToken);
+      localStorage.setItem('refreshToken', urlRefresh);
+    }
+
     // 로컬 스토리지에서 토큰 확인 (Google OAuth 또는 일반 로그인)
     const accessToken = localStorage.getItem('accessToken');
     const refreshToken = localStorage.getItem('refreshToken');
@@ -38,25 +49,37 @@ export default function CompleteSignupPage() {
           if (response.data?.user) {
             const user = response.data.user;
             
-            // 기존 사용자인지 확인
-            if (user.name && user.residentNumber && user.residentNumber !== '1900-01-01' && user.residentNumber !== '') {
+            // 기존 사용자인지 확인 - 더 엄격한 검증
+            const hasName = user.name && user.name.trim() !== '';
+            const hasResidentNumber = user.residentNumber && 
+                                    user.residentNumber !== '1900-01-01' && 
+                                    user.residentNumber !== '' &&
+                                    user.residentNumber !== 'not_provided';
+            
+            if (hasName && hasResidentNumber) {
               // 기존 사용자이고 정보가 완전하면 바로 메인 페이지로
-              console.log('기존 사용자 발견. 메인 페이지로 이동');
               router.replace('/');
               return;
             }
 
+            // 정보가 불완전한 경우 사용자 정보 설정하고 입력 받기
             setUserInfo({
               email: user.email || ''
             });
             
-            // 구글 이름을 기본값으로 설정하지 않음 - 사용자가 직접 입력하도록
+            // 기존 이름이 있다면 기본값으로 설정 (구글에서 가져온 이름 등)
+            if (user.name && user.name.trim() !== '') {
+              setRealName(user.name.trim());
+            }
           } else {
             // 로그인되지 않은 경우 로그인 페이지로 리다이렉트
             router.replace('/login');
           }
         } catch (error: any) {
           console.error('사용자 정보 가져오기 오류:', error.message);
+          // 토큰이 유효하지 않거나 사용자가 존재하지 않는 경우
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
           router.replace('/login');
         }
       };
@@ -66,7 +89,7 @@ export default function CompleteSignupPage() {
       // 토큰이 없으면 로그인 페이지로 리다이렉트
       router.replace('/login');
     }
-  }, [router, realName]);
+  }, [router]);
 
   const handleCompleteSignup = async (): Promise<void> => {
     if (!realName.trim()) {
@@ -96,13 +119,6 @@ export default function CompleteSignupPage() {
 
       const user = response.data.user;
 
-      console.log('사용자 정보 업데이트:', {
-        id: user.id,
-        name: realName.trim(),
-        email: userInfo?.email || user.email || '',
-        resident_number: residentNumber
-      });
-
       // 사용자가 데이터베이스에 있는지 확인
       const userCheckResponse = await apiClient.getUser();
       
@@ -129,7 +145,6 @@ export default function CompleteSignupPage() {
         console.error('사용자 생성/업데이트 오류:', createError);
         // RLS 오류가 발생해도 사용자는 Supabase Auth에 생성되었으므로 성공으로 처리
         if (createError.message && createError.message.includes('42501')) {
-          console.log('RLS 정책 위반 오류 발생, 하지만 사용자는 생성됨. 성공으로 처리');
           isSuccess = true;
         } else {
           throw createError;
@@ -137,7 +152,6 @@ export default function CompleteSignupPage() {
       }
 
       if (isSuccess) {
-        console.log('사용자 정보 업데이트 성공');
         setMessage('가입이 완료되었습니다!');
         setTimeout(() => {
           router.replace('/');
@@ -155,7 +169,6 @@ export default function CompleteSignupPage() {
 
   const setMessage = (message: string) => {
     // 메시지 설정 로직 (필요시 구현)
-    console.log(message);
   };
 
   const handleRealNameChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
