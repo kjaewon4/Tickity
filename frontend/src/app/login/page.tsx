@@ -59,21 +59,21 @@ export default function LoginPage() {
               if (user.name && user.residentNumber && user.residentNumber !== '1900-01-01' && user.residentNumber !== '') {
                 // 기존 사용자 - 메인 페이지로
                 console.log('기존 사용자, 메인 페이지로 이동');
-                router.replace('/');
+                window.location.href = '/';
               } else {
                 // 새 사용자 - 회원가입 완료 페이지로
                 console.log('새 사용자, 회원가입 완료 페이지로 이동');
-                router.replace('/signup/complete');
+                window.location.href = '/signup/complete';
               }
             } else {
               // 사용자 정보 없음 - 회원가입 완료 페이지로
               console.log('사용자 정보 없음, 회원가입 완료 페이지로 이동');
-              router.replace('/signup/complete');
+              window.location.href = '/signup/complete';
             }
           } catch (error) {
             console.error('사용자 정보 확인 오류:', error);
             // 오류가 발생해도 회원가입 완료 페이지로 이동 (신규 사용자로 간주)
-            router.replace('/signup/complete');
+            window.location.href = '/signup/complete';
           }
         };
         
@@ -128,8 +128,8 @@ export default function LoginPage() {
         localStorage.setItem('accessToken', response.data.accessToken);
         localStorage.setItem('refreshToken', response.data.refreshToken);
         
-        // 로그인 성공 시 메인 페이지로 이동
-        router.replace('/');
+        // 로그인 성공 시 페이지 새로고침하여 navbar 상태 업데이트
+        window.location.href = '/';
       } else {
         setError(response.error || '로그인에 실패했습니다.');
       }
