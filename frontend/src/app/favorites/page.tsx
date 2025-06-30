@@ -8,15 +8,17 @@ import { createSeoConcertUrl } from '@/utils/urlUtils';
 interface FavoriteConcert {
   id: string;
   created_at: string;
-  concert: {
+  concerts: {
     id: string;
     title: string;
     main_performer: string;
-    date: string;
+    start_date: string;
+    start_time: string;
     poster_url: string;
-    organizer: string;
-    venue_name: string;
-    venue_address: string;
+    category: string;
+    venues: {
+      name: string;
+    };
   };
 }
 
@@ -25,7 +27,7 @@ const FavoritesPage = () => {
   const [favorites, setFavorites] = useState<FavoriteConcert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null); // null: 확인 중, true: 로그인됨, false: 로그인 안됨
   const [userId, setUserId] = useState<string | null>(null);
 
   // 로그인 상태 확인 및 찜한 공연 목록 가져오기
@@ -34,6 +36,7 @@ const FavoritesPage = () => {
       const accessToken = localStorage.getItem('accessToken');
       
       if (!accessToken) {
+        setIsLoggedIn(false);
         setError('로그인이 필요합니다.');
         setLoading(false);
         return;
@@ -49,6 +52,7 @@ const FavoritesPage = () => {
         });
         
         if (!userResponse.ok) {
+          setIsLoggedIn(false);
           setError('로그인이 필요합니다.');
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
@@ -58,6 +62,7 @@ const FavoritesPage = () => {
         
         const userData = await userResponse.json();
         if (!userData.success || !userData.data?.user) {
+          setIsLoggedIn(false);
           setError('로그인이 필요합니다.');
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
@@ -82,12 +87,15 @@ const FavoritesPage = () => {
         }
       } catch (error) {
         console.error('찜한 공연 목록 로드 오류:', error);
-        setError('찜한 공연 목록을 불러오는 중 오류가 발생했습니다.');
+        setIsLoggedIn(false);
+        setError('로그인이 필요합니다.');
+        setFavorites([]);
       } finally {
         setLoading(false);
       }
     };
 
+    // 즉시 실행
     checkLoginAndLoadFavorites();
   }, []);
 
@@ -132,7 +140,7 @@ const FavoritesPage = () => {
       const response = await removeFromFavorites(concertId, currentUserId);
       if (response.success) {
         // 목록에서 제거
-        setFavorites(prev => prev.filter(fav => fav.concert.id !== concertId));
+        setFavorites(prev => prev.filter(fav => fav.concerts.id !== concertId));
       } else {
         alert('찜하기 삭제에 실패했습니다.');
       }
@@ -142,7 +150,20 @@ const FavoritesPage = () => {
     }
   };
 
-  if (!isLoggedIn) {
+  // 로딩 중일 때
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">찜한 공연 목록을 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 로그인되지 않은 경우
+  if (isLoggedIn === false) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -159,18 +180,8 @@ const FavoritesPage = () => {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">찜한 공연 목록을 불러오는 중...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
+  // 오류가 발생한 경우
+  if (error && isLoggedIn !== true) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -197,11 +208,15 @@ const FavoritesPage = () => {
           </p>
         </div>
 
-        {(!favorites || favorites.length === 0) ? (
-          <div className="text-center py-20">
-            <div className="text-gray-400 text-6xl mb-4">💔</div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">아직 찜한 공연이 없습니다</h2>
-            <p className="text-gray-600 mb-6">관심 있는 공연을 찜해보세요!</p>
+        {favorites.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-gray-400 mb-4">
+              <svg className="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">아직 찜한 공연이 없습니다</h3>
+            <p className="text-gray-500 mb-6">관심 있는 공연을 찜해보세요!</p>
             <button
               onClick={() => router.push('/')}
               className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
@@ -212,42 +227,46 @@ const FavoritesPage = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {favorites.map((favorite) => (
-              <div
-                key={favorite.id}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-              >
+              <div key={favorite.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                 <div className="relative">
                   <img
-                    src={favorite.concert.poster_url}
-                    alt={favorite.concert.title}
-                    className="w-full h-48 object-cover cursor-pointer"
-                    onClick={() => router.push(createSeoConcertUrl(favorite.concert.title, favorite.concert.id))}
-                  />
-                  <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    찜함
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveFavorite(favorite.concert.id);
+                    src={favorite.concerts.poster_url || '/default-poster.jpg'}
+                    alt={favorite.concerts.title}
+                    className="w-full h-48 object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = '/default-poster.jpg';
                     }}
-                    className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full hover:bg-red-600"
+                  />
+                  <button
+                    onClick={() => handleRemoveFavorite(favorite.concerts.id)}
+                    className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                    title="찜하기 삭제"
                   >
-                    삭제
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
                   </button>
                 </div>
                 <div className="p-4">
-                  <h3 className="font-semibold text-gray-800 mb-1 line-clamp-2 cursor-pointer"
-                      onClick={() => router.push(createSeoConcertUrl(favorite.concert.title, favorite.concert.id))}>
-                    {favorite.concert.title}
+                  <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2">
+                    {favorite.concerts.title}
                   </h3>
-                  <p className="text-sm text-gray-600 mb-2">
-                    {favorite.concert.main_performer}
+                  <p className="text-gray-600 text-sm mb-2">
+                    {favorite.concerts.main_performer}
                   </p>
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <div>📅 {favorite.concert.date}</div>
-                    <div>📍 {favorite.concert.venue_name || '장소 미정'}</div>
-                  </div>
+                  <p className="text-gray-500 text-sm mb-2">
+                    {favorite.concerts.venues?.name || '장소 미정'}
+                  </p>
+                  <p className="text-gray-500 text-sm mb-3">
+                    {new Date(favorite.concerts.start_date).toLocaleDateString('ko-KR')} {favorite.concerts.start_time}
+                  </p>
+                  <button
+                    onClick={() => router.push(createSeoConcertUrl(favorite.concerts.title, favorite.concerts.id))}
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    상세보기
+                  </button>
                 </div>
               </div>
             ))}
