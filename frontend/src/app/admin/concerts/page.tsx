@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { apiClient } from '@/lib/apiClient';
 import { createSeoConcertUrl } from '@/utils/urlUtils';
 
 interface Venue {
@@ -43,11 +42,12 @@ export default function AdminConcertsPage() {
     const loadConcerts = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get('/concerts');
-        if (response.success && response.data) {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
           // 백엔드에서 { concerts: [...], total: number } 형태로 반환
-          const data = response.data as any;
-          const concerts = data.concerts || data || [];
+          const concerts = data.data.concerts || data.data || [];
           setConcerts(concerts);
         }
       } catch (error) {
@@ -68,16 +68,24 @@ export default function AdminConcertsPage() {
     }
 
     try {
-      const response = await apiClient.delete(`/concerts/${concertId}`);
-      if (response.success) {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/${concertId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
         alert('콘서트가 삭제되었습니다.');
         setConcerts(prev => prev.filter(concert => concert.id !== concertId));
       } else {
-        alert(`삭제 실패: ${response.error}`);
+        alert(`삭제 실패: ${data.error}`);
       }
     } catch (error: any) {
       console.error('콘서트 삭제 실패:', error);
-      alert(`삭제 실패: ${error.response?.data?.error || '알 수 없는 오류'}`);
+      alert(`삭제 실패: ${error.message || '알 수 없는 오류'}`);
     }
   };
 
