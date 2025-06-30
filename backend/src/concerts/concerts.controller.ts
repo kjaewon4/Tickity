@@ -253,4 +253,217 @@ router.get('/by-short-id/:shortId', async (req: Request, res: Response<ApiRespon
   }
 });
 
+/**
+ * 찜하기 추가
+ * POST /concerts/:concertId/favorite
+ */
+router.post('/:concertId/favorite', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const { concertId } = req.params;
+    const userId = req.body.userId; // 실제로는 JWT 토큰에서 추출
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: '로그인이 필요합니다.'
+      });
+    }
+
+    // 이미 찜한 공연인지 확인
+    const { data: existingFavorite, error: checkError } = await supabase
+      .from('user_favorites')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('concert_id', concertId)
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('찜하기 확인 오류:', checkError);
+      return res.status(500).json({
+        success: false,
+        error: '찜하기 확인 중 오류가 발생했습니다.'
+      });
+    }
+
+    if (existingFavorite) {
+      return res.status(400).json({
+        success: false,
+        error: '이미 찜한 공연입니다.'
+      });
+    }
+
+    // 찜하기 추가
+    const { data: newFavorite, error: insertError } = await supabase
+      .from('user_favorites')
+      .insert([{
+        user_id: userId,
+        concert_id: concertId
+      }])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('찜하기 추가 오류:', insertError);
+      return res.status(500).json({
+        success: false,
+        error: '찜하기 추가 중 오류가 발생했습니다.'
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      data: newFavorite,
+      message: '찜하기가 추가되었습니다.'
+    });
+  } catch (error) {
+    console.error('찜하기 추가 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '찜하기 추가 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+/**
+ * 찜하기 삭제
+ * DELETE /concerts/:concertId/favorite
+ */
+router.delete('/:concertId/favorite', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const { concertId } = req.params;
+    const userId = req.body.userId; // 실제로는 JWT 토큰에서 추출
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: '로그인이 필요합니다.'
+      });
+    }
+
+    // 찜하기 삭제
+    const { error: deleteError } = await supabase
+      .from('user_favorites')
+      .delete()
+      .eq('user_id', userId)
+      .eq('concert_id', concertId);
+
+    if (deleteError) {
+      console.error('찜하기 삭제 오류:', deleteError);
+      return res.status(500).json({
+        success: false,
+        error: '찜하기 삭제 중 오류가 발생했습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '찜하기가 삭제되었습니다.'
+    });
+  } catch (error) {
+    console.error('찜하기 삭제 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '찜하기 삭제 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+/**
+ * 사용자의 찜한 공연 목록 조회
+ * GET /concerts/favorites/:userId
+ */
+router.get('/favorites/:userId', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const { userId } = req.params;
+
+    const { data: favorites, error } = await supabase
+      .from('user_favorites')
+      .select(`
+        *,
+        concerts (
+          id,
+          title,
+          main_performer,
+          start_date,
+          start_time,
+          poster_url,
+          category,
+          venues (
+            name
+          )
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('찜한 공연 목록 조회 오류:', error);
+      return res.status(500).json({
+        success: false,
+        error: '찜한 공연 목록 조회 중 오류가 발생했습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: favorites,
+      message: '찜한 공연 목록 조회 성공'
+    });
+  } catch (error) {
+    console.error('찜한 공연 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '찜한 공연 목록 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+/**
+ * 특정 공연의 찜하기 상태 확인
+ * GET /concerts/:concertId/favorite/status
+ */
+router.get('/:concertId/favorite/status', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const { concertId } = req.params;
+    const userId = req.query.userId as string;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: '사용자 ID가 필요합니다.'
+      });
+    }
+
+    const { data: favorite, error } = await supabase
+      .from('user_favorites')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('concert_id', concertId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('찜하기 상태 확인 오류:', error);
+      return res.status(500).json({
+        success: false,
+        error: '찜하기 상태 확인 중 오류가 발생했습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        isFavorited: !!favorite,
+        favoriteId: favorite?.id || null
+      },
+      message: '찜하기 상태 확인 성공'
+    });
+  } catch (error) {
+    console.error('찜하기 상태 확인 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '찜하기 상태 확인 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 export default router; 

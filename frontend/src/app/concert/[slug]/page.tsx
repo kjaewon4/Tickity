@@ -5,6 +5,7 @@ import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import '../../globals.css';
 import { useParams } from 'next/navigation';
 import { extractConcertShortId } from '@/utils/urlUtils';
+import { addToFavorites, removeFromFavorites, checkFavoriteStatus } from '@/utils/favoriteUtils';
 
 interface Concert {
   id: string;
@@ -54,6 +55,9 @@ const ConcertDetail = () => {
   const [rounds, setRounds] = useState<{ round: number; time: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const calendarDays = useMemo(() => {
     if (!concert?.start_date) return [];
@@ -67,6 +71,98 @@ const ConcertDetail = () => {
     for (let i = 1; i <= totalDays; i++) days.push(i);
     return days;
   }, [concert?.start_date]);
+
+  // 로그인 상태 확인
+  useEffect(() => {
+    const checkLoginStatus = async () => {
+      const accessToken = localStorage.getItem('accessToken');
+      
+      if (accessToken) {
+        try {
+          // API를 통해 사용자 정보 조회
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/user`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.data?.user) {
+              setIsLoggedIn(true);
+              setUserId(data.data.user.id);
+              console.log('사용자 로그인 상태 확인됨:', data.data.user.id);
+            } else {
+              // 토큰이 유효하지 않은 경우 제거
+              localStorage.removeItem('accessToken');
+              localStorage.removeItem('refreshToken');
+              setIsLoggedIn(false);
+              setUserId(null);
+              console.log('유효하지 않은 토큰, 로그아웃 처리');
+            }
+          } else {
+            // API 호출 실패 시 토큰 제거
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            setIsLoggedIn(false);
+            setUserId(null);
+            console.log('API 호출 실패, 로그아웃 처리');
+          }
+        } catch (error) {
+          console.error('사용자 정보 조회 오류:', error);
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          setIsLoggedIn(false);
+          setUserId(null);
+        }
+      } else {
+        setIsLoggedIn(false);
+        setUserId(null);
+        console.log('로그인 상태 없음');
+      }
+    };
+
+    checkLoginStatus();
+  }, []);
+
+  // 찜하기 상태 확인
+  useEffect(() => {
+    const checkFavoriteStatusAsync = async () => {
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken || !concert) return;
+
+      try {
+        // 토큰으로 사용자 정보 조회
+        const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/user`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!userResponse.ok) {
+          return;
+        }
+        
+        const userData = await userResponse.json();
+        if (!userData.success || !userData.data?.user) {
+          return;
+        }
+        
+        const currentUserId = userData.data.user.id;
+        
+        const response = await checkFavoriteStatus(concert.id, currentUserId);
+        if (response.success) {
+          setLiked(response.data.isFavorited);
+        }
+      } catch (error) {
+        console.error('찜하기 상태 확인 오류:', error);
+      }
+    };
+
+    checkFavoriteStatusAsync();
+  }, [concert]);
 
   useEffect(() => {
     if (concert?.start_date) {
@@ -138,6 +234,77 @@ const ConcertDetail = () => {
     };
   }, [concert, seatPrices]);
 
+  const handleFavoriteToggle = async () => {
+    const accessToken = localStorage.getItem('accessToken');
+    
+    if (!accessToken) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    // 토큰으로 사용자 정보 조회
+    try {
+      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/user`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!userResponse.ok) {
+        alert('로그인이 필요합니다.');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setIsLoggedIn(false);
+        setUserId(null);
+        return;
+      }
+      
+      const userData = await userResponse.json();
+      if (!userData.success || !userData.data?.user) {
+        alert('로그인이 필요합니다.');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setIsLoggedIn(false);
+        setUserId(null);
+        return;
+      }
+      
+      const currentUserId = userData.data.user.id;
+      
+      if (!concert) return;
+
+      setFavoriteLoading(true);
+      try {
+        if (liked) {
+          // 찜하기 삭제
+          const response = await removeFromFavorites(concert.id, currentUserId);
+          if (response.success) {
+            setLiked(false);
+          } else {
+            alert('찜하기 삭제에 실패했습니다.');
+          }
+        } else {
+          // 찜하기 추가
+          const response = await addToFavorites(concert.id, currentUserId);
+          if (response.success) {
+            setLiked(true);
+          } else {
+            alert('찜하기 추가에 실패했습니다.');
+          }
+        }
+      } catch (error) {
+        console.error('찜하기 토글 오류:', error);
+        alert('찜하기 처리 중 오류가 발생했습니다.');
+      } finally {
+        setFavoriteLoading(false);
+      }
+    } catch (error) {
+      console.error('사용자 정보 조회 오류:', error);
+      alert('로그인이 필요합니다.');
+    }
+  };
+
   const handleReservation = () => {
     if (!concert) return;
     localStorage.setItem('concertId', concert.id);
@@ -173,7 +340,13 @@ const ConcertDetail = () => {
                 <h2 className="text-lg font-bold flex items-center gap-2">
                   {ticketInfo.title}
                 </h2>
-                <button onClick={() => setLiked(!liked)} className="text-gray-400 hover:text-red-500 text-xl">
+                <button 
+                  onClick={handleFavoriteToggle} 
+                  disabled={favoriteLoading}
+                  className={`text-gray-400 hover:text-red-500 text-xl transition-colors ${
+                    favoriteLoading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
                   {liked ? <AiFillHeart className="text-red-500" /> : <AiOutlineHeart />}
                 </button>
               </div>
