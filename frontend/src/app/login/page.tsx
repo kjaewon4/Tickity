@@ -73,6 +73,7 @@ export default function LoginPage() {
           } catch (error) {
             console.error('사용자 정보 확인 오류:', error);
             // 오류가 발생해도 회원가입 완료 페이지로 이동 (신규 사용자로 간주)
+            console.log('오류 발생으로 인해 신규 사용자로 간주, 회원가입 완료 페이지로 이동');
             window.location.href = '/signup/complete';
           }
         };
