@@ -56,36 +56,6 @@ export const getAllConcerts = async (): Promise<Concert[]> => {
 };
 
 /**
- * 관리자용 콘서트 목록 조회 (모든 필드 + venues 정보 포함)
- */
-export const getAdminConcerts = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('concerts')
-      .select(`
-        *,
-        venues (
-          id,
-          name,
-          address,
-          capacity
-        )
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('관리자 콘서트 목록 조회 오류:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('getAdminConcerts 오류:', error);
-    return [];
-  }
-};
-
-/**
  * 콘서트 ID로 특정 콘서트 조회
  * @param concertId - 콘서트 ID
  * @returns 콘서트 정보
@@ -295,7 +265,7 @@ export interface GradeSummary {
   price: number;
   zones: ZoneInfo[];
 }
-/** 콘서트용 “등급→구역→잔여석” 요약 반환 */
+/** 콘서트용 "등급→구역→잔여석" 요약 반환 */
 export async function getSeatSummary(
   concertId: string,
   withTotal = false,
@@ -330,72 +300,71 @@ export async function getSeatSummary(
 }
 
 /**
- * 콘서트 좌석 가격 저장
+ * 간단한 ID로 공연 조회 (숫자 ID 또는 짧은 UUID)
+ * @param shortId 간단한 ID
+ * @returns 공연 정보
  */
-export const saveConcertSeatPrices = async (
-  concertId: string,
-  seatPrices: Array<{ seat_grade_id: string; price: number }>
-): Promise<boolean> => {
+export const getConcertByShortId = async (shortId: string): Promise<Concert | null> => {
   try {
-    // 기존 가격 정보 삭제
-    const { error: deleteError } = await supabase
-      .from('concert_seat_prices')
-      .delete()
-      .eq('concert_id', concertId);
+    // 숫자 ID인 경우
+    if (/^\d+$/.test(shortId)) {
+      // 모든 공연을 가져와서 ID에서 숫자 부분을 추출하여 비교
+      const { data: concerts, error } = await supabase
+        .from('concerts')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (deleteError) {
-      console.error('기존 가격 정보 삭제 오류:', deleteError);
-      return false;
+      if (error) {
+        console.error('shortId로 공연 조회 오류:', error);
+        return null;
+      }
+
+      // ID에서 숫자 부분을 추출하여 비교
+      const foundConcert = concerts?.find(concert => {
+        const numericPart = concert.id.replace(/[^0-9]/g, '');
+        return numericPart === shortId;
+      });
+
+      return foundConcert || null;
     }
 
-    // 새로운 가격 정보 삽입
-    const priceData = seatPrices.map(item => ({
-      concert_id: concertId,
-      seat_grade_id: item.seat_grade_id,
-      price: item.price
-    }));
+    // 짧은 UUID인 경우 (8자리)
+    if (/^[0-9a-f]{8}$/i.test(shortId)) {
+      const { data: concerts, error } = await supabase
+        .from('concerts')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    const { error: insertError } = await supabase
-      .from('concert_seat_prices')
-      .insert(priceData);
+      if (error) {
+        console.error('shortId로 공연 조회 오류:', error);
+        return null;
+      }
 
-    if (insertError) {
-      console.error('가격 정보 저장 오류:', insertError);
-      return false;
+      // UUID의 앞 8자리와 비교
+      const foundConcert = concerts?.find(concert => 
+        concert.id.toLowerCase().startsWith(shortId.toLowerCase())
+      );
+
+      return foundConcert || null;
     }
 
-    return true;
+    return null;
   } catch (error) {
-    console.error('saveConcertSeatPrices 오류:', error);
-    return false;
+    console.error('getConcertByShortId 오류:', error);
+    return null;
   }
 };
 
 /**
- * 콘서트 좌석 가격 조회
+ * shortId로 공연 상세 정보 조회
+ * @param shortId - 공연 ID의 앞 8글자
+ * @returns 공연 상세 정보
  */
-export const getConcertSeatPrices = async (concertId: string) => {
-  try {
-    const { data, error } = await supabase
-      .from('concert_seat_prices')
-      .select(`
-        *,
-        seat_grades (
-          id,
-          grade_name,
-          default_price
-        )
-      `)
-      .eq('concert_id', concertId);
-
-    if (error) {
-      console.error('콘서트 좌석 가격 조회 오류:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('getConcertSeatPrices 오류:', error);
-    return [];
+export const getConcertDetailByShortId = async (shortId: string) => {
+  const concert = await getConcertByShortId(shortId);
+  if (!concert) {
+    throw new Error('공연을 찾을 수 없습니다.');
   }
+
+  return getConcertDetail(concert.id);
 };
