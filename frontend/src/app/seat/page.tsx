@@ -43,10 +43,10 @@ export default function SeatPage() {
             {zoneNumber ? (
               <SeatGrid
                 concertId={concertId}
-                zoneNumber={zoneNumber}
+                sectionId={zoneNumber!}
                 selectedDate={selectedDate}
                 selectedTime={selectedTime}
-                onSeatSelect={(info) => setSelectedSeatInfo(info)} // ✅ SeatGrid에서 선택된 좌석 정보 전달 받음
+                onSeatSelect={(info) => setSelectedSeatInfo(info)} // SeatGrid에서 선택된 좌석 정보 전달 받음
               />
             ) : (
               <SeatSelection venueId={venueId} onZoneSelect={handleZoneSelect} />

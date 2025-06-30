@@ -1,54 +1,58 @@
 'use client';
 
-import { FC, useState } from 'react';
+import { FC, useEffect, useState } from 'react';
 
 interface Seat {
-  grade: 'VIP' | 'R';
-  status: 'available' | 'sold';
+  row: number;
+  col: number;
+  status: 'available' | 'sold' | 'hold';
+  holdExpiresAt: string | null;
 }
 
 interface SeatGridProps {
-  zoneNumber: string;
+  concertId: string;
+  sectionId: string;
   onSeatSelect?: (info: string) => void;
 }
 
-// 좌석 구조
-const seatMap: Record<string, (Seat | null)[][]> = {
-  '43': Array.from({ length: 14 }, (_, rowIdx) =>
-    Array.from({ length: 20 }, (_, colIdx) => {
-      if (rowIdx <= 5 && colIdx >= 17) return null;
-      if (
-        (rowIdx === 0 && [7, 8, 16].includes(colIdx)) ||
-        (rowIdx === 1 && [7, 8].includes(colIdx)) ||
-        ([2, 3, 4, 5].includes(rowIdx) && colIdx === 8) ||
-        (rowIdx === 6 && [9, 14, 15, 16, 17, 18, 19].includes(colIdx)) ||
-        (rowIdx === 7 && [9, 15, 16, 17, 18, 19].includes(colIdx)) ||
-        (rowIdx === 8 && [9, 15, 16, 17, 18, 19].includes(colIdx)) ||
-        ([9, 10, 11, 12].includes(rowIdx) && colIdx === 9) ||
-        (rowIdx === 13 && [7, 8, 9].includes(colIdx))
-      ) {
-        return null;
-      }
-      return { grade: 'R', status: 'available' };
-    })
-  ),
-};
-
-const getFloorByZone = (zone: string): string => {
-  const num = parseInt(zone);
+const getFloorByZoneCode = (code: string): string => {
+  const num = parseInt(code);
   return num <= 20 ? '1층' : '2층';
 };
 
-const SeatGrid: FC<SeatGridProps> = ({ zoneNumber, onSeatSelect }) => {
+const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => {
+  const [seatMap, setSeatMap] = useState<Seat[][]>([]);
+  const [floor, setFloor] = useState('');
+  const [zoneCode, setZoneCode] = useState('');
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
-  const seats = seatMap[zoneNumber];
-  const floor = getFloorByZone(zoneNumber);
+
+  useEffect(() => {
+    // if (!concertId || !sectionId || sectionId === 'undefined') return;
+
+    console.log("SeatGrid sectionId:  " + sectionId);
+    const fetchSeats = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/${concertId}/${sectionId}/seats`);
+        const data = await res.json();
+
+        if (data && data.seatMap) {
+          setSeatMap(data.seatMap);
+          setFloor(data.floor);
+          setZoneCode(data.zoneCode);
+        }
+      } catch (err) {
+        console.error('좌석 상태 요청 실패:', err);
+      }
+    };
+
+    fetchSeats();
+  }, [concertId, sectionId]);
 
   const handleSeatClick = (row: number, col: number) => {
-    const seat = seats?.[row]?.[col];
+    const seat = seatMap.find(s => s.row === row && s.col === col);
     if (!seat || seat.status === 'sold') return;
 
-    const seatKey = `${zoneNumber}구역 ${row + 1}열 ${String(col + 1).padStart(3, '0')}번`;
+    const seatKey = `${zoneCode}구역 ${row + 1}열 ${String(col + 1).padStart(3, '0')}번`;
     setSelectedSeat(seatKey);
 
     if (onSeatSelect) {
@@ -64,26 +68,27 @@ const SeatGrid: FC<SeatGridProps> = ({ zoneNumber, onSeatSelect }) => {
             무대방향 <span className="font-normal">(STAGE)</span>
           </div>
           <p className="text-sm text-gray-600 mt-1">
-            현재 보고 계신 구역은 {floor} {zoneNumber}구역입니다.
+            현재 보고 계신 구역은 {floor} {zoneCode}구역입니다.
           </p>
         </div>
 
-        {seats ? (
+        {seatMap.length > 0 ? (
           <div className="flex flex-col gap-[6px]">
-            {seats.map((row, rowIdx) => (
+            {[...Array(14)].map((_, rowIdx) => (
               <div key={rowIdx} className="flex items-center gap-[6px]">
-                {/* 행 번호 */}
                 <div className="w-6 text-right text-sm text-gray-400">{rowIdx + 1}</div>
-                {/* 좌석들 */}
-                {row.map((seat, colIdx) => {
-                  const seatKey = `${zoneNumber}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`;
+                {[...Array(20)].map((_, colIdx) => {
+                  const seat = seatMap.find(s => s.row === rowIdx && s.col === colIdx);
+                  if (!seat) return <div key={colIdx} className="w-8 h-8" />;
+
+                  const seatKey = `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`;
                   const isSelected = selectedSeat === seatKey;
 
                   const color =
-                    seat === null
-                      ? 'bg-transparent border-transparent cursor-default'
-                      : seat.status === 'sold'
+                    seat.status === 'sold'
                       ? 'bg-transparent cursor-default'
+                      : seat.status === 'hold'
+                      ? 'bg-gray-300 cursor-not-allowed'
                       : isSelected
                       ? 'bg-purple-700 border-black'
                       : 'bg-purple-300 hover:bg-purple-400';
@@ -100,9 +105,7 @@ const SeatGrid: FC<SeatGridProps> = ({ zoneNumber, onSeatSelect }) => {
             ))}
           </div>
         ) : (
-          <div className="text-center text-sm text-gray-400 mt-4">
-            해당 구역 좌석 데이터가 존재하지 않습니다.
-          </div>
+          <div className="text-center text-sm text-gray-400 mt-4">좌석 정보를 불러오는 중입니다…</div>
         )}
       </div>
     </div>
