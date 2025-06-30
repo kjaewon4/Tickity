@@ -2,8 +2,8 @@ export interface Concert {
   id: string;
   title: string;
   date: string;
-  location: string;
-  poster_url: string;
+  venue_id: string;
+  poster_url?: string;
   created_at: string;
   organizer: string;
   promoter: string;
@@ -25,4 +25,9 @@ export interface Concert {
   seller_email: string;
   seller_contact: string;
   seller_address: string;
+  category: string;
+  start_date?: string;
+  start_time?: string;
+  round?: number;
+  ticket_open_at?: string;
 } 

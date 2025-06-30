@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import apiClient from '@/lib/apiClient';
 
 interface Venue {
@@ -41,10 +42,12 @@ export default function AdminConcertsPage() {
     const loadConcerts = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get('/concerts');
+        const response = await apiClient.get('/concerts/admin');
         if (response.success && response.data) {
           // 백엔드에서 { concerts: [...], total: number } 형태로 반환
-          setConcerts(response.data.concerts || []);
+          const data = response.data as any;
+          const concerts = data.concerts || data || [];
+          setConcerts(concerts);
         }
       } catch (error) {
         console.error('콘서트 목록 로드 실패:', error);
@@ -84,7 +87,16 @@ export default function AdminConcertsPage() {
   );
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
+    if (!dateString || dateString.trim() === '') {
+      return '날짜 미정';
+    }
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return '날짜 오류';
+    }
+    
+    return date.toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -94,9 +106,18 @@ export default function AdminConcertsPage() {
   };
 
   const formatPeriod = (from: string, to: string) => {
-    const fromDate = new Date(from).toLocaleDateString('ko-KR');
-    const toDate = new Date(to).toLocaleDateString('ko-KR');
-    return `${fromDate} ~ ${toDate}`;
+    if (!from || !to || from.trim() === '' || to.trim() === '') {
+      return '기간 미정';
+    }
+    
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      return '기간 오류';
+    }
+    
+    return `${fromDate.toLocaleDateString('ko-KR')} ~ ${toDate.toLocaleDateString('ko-KR')}`;
   };
 
   if (loading) {
@@ -201,7 +222,11 @@ export default function AdminConcertsPage() {
                     let status = '';
                     let statusColor = '';
                     
-                    if (now < validFrom) {
+                    // 날짜가 유효하지 않으면 상태를 미정으로 표시
+                    if (isNaN(validFrom.getTime()) || isNaN(validTo.getTime()) || isNaN(concertDate.getTime())) {
+                      status = '상태 미정';
+                      statusColor = 'text-gray-600 bg-gray-100';
+                    } else if (now < validFrom) {
                       status = '예매 대기';
                       statusColor = 'text-yellow-600 bg-yellow-100';
                     } else if (now >= validFrom && now <= validTo) {
@@ -220,11 +245,14 @@ export default function AdminConcertsPage() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             {concert.poster_url && (
-                              <div className="flex-shrink-0 h-10 w-10">
-                                <img
+                              <div className="flex-shrink-0 h-10 w-10 relative">
+                                <Image
                                   className="h-10 w-10 rounded object-cover"
                                   src={concert.poster_url}
                                   alt={concert.title}
+                                  width={40}
+                                  height={40}
+                                  unoptimized={true}
                                 />
                               </div>
                             )}

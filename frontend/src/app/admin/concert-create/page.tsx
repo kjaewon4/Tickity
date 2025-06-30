@@ -11,6 +11,18 @@ interface Venue {
   capacity?: number;
 }
 
+interface SeatGrade {
+  id: string;
+  grade_name: string;
+  default_price: number;
+  venue_id: string;
+}
+
+interface SeatPrice {
+  seat_grade_id: string;
+  price: number;
+}
+
 interface ConcertFormData {
   title: string;
   date: string;
@@ -44,6 +56,12 @@ export default function ConcertCreatePage() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(false);
   const [venuesLoading, setVenuesLoading] = useState(true);
+  const [seatGrades, setSeatGrades] = useState<SeatGrade[]>([]);
+  const [seatPrices, setSeatPrices] = useState<SeatPrice[]>([]);
+  const [seatGradesLoading, setSeatGradesLoading] = useState(false);
+  
+  // 오늘 날짜 (최소 선택 가능 날짜)
+  const today = new Date().toISOString().split('T')[0];
   const [formData, setFormData] = useState<ConcertFormData>({
     title: '',
     date: `${new Date().toISOString().split('T')[0]}T19:00`, // 오늘 날짜 + 19:00 기본값
@@ -69,7 +87,7 @@ export default function ConcertCreatePage() {
     start_date: '',
     start_time: '',
     round: 1,
-    ticket_open_at: ''
+    ticket_open_at: '09:00' // 기본 오픈 시간
   });
 
   // 공연장 목록 로드
@@ -80,7 +98,7 @@ export default function ConcertCreatePage() {
         const response = await apiClient.get('/venues');
         
         if (response && response.success) {
-          setVenues(response.data || []);
+          setVenues((response.data as Venue[]) || []);
         } else {
           console.error('공연장 목록 조회 실패:', response?.error || 'No response data');
           setVenues([]);
@@ -102,18 +120,118 @@ export default function ConcertCreatePage() {
       ...prev,
       [name]: type === 'number' ? parseFloat(value) || 0 : value
     }));
+
+    // venue_id가 변경되면 좌석 등급 정보 로드
+    if (name === 'venue_id' && value) {
+      loadSeatGrades(value);
+    }
+  };
+
+  // 날짜 유효성 검사
+  const validateDates = () => {
+    const concertDate = new Date(formData.date);
+    const validFromDate = new Date(formData.valid_from);
+    const validToDate = new Date(formData.valid_to);
+
+    if (concertDate < validFromDate) {
+      alert('공연 날짜는 예매 시작일보다 빠를 수 없습니다.');
+      return false;
+    }
+
+    if (validFromDate > validToDate) {
+      alert('예매 시작일은 예매 종료일보다 늦을 수 없습니다.');
+      return false;
+    }
+
+    return true;
+  };
+
+  // 좌석 등급 정보 로드
+  const loadSeatGrades = async (venueId: string) => {
+    try {
+      setSeatGradesLoading(true);
+      const response = await apiClient.get(`/venues/${venueId}/seat-grades`);
+      
+      if (response && response.success) {
+        const grades = (response.data as SeatGrade[]) || [];
+        setSeatGrades(grades);
+        
+        // 기본 가격으로 초기화
+        const defaultPrices = grades.map((grade: SeatGrade) => ({
+          seat_grade_id: grade.id,
+          price: grade.default_price
+        }));
+        setSeatPrices(defaultPrices);
+      } else {
+        console.error('좌석 등급 조회 실패:', response?.error);
+        setSeatGrades([]);
+        setSeatPrices([]);
+      }
+    } catch (error) {
+      console.error('좌석 등급 API 호출 실패:', error);
+      setSeatGrades([]);
+      setSeatPrices([]);
+    } finally {
+      setSeatGradesLoading(false);
+    }
+  };
+
+  // 좌석 가격 변경 핸들러
+  const handleSeatPriceChange = (seatGradeId: string, price: number) => {
+    setSeatPrices(prev => 
+      prev.map(item => 
+        item.seat_grade_id === seatGradeId 
+          ? { ...item, price }
+          : item
+      )
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 날짜 유효성 검사
+    if (!validateDates()) {
+      return;
+    }
+    
     setLoading(true);
 
     try {
+      // 날짜 유효성 검사 및 안전한 변환 함수
+      const safeToISOString = (dateStr: string | undefined, fallback?: string): string => {
+        if (!dateStr || dateStr.trim() === '') {
+          return fallback || new Date().toISOString();
+        }
+        
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+          console.warn(`Invalid date: ${dateStr}, using fallback`);
+          return fallback || new Date().toISOString();
+        }
+        
+        return date.toISOString();
+      };
+
+      const safeToDateString = (dateStr: string | undefined, fallback?: string): string => {
+        if (!dateStr || dateStr.trim() === '') {
+          return fallback || new Date().toISOString().split('T')[0];
+        }
+        
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+          console.warn(`Invalid date: ${dateStr}, using fallback`);
+          return fallback || new Date().toISOString().split('T')[0];
+        }
+        
+        return date.toISOString().split('T')[0];
+      };
+
       // 실제 데이터베이스 스키마에 맞춘 데이터 구성
       const processedData = {
         // 기본 필수 필드들
         title: formData.title,
-        date: new Date(formData.date).toISOString(),
+        date: safeToISOString(formData.date),
         main_performer: formData.main_performer,
         organizer: formData.organizer,
         promoter: formData.promoter,
@@ -122,8 +240,8 @@ export default function ConcertCreatePage() {
         age_rating: formData.age_rating,
         booking_fee: formData.booking_fee,
         shipping_note: formData.shipping_note,
-        valid_from: formData.valid_from,
-        valid_to: formData.valid_to,
+        valid_from: safeToDateString(formData.valid_from),
+        valid_to: safeToDateString(formData.valid_to, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
         seller_name: formData.seller_name,
         seller_rep: formData.seller_rep,
         seller_reg_no: formData.seller_reg_no,
@@ -140,9 +258,12 @@ export default function ConcertCreatePage() {
         // 선택적 필드들
         poster_url: formData.poster_url || null,
         venue_id: formData.venue_id || null,
-        start_date: formData.start_date || null,
-        start_time: formData.start_time || null,
-        ticket_open_at: formData.ticket_open_at ? new Date(formData.ticket_open_at).toISOString() : null,
+        start_date: safeToDateString(formData.start_date),
+        start_time: formData.start_time || '19:00',
+        // 티켓 오픈은 예매 시작일에 사용자가 선택한 시간으로 설정
+        ticket_open_at: formData.valid_from 
+          ? `${formData.valid_from}T${formData.ticket_open_at || '09:00'}`
+          : safeToISOString(new Date().toISOString().split('T')[0] + 'T09:00'),
         android_min_version: "7.0",
         ios_min_version: "12.0",
       };
@@ -150,6 +271,28 @@ export default function ConcertCreatePage() {
       const response = await apiClient.post('/concerts', processedData);
 
       if (response.success) {
+        const concertId = (response.data as any).id;
+        
+        // 기본 가격과 다른 경우에만 저장
+        const changedPrices = seatPrices.filter(seatPrice => {
+          const seatGrade = seatGrades.find(grade => grade.id === seatPrice.seat_grade_id);
+          return seatGrade && seatPrice.price !== seatGrade.default_price;
+        });
+
+        if (changedPrices.length > 0) {
+          try {
+            const priceResponse = await apiClient.post(`/concerts/${concertId}/seat-prices`, {
+              seatPrices: changedPrices
+            });
+            
+            if (!priceResponse.success) {
+              console.warn('좌석 가격 저장 실패:', priceResponse.error);
+            }
+          } catch (priceError) {
+            console.warn('좌석 가격 저장 중 오류:', priceError);
+          }
+        }
+        
         alert('콘서트가 성공적으로 등록되었습니다!');
         router.push('/admin/concerts'); // 관리자 콘서트 목록 페이지로 이동
       } else {
@@ -214,6 +357,7 @@ export default function ConcertCreatePage() {
                   id="date"
                   name="date"
                   required
+                  min={today}
                   value={formData.date.split('T')[0]} // 날짜 부분만 표시
                   onChange={(e) => {
                     // 날짜가 변경되면 시간은 19:00으로 기본 설정
@@ -352,7 +496,7 @@ export default function ConcertCreatePage() {
             </div>
 
             {/* 예매 기간 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label htmlFor="valid_from" className="block text-sm font-medium text-gray-700 mb-2">
                   예매 시작일 *
@@ -362,6 +506,7 @@ export default function ConcertCreatePage() {
                   id="valid_from"
                   name="valid_from"
                   required
+                  min={today}
                   value={formData.valid_from}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -377,6 +522,7 @@ export default function ConcertCreatePage() {
                   id="valid_to"
                   name="valid_to"
                   required
+                  min={formData.valid_from || today}
                   value={formData.valid_to}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -384,40 +530,24 @@ export default function ConcertCreatePage() {
               </div>
 
               <div>
-                <label htmlFor="ticket_open_date" className="block text-sm font-medium text-gray-700 mb-2">
-                  티켓 오픈 날짜
-                </label>
-                <input
-                  type="date"
-                  id="ticket_open_date"
-                  name="ticket_open_date"
-                  value={formData.ticket_open_at ? formData.ticket_open_at.split('T')[0] : ''} // 날짜 부분만 표시
-                  onChange={(e) => {
-                    // 날짜가 변경되면 시간은 09:00으로 기본 설정
-                    const newDateTime = e.target.value ? `${e.target.value}T09:00` : '';
-                    setFormData(prev => ({ ...prev, ticket_open_at: newDateTime }));
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
                 <label htmlFor="ticket_open_time" className="block text-sm font-medium text-gray-700 mb-2">
-                  티켓 오픈 시간
+                  티켓 오픈 시간 * (예매 시작일과 동일한 날짜)
                 </label>
                 <input
                   type="time"
                   id="ticket_open_time"
                   name="ticket_open_time"
-                  value={formData.ticket_open_at ? (formData.ticket_open_at.split('T')[1] || '09:00') : '09:00'} // 시간 부분만 표시
+                  required
+                  value={formData.ticket_open_at || '09:00'} // 시간만 저장
                   onChange={(e) => {
-                    // 시간이 변경되면 날짜와 결합
-                    const dateOnly = formData.ticket_open_at ? formData.ticket_open_at.split('T')[0] : new Date().toISOString().split('T')[0];
-                    const newDateTime = `${dateOnly}T${e.target.value}`;
-                    setFormData(prev => ({ ...prev, ticket_open_at: newDateTime }));
+                    // 시간만 저장, 실제 전송 시 예매 시작일과 결합됨
+                    setFormData(prev => ({ ...prev, ticket_open_at: e.target.value }));
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                <p className="text-sm text-gray-500 mt-1">
+                  티켓 오픈 날짜는 예매 시작일과 동일하게 설정됩니다.
+                </p>
               </div>
 
               <div>
@@ -597,6 +727,59 @@ export default function ConcertCreatePage() {
                 </div>
               </div>
             </div>
+
+            {/* 좌석 가격 설정 */}
+            {formData.venue_id && (
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">좌석 가격 설정</h3>
+                
+                {seatGradesLoading ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-sm text-gray-500">좌석 등급 정보를 불러오는 중...</p>
+                  </div>
+                ) : seatGrades.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {seatGrades.map((grade) => {
+                      const currentPrice = seatPrices.find(p => p.seat_grade_id === grade.id)?.price || grade.default_price;
+                      
+                      return (
+                        <div key={grade.id} className="border rounded-lg p-4 bg-gray-50">
+                          <div className="flex justify-between items-center mb-3">
+                            <h4 className="font-medium text-gray-900">{grade.grade_name}</h4>
+                            <span className="text-sm text-gray-500">
+                              기본 가격: {grade.default_price.toLocaleString()}원
+                            </span>
+                          </div>
+                          
+                          <div>
+                            <label htmlFor={`price-${grade.id}`} className="block text-sm font-medium text-gray-700 mb-2">
+                              콘서트 가격 *
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                id={`price-${grade.id}`}
+                                min="0"
+                                step="100"
+                                value={currentPrice}
+                                onChange={(e) => handleSeatPriceChange(grade.id, parseInt(e.target.value) || 0)}
+                                className="w-full px-3 py-2 pr-8 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                              <span className="absolute right-3 top-2 text-gray-500 text-sm">원</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500">선택한 공연장에 등록된 좌석 등급이 없습니다.</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 기타 정보 */}
             <div className="border-t pt-6">

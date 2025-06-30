@@ -5,7 +5,8 @@ import {
   createVenue, 
   updateVenue, 
   deleteVenue,
-  getSectionsByVenueId  
+  getSectionsByVenueId,
+  getSeatGradesByVenueId  
 } from './venues.service';
 import { ApiResponse } from '../types/auth';
 
@@ -171,6 +172,31 @@ router.get('/:venueId/sections', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('섹션 조회 오류:', error);
     res.status(500).json({ success: false, message: '공연장 섹션 조회 실패' });
+  }
+});
+
+/**
+ * @route GET /venues/:venueId/seat-grades
+ * @desc 특정 공연장의 좌석 등급 정보 조회
+ */
+router.get('/:venueId/seat-grades', async (req: Request, res: Response) => {
+  const { venueId } = req.params;
+
+  try {
+    const seatGrades = await getSeatGradesByVenueId(venueId);
+    
+    const response: ApiResponse<typeof seatGrades> = {
+      success: true,
+      data: seatGrades
+    };
+    res.status(200).json(response);
+  } catch (error) {
+    console.error('좌석 등급 조회 오류:', error);
+    const response: ApiResponse<null> = {
+      success: false,
+      error: '좌석 등급 조회 중 오류가 발생했습니다.'
+    };
+    res.status(500).json(response);
   }
 });
 

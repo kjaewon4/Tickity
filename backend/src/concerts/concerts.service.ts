@@ -56,6 +56,36 @@ export const getAllConcerts = async (): Promise<Concert[]> => {
 };
 
 /**
+ * 관리자용 콘서트 목록 조회 (모든 필드 + venues 정보 포함)
+ */
+export const getAdminConcerts = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('concerts')
+      .select(`
+        *,
+        venues (
+          id,
+          name,
+          address,
+          capacity
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('관리자 콘서트 목록 조회 오류:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('getAdminConcerts 오류:', error);
+    return [];
+  }
+};
+
+/**
  * 콘서트 ID로 특정 콘서트 조회
  * @param concertId - 콘서트 ID
  * @returns 콘서트 정보
@@ -298,3 +328,74 @@ export async function getSeatSummary(
 
   return Object.values(map);
 }
+
+/**
+ * 콘서트 좌석 가격 저장
+ */
+export const saveConcertSeatPrices = async (
+  concertId: string,
+  seatPrices: Array<{ seat_grade_id: string; price: number }>
+): Promise<boolean> => {
+  try {
+    // 기존 가격 정보 삭제
+    const { error: deleteError } = await supabase
+      .from('concert_seat_prices')
+      .delete()
+      .eq('concert_id', concertId);
+
+    if (deleteError) {
+      console.error('기존 가격 정보 삭제 오류:', deleteError);
+      return false;
+    }
+
+    // 새로운 가격 정보 삽입
+    const priceData = seatPrices.map(item => ({
+      concert_id: concertId,
+      seat_grade_id: item.seat_grade_id,
+      price: item.price
+    }));
+
+    const { error: insertError } = await supabase
+      .from('concert_seat_prices')
+      .insert(priceData);
+
+    if (insertError) {
+      console.error('가격 정보 저장 오류:', insertError);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('saveConcertSeatPrices 오류:', error);
+    return false;
+  }
+};
+
+/**
+ * 콘서트 좌석 가격 조회
+ */
+export const getConcertSeatPrices = async (concertId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('concert_seat_prices')
+      .select(`
+        *,
+        seat_grades (
+          id,
+          grade_name,
+          default_price
+        )
+      `)
+      .eq('concert_id', concertId);
+
+    if (error) {
+      console.error('콘서트 좌석 가격 조회 오류:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('getConcertSeatPrices 오류:', error);
+    return [];
+  }
+};

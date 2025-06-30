@@ -139,3 +139,26 @@ export const getSectionsByVenueId = async (venueId: string) => {
 
   return data;
 };
+
+/**
+ * 특정 공연장의 좌석 등급 정보 조회
+ */
+export const getSeatGradesByVenueId = async (venueId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('seat_grades')
+      .select('*')
+      .eq('venue_id', venueId)
+      .order('grade_name', { ascending: true });
+
+    if (error) {
+      console.error('좌석 등급 조회 오류:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('getSeatGradesByVenueId 오류:', error);
+    return [];
+  }
+};
