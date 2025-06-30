@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getSeatSummary, getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts, getConcertDetail, listSectionAvailability, getAdminConcerts, saveConcertSeatPrices, getConcertSeatPrices } from './concerts.service';
+import { getSeatSummary, getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts, getConcertDetail, listSectionAvailability, getConcertDetailByShortId, getConcertByShortId } from './concerts.service';
 import { ApiResponse } from '../types/auth';
 import { supabase } from '../lib/supabaseClient';
 
@@ -36,7 +36,7 @@ router.get('/', async (req: Request, res: Response<ApiResponse>) => {
 });
 
 /**
- * [GET] /concerts/upcoming  
+ * [GET] /concerts/upcoming
  * 다가오는 콘서트 중 가까운 날짜 순 8개 조회 (슬라이더용)
  */
 router.get('/upcoming', async (_req: Request, res: Response<ApiResponse>) => {
@@ -58,60 +58,43 @@ router.get('/upcoming', async (_req: Request, res: Response<ApiResponse>) => {
 });
 
 /**
- * [GET] /concerts/admin
- * 관리자용 콘서트 목록 조회 (모든 필드 + venues 정보 포함)
+ * 간단한 ID로 공연 조회
  */
-router.get('/admin', async (_req: Request, res: Response<ApiResponse>) => {
+router.get('/:concertId', async (req, res) => {
   try {
-    const concerts = await getAdminConcerts();
+    const { concertId } = req.params;
+    
+    // UUID 형식인지 확인
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(concertId);
+    
+    let concert;
+    if (isUuid) {
+      // UUID인 경우 직접 조회
+      concert = await getConcertById(concertId);
+    } else {
+      // UUID가 아닌 경우 shortId로 조회 시도
+      concert = await getConcertByShortId(concertId);
+    }
 
-    res.json({
-      success: true,
-      data: {
-        concerts,
-        total: concerts.length,
-      },
-      message: '관리자 콘서트 목록 조회 성공',
-    });
-  } catch (err: any) {
-    console.error('[GET] /concerts/admin 오류:', err.message);
-    res.status(500).json({
-      success: false,
-      error: '관리자 콘서트 목록 조회 중 서버 오류 발생',
-    });
-  }
-});
-
-/**
- * 특정 콘서트 상세 정보 조회
- * GET /concerts/:concertId
- * 콘서트 정보 (제목, 날짜, 공연장 이름 및 주소 등)
- * 좌석 등급 + 가격 + 총 좌석 수
- * 취소 수수료 정책
- */
-router.get('/:concertId', async (req: Request, res: Response<ApiResponse>) => {
-  const { concertId } = req.params;
-
-  try {
-    if (!concertId) {
-      return res.status(400).json({
+    if (!concert) {
+      return res.status(404).json({
         success: false,
-        error: '콘서트 ID가 필요합니다.'
+        message: '공연을 찾을 수 없습니다.'
       });
     }
 
-    const detail = await getConcertDetail(concertId);
-
+    // 공연 상세 정보 조회
+    const concertDetail = await getConcertDetail(concert.id);
+    
     res.json({
       success: true,
-      data: detail,
-      message: '콘서트 상세 정보 조회 성공'
+      data: concertDetail
     });
-  } catch (err: any) {
-    console.error('콘서트 조회 오류:', err.message);
+  } catch (error) {
+    console.error('공연 조회 오류:', error);
     res.status(500).json({
       success: false,
-      error: '콘서트 상세 조회 중 오류가 발생했습니다.'
+      message: '공연 조회 중 오류가 발생했습니다.'
     });
   }
 });
@@ -162,7 +145,7 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
     const concertData = req.body;
 
     // 기본 필드 검증
-    if (!concertData.title || !concertData.date || !concertData.venue_id) {
+    if (!concertData.title || !concertData.date || !concertData.location) {
       return res.status(400).json({
         success: false,
         error: '필수 정보(제목, 날짜, 장소)를 입력해주세요.'
@@ -240,64 +223,32 @@ router.delete('/:concertId', async (req: Request, res: Response<ApiResponse>) =>
 });
 
 /**
- * GET /concerts/:concertId/seat-prices
- * 콘서트의 좌석 가격 조회
+ * shortId로 공연 상세 정보 조회
+ * GET /concerts/by-short-id/:shortId
  */
-router.get('/:concertId/seat-prices', async (req: Request, res: Response<ApiResponse>) => {
-  const { concertId } = req.params;
+router.get('/by-short-id/:shortId', async (req: Request, res: Response<ApiResponse>) => {
+  const { shortId } = req.params;
 
   try {
-    const seatPrices = await getConcertSeatPrices(concertId);
-    
-    res.json({
-      success: true,
-      data: seatPrices,
-      message: '콘서트 좌석 가격 조회 성공'
-    });
-  } catch (error: any) {
-    console.error('좌석 가격 조회 오류:', error);
-    res.status(500).json({
-      success: false,
-      error: '좌석 가격 조회 중 오류가 발생했습니다.'
-    });
-  }
-});
-
-/**
- * POST /concerts/:concertId/seat-prices
- * 콘서트의 좌석 가격 저장
- */
-router.post('/:concertId/seat-prices', async (req: Request, res: Response<ApiResponse>) => {
-  const { concertId } = req.params;
-  const { seatPrices } = req.body;
-
-  try {
-    if (!Array.isArray(seatPrices)) {
+    if (!shortId) {
       return res.status(400).json({
         success: false,
-        error: '좌석 가격 배열이 필요합니다.'
+        error: 'shortId가 필요합니다.'
       });
     }
 
-    const success = await saveConcertSeatPrices(concertId, seatPrices);
-    
-    if (!success) {
-      return res.status(500).json({
-        success: false,
-        error: '좌석 가격 저장에 실패했습니다.'
-      });
-    }
+    const detail = await getConcertDetailByShortId(shortId);
 
     res.json({
       success: true,
-      data: null,
-      message: '좌석 가격 저장 성공'
+      data: detail,
+      message: '공연 상세 정보 조회 성공'
     });
-  } catch (error: any) {
-    console.error('좌석 가격 저장 오류:', error);
+  } catch (err: any) {
+    console.error('shortId로 공연 조회 오류:', err.message);
     res.status(500).json({
       success: false,
-      error: '좌석 가격 저장 중 오류가 발생했습니다.'
+      error: '공연 상세 조회 중 오류가 발생했습니다.'
     });
   }
 });

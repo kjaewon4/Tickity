@@ -11,10 +11,11 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: 'example.com',
+        port: '',
+        pathname: '/**',
       },
     ],
-    unoptimized: true, // 외부 이미지 최적화 비활성화
   },
 };
 

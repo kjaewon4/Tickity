@@ -10,6 +10,7 @@ import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import { useRouter } from "next/navigation";
 import ChatbotModal from "./layout/ChatbotModal";
+import { createSimpleConcertUrl, createSeoConcertUrl } from "@/utils/urlUtils";
 
 interface Concert {
   id: string;
@@ -23,11 +24,21 @@ interface Concert {
 
 const formatStartDate = (dateStr: string): string => {
   const date = new Date(dateStr);
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  // const weekday = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
-  return `${year}.${month}.${day}`;
+  return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+};
+
+// 이미지 URL 검증 함수 추가
+const isValidImageUrl = (url: string): boolean => {
+  if (!url || url.trim() === '') return false;
+  
+  // example.com이나 유효하지 않은 도메인 필터링
+  const invalidDomains = ['example.com', 'placeholder.com', 'dummy.com'];
+  try {
+    const urlObj = new URL(url);
+    return !invalidDomains.some(domain => urlObj.hostname.includes(domain));
+  } catch {
+    return false;
+  }
 };
 
 function SampleNextArrow({ onClick }: { onClick?: () => void }) {
@@ -158,14 +169,15 @@ export default function HomePage() {
           <div
             key={concert.id}
             className="px-4 cursor-pointer"
-            onClick={() => router.push(`/reservation/${concert.id}`)}
+            onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
           >
             <div className="w-[220px] h-[330px] rounded shadow overflow-hidden bg-white">
               <div className="relative h-[250px]">
                 <Image
                   src={
                     concert.poster_url &&
-                    concert.poster_url.trim() !== ''
+                    concert.poster_url.trim() !== '' &&
+                    isValidImageUrl(concert.poster_url)
                       ? concert.poster_url
                       : '/images/default-poster.png'
                   }
@@ -214,12 +226,18 @@ export default function HomePage() {
         {concerts.map((concert) => (
           <div
             key={concert.id}
-            onClick={() => router.push(`/reservation/${concert.id}`)}
+            onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
             className="w-[220px] border rounded-lg shadow-sm hover:shadow-md transition bg-white dark:bg-gray-800 p-2 cursor-pointer"
           >
             <div className="w-full h-[250px] bg-gray-200 rounded-md overflow-hidden mb-2 relative">
               <Image
-                src={concert.poster_url?.trim() !== '' ? concert.poster_url : '/images/default-poster.png'}
+                src={
+                  concert.poster_url &&
+                  concert.poster_url.trim() !== '' &&
+                  isValidImageUrl(concert.poster_url)
+                    ? concert.poster_url
+                    : '/images/default-poster.png'
+                }
                 alt={concert.title}
                 fill
                 className="object-cover"
