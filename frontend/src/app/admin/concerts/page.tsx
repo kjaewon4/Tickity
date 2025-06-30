@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import apiClient from '@/lib/apiClient';
+import { apiClient } from '@/lib/apiClient';
+import { createSeoConcertUrl } from '@/utils/urlUtils';
 
 interface Venue {
   id: string;
@@ -42,7 +43,7 @@ export default function AdminConcertsPage() {
     const loadConcerts = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get('/concerts/admin');
+        const response = await apiClient.get('/concerts');
         if (response.success && response.data) {
           // 백엔드에서 { concerts: [...], total: number } 형태로 반환
           const data = response.data as any;
@@ -296,7 +297,7 @@ export default function AdminConcertsPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex justify-end space-x-2">
                             <Link
-                              href={`/admin/concerts/${concert.id}`}
+                              href={createSeoConcertUrl(concert.title, concert.id)}
                               className="text-indigo-600 hover:text-indigo-900"
                             >
                               보기
