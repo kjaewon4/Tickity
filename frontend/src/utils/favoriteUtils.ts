@@ -8,14 +8,12 @@
  */
 export const addToFavorites = async (concertId: string, userId: string) => {
   try {
-    const accessToken = localStorage.getItem('accessToken');
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-favorites`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/${concertId}/favorite`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ concert_id: concertId }),
+      body: JSON.stringify({ userId }),
     });
 
     const data = await response.json();
@@ -34,13 +32,12 @@ export const addToFavorites = async (concertId: string, userId: string) => {
  */
 export const removeFromFavorites = async (concertId: string, userId: string) => {
   try {
-    const accessToken = localStorage.getItem('accessToken');
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-favorites/${concertId}`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/${concertId}/favorite`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
       },
+      body: JSON.stringify({ userId }),
     });
 
     const data = await response.json();
@@ -59,14 +56,8 @@ export const removeFromFavorites = async (concertId: string, userId: string) => 
  */
 export const checkFavoriteStatus = async (concertId: string, userId: string) => {
   try {
-    const accessToken = localStorage.getItem('accessToken');
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/user-favorites/check/${concertId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      }
+      `${process.env.NEXT_PUBLIC_API_URL}/concerts/${concertId}/favorite/status?userId=${userId}`
     );
 
     const data = await response.json();
@@ -84,12 +75,7 @@ export const checkFavoriteStatus = async (concertId: string, userId: string) => 
  */
 export const getFavoriteConcerts = async (userId: string) => {
   try {
-    const accessToken = localStorage.getItem('accessToken');
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user-favorites`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/favorites/${userId}`);
     const data = await response.json();
     return data;
   } catch (error) {

@@ -15,7 +15,6 @@ import seatsRouter from './seats/seats.controller';
 import ticketsRouter from './tickets/tickets.controller';
 import authRouter from './auth/auth.controller';
 import chatbotRouter from './chatbot/chatbot.controller';
-import userFavoritesRouter from './user_favorites/user_favorites.controller';
 
 
 // NODE_ENV가 test 가 아닐 때만 스케줄러 구동
@@ -64,14 +63,6 @@ app.use('/seats', seatsRouter);
 //    - /tickets/cancel (티켓 취소 / on-chain + DB)
 //    - /tickets/... 기타 엔드포인트
 app.use('/tickets', ticketsRouter);
-
-// ■ 찜하기 관련 라우트
-//    - POST /user-favorites (찜하기 추가)
-//    - DELETE /user-favorites/:concertId (찜하기 삭제)
-//    - GET /user-favorites (내가 찜한 공연 목록)
-//    - GET /user-favorites/check/:concertId (찜하기 상태 확인)
-//    - POST /user-favorites/toggle/:concertId (찜하기 토글)
-app.use('/user-favorites', userFavoritesRouter);
 
 app.use('/chatbot', chatbotRouter);
 
