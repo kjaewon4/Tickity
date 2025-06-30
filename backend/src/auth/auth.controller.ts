@@ -220,7 +220,7 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
       });
     }
 
-    // 사용자 정보 조회
+    // 데이터베이스에서 사용자 정보 조회
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -228,6 +228,28 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
       .single();
 
     if (userError) {
+      // 사용자가 데이터베이스에 없는 경우 (Google OAuth 신규 사용자)
+      if (userError.code === 'PGRST116') {
+        console.log('Google OAuth 신규 사용자 발견:', authData.user.id);
+        
+        // 신규 사용자 정보만 반환 (데이터베이스에 저장하지 않음)
+        const newUserInfo: UserInfo = {
+          id: authData.user.id,
+          email: authData.user.email!,
+          name: '', // 빈 문자열로 설정하여 사용자가 직접 입력하도록
+          residentNumber: '', // 빈 문자열로 설정하여 회원가입 완료 페이지로 이동
+          walletAddress: '',
+          createdAt: new Date().toISOString()
+        };
+
+        return res.json({
+          success: true,
+          data: {
+            user: newUserInfo
+          }
+        });
+      }
+
       console.error('사용자 정보 조회 오류:', userError);
       return res.status(500).json({
         success: false,
@@ -466,17 +488,12 @@ router.get('/check-email/:email', async (req: Request, res: Response<ApiResponse
 router.get('/google', async (req: Request, res: Response) => {
   try {
     const dynamicConfig = getDynamicConfig(req);
-    console.log('=== Google OAuth 시작 ===');
-    console.log('Frontend URL:', dynamicConfig.FRONTEND_URL);
-    console.log('Backend URL:', dynamicConfig.BACKEND_URL);
-    console.log('Request Origin:', req.headers.origin);
-    console.log('Request Host:', req.headers.host);
     
-    // 프론트엔드로 직접 리다이렉트 (Supabase가 토큰을 처리)
+    // 프론트엔드에서 OAuth 처리 후 사용자 정보 확인하여 적절한 페이지로 이동
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${dynamicConfig.FRONTEND_URL}/login`,
+        redirectTo: `${dynamicConfig.FRONTEND_URL}/auth/callback`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent'
@@ -492,7 +509,6 @@ router.get('/google', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('Google OAuth URL 생성됨:', data.url);
     // Google OAuth URL로 리다이렉트
     res.redirect(data.url);
   } catch (error) {
@@ -504,23 +520,11 @@ router.get('/google', async (req: Request, res: Response) => {
   }
 });
 
-// 구글 OAuth 콜백 처리
+// 구글 OAuth 콜백 처리 (현재 미사용 - 프론트엔드에서 처리)
 router.get('/google/callback', async (req: Request, res: Response) => {
   try {
     const dynamicConfig = getDynamicConfig(req);
-    console.log('=== Google OAuth 콜백 디버그 ===');
-    console.log('전체 URL:', req.url);
-    console.log('Query 파라미터:', req.query);
-    console.log('Headers:', req.headers);
-    console.log('Frontend URL:', dynamicConfig.FRONTEND_URL);
-    
-    const { code, error, state } = req.query;
-    console.log('Google OAuth 콜백 호출됨:', { 
-      code: !!code, 
-      error, 
-      state: !!state,
-      codeLength: code ? (code as string).length : 0
-    });
+    const { code, error } = req.query;
 
     if (error) {
       console.error('Google OAuth 콜백 오류:', error);
@@ -529,12 +533,9 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 
     if (!code) {
       console.error('Google OAuth 코드 없음');
-      console.log('전체 query 객체:', JSON.stringify(req.query, null, 2));
-      console.log('전체 URL 파라미터:', req.url);
       return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=no_code`);
     }
 
-    console.log('코드 교환 시작...');
     // 코드로 세션 교환
     const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code as string);
 
@@ -548,20 +549,13 @@ router.get('/google/callback', async (req: Request, res: Response) => {
       return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=no_session`);
     }
 
-    console.log('세션 교환 성공, 사용자 ID:', data.user?.id);
-
     // 사용자 메타데이터에서 정보 추출
     const userMetadata = data.user.user_metadata;
-    console.log('사용자 메타데이터:', userMetadata);
-    
     const name = userMetadata?.name || '';
     const residentNumber = userMetadata?.resident_number || '';
-    const passwordHash = userMetadata?.password_hash || 'email_signup'; // 기본값을 email_signup으로 설정
-
-    console.log('추출된 정보:', { name, residentNumber: residentNumber ? '있음' : '없음', passwordHash: passwordHash ? '있음' : '없음' });
 
     // 주민번호 암호화
-    let encryptedResidentNumber = 'not_provided'; // 기본값 설정 (NOT NULL 제약조건 때문)
+    let encryptedResidentNumber = 'not_provided';
     if (residentNumber) {
       try {
         encryptedResidentNumber = encryptResidentNumber(residentNumber);
@@ -571,7 +565,6 @@ router.get('/google/callback', async (req: Request, res: Response) => {
       }
     }
 
-    console.log('지갑 생성 시작...');
     // 지갑 생성
     let address = '';
     let encryptedKey = '';
@@ -580,34 +573,30 @@ router.get('/google/callback', async (req: Request, res: Response) => {
       const { address: walletAddress, privateKey } = await bc.createUserWallet();
       address = walletAddress;
       encryptedKey = encrypt(privateKey);
-      console.log('지갑 생성 완료:', address);
     } catch (walletError) {
       console.error('지갑 생성 실패:', walletError);
-      console.log('지갑 없이 사용자 정보 저장 진행');
       // 지갑 생성 실패 시에도 사용자 정보는 저장
       address = 'wallet_creation_failed';
       encryptedKey = 'wallet_creation_failed';
     }
 
     // 기존 사용자 확인
-    console.log('기존 사용자 확인 중...');
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
-      .select('id')
+      .select('id, name, resident_number_encrypted')
       .eq('id', data.user.id)
       .maybeSingle();
 
     if (checkError) {
       console.error('사용자 확인 오류:', checkError);
-      // RLS 오류가 발생한 경우, 사용자가 존재하지 않는 것으로 간주하고 계속 진행
-      console.log('RLS 오류 발생, 신규 사용자로 간주하여 계속 진행');
     }
 
-    console.log('기존 사용자 확인:', existingUser ? '존재함' : '존재하지 않음');
+    let needsSignupComplete = false;
 
     // 사용자가 없으면 데이터베이스에 사용자 정보 저장
     if (!existingUser) {
-      console.log('사용자 정보 저장 시작...');
+      needsSignupComplete = !name || !residentNumber;
+      
       const { error: dbInsertError } = await supabase
         .from('users')
         .insert([{
@@ -616,31 +605,32 @@ router.get('/google/callback', async (req: Request, res: Response) => {
           name,
           resident_number_encrypted: encryptedResidentNumber,
           wallet_address: address,
-          private_key_encrypted: encryptedKey, // 지갑 개인키 암호화
-          password_hash: 'google_oauth', // Google OAuth 사용자임을 명시
+          private_key_encrypted: encryptedKey,
+          password_hash: 'google_oauth',
           created_at: new Date().toISOString()
         }]);
 
-      if (dbInsertError) {
+      if (dbInsertError && dbInsertError.code !== '42501') {
         console.error('Google OAuth 사용자 DB 저장 오류:', dbInsertError);
-        // RLS 오류가 발생한 경우에도 계속 진행 (사용자는 Supabase Auth에 생성됨)
-        if (dbInsertError.code === '42501') {
-          console.log('RLS 정책 위반, 하지만 사용자는 Supabase Auth에 생성됨. 계속 진행');
-        } else {
-          return res.status(500).json({
-            success: false,
-            error: '사용자 정보 생성 중 오류가 발생했습니다.'
-          });
-        }
-      } else {
-        console.log('사용자 정보 저장 성공');
+        return res.status(500).json({
+          success: false,
+          error: '사용자 정보 생성 중 오류가 발생했습니다.'
+        });
       }
     } else {
-      console.log('사용자가 이미 존재하므로 저장 건너뜀');
+      // 기존 사용자이지만 이름이나 주민번호가 없는 경우 signup/complete 필요
+      needsSignupComplete = !existingUser.name || 
+                           !existingUser.resident_number_encrypted || 
+                           existingUser.resident_number_encrypted === 'not_provided' ||
+                           existingUser.name.trim() === '';
     }
 
-    // 인증 성공 후 로그인 페이지로 리다이렉트
-    res.redirect(`${dynamicConfig.FRONTEND_URL}/login?message=email_confirmed`);
+    // 리다이렉트 결정
+    if (needsSignupComplete) {
+      res.redirect(`${dynamicConfig.FRONTEND_URL}/signup/complete?from=google`);
+    } else {
+      res.redirect(`${dynamicConfig.FRONTEND_URL}/login?message=email_confirmed`);
+    }
 
   } catch (error) {
     const dynamicConfig = getDynamicConfig(req);
@@ -762,7 +752,6 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
     let encryptedResidentNumber = 'not_provided';
     try {
       encryptedResidentNumber = encryptResidentNumber(resident_number);
-      console.log('주민번호 암호화 성공');
     } catch (encryptError) {
       console.error('주민번호 암호화 오류:', encryptError);
       return res.status(400).json({
@@ -779,17 +768,14 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
       const { address: walletAddress, privateKey } = await bc.createUserWallet();
       address = walletAddress;
       encryptedKey = encrypt(privateKey);
-      console.log('지갑 생성 완료:', address);
     } catch (walletError) {
       console.error('지갑 생성 실패:', walletError);
-      console.log('지갑 없이 사용자 정보 저장 진행');
       // 지갑 생성 실패 시에도 사용자 정보는 저장
       address = 'wallet_creation_failed';
       encryptedKey = 'wallet_creation_failed';
     }
 
     // 기존 사용자 확인
-    console.log('기존 사용자 확인 중...');
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
       .select('id')
@@ -798,15 +784,10 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
 
     if (checkError) {
       console.error('사용자 확인 오류:', checkError);
-      // RLS 오류가 발생한 경우, 사용자가 존재하지 않는 것으로 간주하고 계속 진행
-      console.log('RLS 오류 발생, 신규 사용자로 간주하여 계속 진행');
     }
-
-    console.log('기존 사용자 확인:', existingUser ? '존재함' : '존재하지 않음');
 
     // 사용자가 없으면 데이터베이스에 사용자 정보 저장
     if (!existingUser) {
-      console.log('사용자 정보 저장 시작...');
       const { error: dbInsertError } = await supabase
         .from('users')
         .insert([{
@@ -815,27 +796,18 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
           name,
           resident_number_encrypted: encryptedResidentNumber,
           wallet_address: address,
-          private_key_encrypted: encryptedKey, // 지갑 개인키 암호화
-          password_hash: 'google_oauth', // Google OAuth 사용자임을 명시
+          private_key_encrypted: encryptedKey,
+          password_hash: 'google_oauth',
           created_at: new Date().toISOString()
         }]);
 
-      if (dbInsertError) {
+      if (dbInsertError && dbInsertError.code !== '42501') {
         console.error('Google OAuth 사용자 DB 저장 오류:', dbInsertError);
-        // RLS 오류가 발생한 경우에도 계속 진행 (사용자는 Supabase Auth에 생성됨)
-        if (dbInsertError.code === '42501') {
-          console.log('RLS 정책 위반, 하지만 사용자는 Supabase Auth에 생성됨. 계속 진행');
-        } else {
-          return res.status(500).json({
-            success: false,
-            error: '사용자 정보 생성 중 오류가 발생했습니다.'
-          });
-        }
-      } else {
-        console.log('사용자 정보 저장 성공');
+        return res.status(500).json({
+          success: false,
+          error: '사용자 정보 생성 중 오류가 발생했습니다.'
+        });
       }
-    } else {
-      console.log('사용자가 이미 존재하므로 저장 건너뜀');
     }
 
     res.json({
@@ -924,7 +896,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
       console.log('기존 사용자 확인 중...');
       const { data: existingUser, error: checkError } = await supabase
         .from('users')
-        .select('id')
+        .select('id, name, resident_number_encrypted')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -1029,20 +1001,16 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
       encryptedKey = 'wallet_creation_failed';
     }
 
-    // 이미 사용자가 데이터베이스에 있는지 확인
-    console.log('기존 사용자 확인 중...');
+    // 기존 사용자 확인
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
-      .select('id')
+      .select('id, name, resident_number_encrypted')
       .eq('id', data.user.id)
       .maybeSingle();
 
     if (checkError) {
       console.error('사용자 확인 오류:', checkError);
-      return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_check_failed`);
     }
-
-    console.log('기존 사용자 확인:', existingUser ? '존재함' : '존재하지 않음');
 
     // 사용자가 없으면 데이터베이스에 사용자 정보 저장
     if (!existingUser) {
