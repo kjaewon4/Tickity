@@ -37,6 +37,31 @@ router.get('/', async (req: Request, res: Response<ApiResponse>) => {
 });
 
 /**
+ * 관리자용 콘서트 목록 조회
+ * GET /concerts/admin
+ */
+router.get('/admin', requireAdminAuth, async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const concerts = await getAllConcerts();
+
+    res.json({
+      success: true,
+      data: {
+        concerts,
+        total: concerts.length,
+      },
+      message: '관리자용 콘서트 목록 조회 성공',
+    });
+  } catch (err: any) {
+    console.error('관리자용 콘서트 목록 조회 오류:', err.message);
+    res.status(500).json({
+      success: false,
+      error: '관리자용 콘서트 목록 조회 중 오류가 발생했습니다.',
+    });
+  }
+});
+
+/**
  * [GET] /concerts/upcoming
  * 다가오는 콘서트 중 가까운 날짜 순 8개 조회 (슬라이더용)
  */
