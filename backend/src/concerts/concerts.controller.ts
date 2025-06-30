@@ -136,6 +136,31 @@ router.get('/:concertId/section-status', async (req, res) => {
   }
 });
 
+router.get('/:concertId/:sectionId/seats', async (req: Request, res: Response) => {
+  const { concertId, sectionId } = req.params;
+
+  const { data, error } = await supabase.rpc('get_seat_status_by_section', {
+    p_concert_id: concertId,
+    p_section_id: sectionId
+  });
+
+  if (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, error: '좌석 상태 조회 실패' });
+  }
+
+  res.json({
+    floor: data.length > 0 ? data[0].floor : null,
+    zoneCode: data.length > 0 ? data[0].zone_code : null,
+    seatMap: data.map(seat => ({
+      row: seat.row_number,
+      col: seat.column_number,
+      status: seat.status,
+      holdExpiresAt: seat.hold_expires_at
+    }))
+  });
+});
+
 /**
  * 새 콘서트 생성 (관리자용)
  * POST /concerts

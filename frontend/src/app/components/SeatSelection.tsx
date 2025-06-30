@@ -44,7 +44,7 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onZoneSelect }) => {
 
 
   const handleAreaClick = (id: string) => {
-    onZoneSelect(id);
+    onZoneSelect(id);  // area.id = section.id (UUID)
   };
 
   return (
@@ -98,7 +98,7 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onZoneSelect }) => {
                       cursor: 'pointer',
                       zIndex: 1,
                     }}
-                    onClick={() => handleAreaClick(area.id)}
+                    onClick={() => handleAreaClick(area.id)} 
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.4)';
                     }}
@@ -122,59 +122,6 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onZoneSelect }) => {
                 </div>
               );
             })}
-
-
-          {/* {mapAreas.map((area) => {
-            const polygonCoords = area.coords
-              .map(([x, y]) => `${(x / originalWidth) * 100}% ${(y / originalHeight) * 100}%`)
-              .join(', ');
-
-            // 중심 좌표 계산
-            const centerX =
-              area.coords.reduce((sum, [x]) => sum + x, 0) / area.coords.length;
-            const centerY =
-              area.coords.reduce((sum, [, y]) => sum + y, 0) / area.coords.length;
-
-            const centerLeft = `${(centerX / originalWidth) * 100}%`;
-            const centerTop = `${(centerY / originalHeight) * 100}%`;
-
-            return (
-              <div key={area.id} className="absolute top-0 left-0 w-full h-full">
-                {/* 영역 클릭 배경 */}
-                {/* <div
-                  className="absolute transition duration-200"
-                  style={{
-                    clipPath: `polygon(${polygonCoords})`,
-                    backgroundColor: 'rgba(59,130,246,0.2)',
-                    width: '100%',
-                    height: '100%',
-                    cursor: 'pointer',
-                    zIndex: 1,
-                  }}
-                  onClick={() => handleAreaClick(area.id)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.4)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.2)';
-                  }}
-                />
-
-                {/* 구역 번호 텍스트 */}
-                {/* <div
-                  className="absolute text-white text-xs font-bold drop-shadow-md pointer-events-none"
-                  style={{
-                    left: centerLeft,
-                    top: centerTop,
-                    transform: 'translate(-50%, -50%)',
-                    zIndex: 2,
-                  }}
-                >
-                  {area.id}구역
-                </div>
-              </div>
-            );
-          })} */} 
 
         </div>
       </div>
