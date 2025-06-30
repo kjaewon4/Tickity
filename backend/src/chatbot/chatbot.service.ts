@@ -1,11 +1,17 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { supabase } from '../lib/supabaseClient';
-import { getAllConcerts } from '../concerts/concerts.service';
+import { getConcerts } from '../concerts/concerts.service';
 import { getUserTickets } from '../tickets/tickets.service';
 
 // Gemini AI 초기화
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+let genAI: GoogleGenerativeAI | null = null;
+let model: any = null;
+
+// GEMINI_API_KEY가 있을 때만 초기화
+if (process.env.GEMINI_API_KEY) {
+  genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -57,6 +63,19 @@ export const analyzeUserIntent = (message: string): {
     };
   }
   
+  // 페이지네이션 관련 (가장 구체적인 조건을 먼저 확인)
+  if (lowerMessage.includes('페이지') || lowerMessage.includes('첫 페이지') ||
+      lowerMessage.match(/\d+페이지/) || lowerMessage.includes('돌아가기') ||
+      lowerMessage.includes('다음 페이지') || lowerMessage.includes('이전 페이지') ||
+      lowerMessage.includes('다음') || lowerMessage.includes('이전') ||
+      lowerMessage.includes('페이지 보기') || lowerMessage.includes('페이지로')) {
+    return {
+      intent: 'pagination',
+      needsData: true,
+      dataType: 'concerts'
+    };
+  }
+  
   // 취소 관련 (가장 구체적인 조건을 먼저 확인)
   if (lowerMessage.includes('취소') || lowerMessage.includes('환불') ||
       lowerMessage.includes('캔슬') || lowerMessage.includes('cancel')) {
@@ -67,10 +86,21 @@ export const analyzeUserIntent = (message: string): {
     };
   }
   
+  // 예매 방법 안내 (더 구체적인 조건을 먼저 확인)
+  if (lowerMessage.includes('예매 방법') || lowerMessage.includes('예매 안내') ||
+      lowerMessage.includes('어떻게 예매') || lowerMessage.includes('예매하는 방법') ||
+      lowerMessage.includes('예매 과정') || lowerMessage.includes('예매 절차')) {
+    return {
+      intent: 'booking_help',
+      needsData: false
+    };
+  }
+  
   // 내 티켓 관련 (더 구체적인 조건을 먼저 확인)
   if (lowerMessage.includes('내 티켓') || lowerMessage.includes('예매 내역') ||
       lowerMessage.includes('구매한') || lowerMessage.includes('마이페이지') ||
-      lowerMessage.includes('티켓 목록')) {
+      lowerMessage.includes('티켓 목록') || lowerMessage.includes('예매목록') ||
+      lowerMessage.includes('예매한') || lowerMessage.includes('내가 예매한')) {
     return {
       intent: 'my_tickets',
       needsData: true,
@@ -78,9 +108,14 @@ export const analyzeUserIntent = (message: string): {
     };
   }
   
-  // 콘서트 목록 관련
-  if (lowerMessage.includes('콘서트') || lowerMessage.includes('공연') || 
-      lowerMessage.includes('예매') || lowerMessage.includes('티켓')) {
+  // 콘서트 목록 관련 (예매 방법 문의는 제외)
+  if ((lowerMessage.includes('콘서트') || lowerMessage.includes('공연') || 
+       lowerMessage.includes('예매') || lowerMessage.includes('티켓')) &&
+      !lowerMessage.includes('예매 방법') && !lowerMessage.includes('예매 안내') &&
+      !lowerMessage.includes('어떻게 예매') && !lowerMessage.includes('예매하는 방법') &&
+      !lowerMessage.includes('예매 과정') && !lowerMessage.includes('예매 절차') &&
+      !lowerMessage.includes('예매목록') && !lowerMessage.includes('예매한') &&
+      !lowerMessage.includes('내가 예매한')) {
     return {
       intent: 'concert_inquiry',
       needsData: true,
@@ -96,14 +131,33 @@ export const analyzeUserIntent = (message: string): {
 };
 
 /**
- * 콘서트 데이터를 챗봇용 텍스트로 변환
+ * 콘서트 데이터를 챗봇용 텍스트로 변환 (페이지네이션 지원)
  */
-const formatConcertsForAI = async (): Promise<string> => {
+const formatConcertsForAI = async (page: number = 1): Promise<{ message: string; currentPage: number; totalPages: number; }> => {
   try {
-    const concerts = await getAllConcerts();
+    const concerts = await getConcerts();
     if (concerts.length === 0) {
-      return "현재 예매 가능한 콘서트가 없습니다.";
+      return {
+        message: "현재 예매 가능한 콘서트가 없습니다.",
+        currentPage: 1,
+        totalPages: 1
+      };
     }
+    
+    const itemsPerPage = 10;
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedConcerts = concerts.slice(startIndex, endIndex);
+    const totalPages = Math.ceil(concerts.length / itemsPerPage);
+    
+    if (paginatedConcerts.length === 0) {
+      return {
+        message: `요청하신 ${page}페이지에는 콘서트가 없습니다. 총 ${totalPages}페이지까지 있습니다.`,
+        currentPage: page,
+        totalPages
+      };
+    }
+    
     const tableHeader = `
 <table class="min-w-full divide-y divide-gray-200 border border-gray-300">
   <thead class="bg-gray-100">
@@ -117,12 +171,12 @@ const formatConcertsForAI = async (): Promise<string> => {
   </thead>
   <tbody class="bg-white divide-y divide-gray-200">
 `;
-    const tableRows = concerts.slice(0, 10).map((concert, index) => `
+    const tableRows = paginatedConcerts.map((concert: any, index: number) => `
     <tr>
-      <td class="px-4 py-2 whitespace-nowrap">${index + 1}</td>
+      <td class="px-4 py-2 whitespace-nowrap">${startIndex + index + 1}</td>
       <td class="px-4 py-2 whitespace-nowrap">${concert.title}</td>
-      <td class="px-4 py-2 whitespace-nowrap">${formatShortDate(concert.date)}</td>
-      <td class="px-4 py-2 whitespace-nowrap">${concert.location}</td>
+      <td class="px-4 py-2 whitespace-nowrap">${formatShortDate(concert.start_date || concert.date)}</td>
+      <td class="px-4 py-2 whitespace-nowrap">${concert.venue_name}</td>
       <td class="px-4 py-2 whitespace-nowrap">${concert.main_performer}</td>
     </tr>
 `).join('');
@@ -131,10 +185,20 @@ const formatConcertsForAI = async (): Promise<string> => {
 </table>
 `;
     const concertTable = tableHeader + tableRows + tableFooter;
-    return `현재 예매 가능한 콘서트 목록입니다:<br/><br/>${concertTable}`;
+    const pageInfo = `<br/><br/>📄 ${page}페이지 / 총 ${totalPages}페이지 (전체 ${concerts.length}개 콘서트)`;
+    
+    return {
+      message: `현재 예매 가능한 콘서트 목록입니다:<br/><br/>${concertTable}${pageInfo}`,
+      currentPage: page,
+      totalPages
+    };
   } catch (error) {
     console.error('콘서트 데이터 조회 오류:', error);
-    return "콘서트 정보를 불러오는 중 오류가 발생했습니다.";
+    return {
+      message: "콘서트 정보를 불러오는 중 오류가 발생했습니다.",
+      currentPage: 1,
+      totalPages: 1
+    };
   }
 };
 
@@ -153,8 +217,12 @@ const formatUserTicketsForAI = async (userId: string): Promise<string> => {
       const status = ticket.is_used ? '사용됨' : 
                     ticket.canceled_at ? '취소됨' : '예매완료';
       
+      const seatInfo = ticket.seat?.label || 
+                      (ticket.seat?.row_idx && ticket.seat?.col_idx ? 
+                       `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음');
+      
       return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}
-   - 좌석: ${ticket.seat?.seat_number} (${ticket.seat?.grade_name})
+   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})
    - 가격: ${ticket.purchase_price.toLocaleString()}원
    - 상태: ${status}
    - 예매일: ${new Date(ticket.created_at).toLocaleDateString('ko-KR')}`;
@@ -172,7 +240,8 @@ const formatUserTicketsForAI = async (userId: string): Promise<string> => {
  */
 const generateMockResponse = async (
   userMessage: string,
-  userId?: string
+  userId?: string,
+  chatHistory?: ChatMessage[]
 ): Promise<ChatbotResponse> => {
   const { intent, needsData, dataType } = analyzeUserIntent(userMessage);
   
@@ -180,43 +249,75 @@ const generateMockResponse = async (
   let actionType: ChatbotResponse['actionType'] = 'general';
   
   if (intent === 'concert_inquiry') {
-    const concerts = await getAllConcerts();
-    const tableHeader = `
-<table class=\"min-w-full divide-y divide-gray-200 border border-gray-300\">
-  <thead class=\"bg-gray-100\">
-    <tr>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">번호</th>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">제목</th>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">날짜</th>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">장소</th>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">출연자</th>
-    </tr>
-  </thead>
-  <tbody class=\"bg-white divide-y divide-gray-200\">
-`;
-    const tableRows = concerts.slice(0, 10).map((concert, index) => `
-    <tr>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${index + 1}</td>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${concert.title}</td>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${new Date(concert.date).toLocaleDateString('ko-KR')}</td>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${concert.location}</td>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${concert.main_performer}</td>
-    </tr>
-`).join('');
-    const tableFooter = `
-  </tbody>
-</table>
-`;
-    const concertTable = tableHeader + tableRows + tableFooter;
-    message = `현재 예매 가능한 콘서트 목록입니다:<br/><br/>${concertTable}`;
+    const concertData = await formatConcertsForAI(1);
+    message = concertData.message;
     actionType = 'show_concerts';
-  } else if (intent === 'cancellation' && userId) {
+    
+    // 페이지네이션 제안 생성
+    const suggestions = generatePaginationSuggestions(concertData.currentPage, concertData.totalPages);
+    
+    return {
+      message,
+      suggestions,
+      needsUserInfo: false,
+      actionType
+    };
+  }
+  
+  if (intent === 'pagination') {
+    const pageMatch = userMessage.match(/(\d+)페이지/) || userMessage.match(/(\d+) ?페이지/);
+    let page = 1;
+    
+    if (pageMatch) {
+      page = parseInt(pageMatch[1]);
+    } else if (userMessage.includes('첫 페이지') || userMessage.includes('돌아가기') || userMessage.includes('첫 페이지로')) {
+      page = 1;
+    } else if (userMessage.includes('다음 페이지') || userMessage.includes('다음')) {
+      // 채팅 히스토리에서 현재 페이지 찾기
+      const currentPage = getCurrentPageFromHistory(chatHistory);
+      page = currentPage + 1;
+    } else if (userMessage.includes('이전 페이지') || userMessage.includes('이전')) {
+      // 채팅 히스토리에서 현재 페이지 찾기
+      const currentPage = getCurrentPageFromHistory(chatHistory);
+      page = Math.max(1, currentPage - 1);
+    }
+    
+    const concertData = await formatConcertsForAI(page);
+    message = concertData.message;
+    actionType = 'show_concerts';
+    
+    // 동적 제안 생성
+    const suggestions = generatePaginationSuggestions(concertData.currentPage, concertData.totalPages);
+    
+    return {
+      message,
+      suggestions,
+      needsUserInfo: false,
+      actionType
+    };
+  }
+  
+  if (intent === 'booking_help') {
+    message = `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n**💰 결제 후 취소 정책:**\n• 공연 7일 전: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`;
+    actionType = 'booking_help';
+    
+    const suggestions = generateSuggestions(intent);
+    
+    return {
+      message,
+      suggestions,
+      needsUserInfo: false,
+      actionType
+    };
+  }
+  
+  if (intent === 'cancellation' && userId) {
     const tickets = await getUserTickets(userId);
     const activeTickets = tickets.filter(ticket => !ticket.canceled_at && !ticket.is_used);
     
     if (activeTickets.length > 0) {
       const ticketList = activeTickets.map((ticket, index) => 
-        `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🪑 ${ticket.seat?.seat_number || '좌석 정보 없음'} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price.toLocaleString()}원\n   📅 ${new Date(ticket.created_at).toLocaleDateString('ko-KR')} 예매`
+        `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🪑 ${ticket.seat?.label || (ticket.seat?.row_idx && ticket.seat?.col_idx ? `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음')} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price.toLocaleString()}원\n   📅 ${new Date(ticket.created_at).toLocaleDateString('ko-KR')} 예매`
       ).join('\n\n');
       
       message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
@@ -224,14 +325,36 @@ const generateMockResponse = async (
       message = `현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!`;
     }
     actionType = 'show_tickets';
-  } else if (intent === 'cancellation' && !userId) {
+    
+    const suggestions = generateSuggestions(intent);
+    
+    return {
+      message,
+      suggestions,
+      needsUserInfo: false,
+      actionType
+    };
+  }
+  
+  if (intent === 'cancellation' && !userId) {
     message = `티켓 취소를 위해서는 로그인이 필요합니다. 🔐\n\n로그인 후 다시 시도해 주세요.\n\n취소 정책:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가`;
     actionType = 'show_tickets';
-  } else if (intent === 'my_tickets' && userId) {
+    
+    const suggestions = generateSuggestions(intent);
+    
+    return {
+      message,
+      suggestions,
+      needsUserInfo: true,
+      actionType
+    };
+  }
+  
+  if (intent === 'my_tickets' && userId) {
     const tickets = await getUserTickets(userId);
     if (tickets.length > 0) {
       const ticketList = tickets.slice(0, 3).map((ticket, index) => 
-        `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🪑 ${ticket.seat?.seat_number || '좌석 정보 없음'} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price.toLocaleString()}원`
+        `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🪑 ${ticket.seat?.label || (ticket.seat?.row_idx && ticket.seat?.col_idx ? `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음')} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price.toLocaleString()}원`
       ).join('\n\n');
       
       message = `회원님의 예매 내역을 확인해드릴게요! 🎫\n\n${ticketList}\n\n총 ${tickets.length}개의 티켓이 있습니다.`;
@@ -239,24 +362,33 @@ const generateMockResponse = async (
       message = `아직 예매하신 티켓이 없네요. 🎭\n\n다양한 콘서트가 준비되어 있으니 구경해보세요!`;
     }
     actionType = 'show_tickets';
-  } else {
-    // 일반 질문들에 대한 응답
-    if (userMessage.includes('NFT') || userMessage.includes('nft')) {
-      message = `NFT 티켓은 Tickity의 핵심 기능입니다! 🎨\n\n✨ 특징:\n• 블록체인 기반 진위 확인\n• 전송 불가능한 소울바운드 티켓\n• 얼굴 인식으로 안전한 입장\n• 디지털 소장 가치\n\n궁금한 점이 더 있으시면 언제든 물어보세요!`;
-    } else if (userMessage.includes('예매') || userMessage.includes('구매')) {
-      message = `티켓 예매 방법을 안내해드릴게요! 📋\n\n1️⃣ 원하는 콘서트 선택\n2️⃣ 좌석 등급 및 위치 선택\n3️⃣ 결제 진행\n4️⃣ NFT 티켓 발행\n5️⃣ 얼굴 등록 (입장용)\n\n간단하고 안전한 예매 과정입니다!`;
-    } else {
-      message = `안녕하세요! Tickity 고객지원 챗봇입니다! 😊\n\n🎵 콘서트 예매 및 관리\n🎫 NFT 기반 티켓 시스템\n👤 얼굴 인식 입장\n🔒 블록체인 보안\n\n무엇을 도와드릴까요?`;
-    }
+    
+    const suggestions = generateSuggestions(intent);
+    
+    return {
+      message,
+      suggestions,
+      needsUserInfo: false,
+      actionType
+    };
   }
   
-  const suggestions = generateSuggestions(intent);
+  // 일반 질문들에 대한 응답
+  if (userMessage.includes('NFT') || userMessage.includes('nft')) {
+    message = `NFT 티켓은 Tickity의 핵심 기능입니다! 🎨\n\n✨ 특징:\n• 블록체인 기반 진위 확인\n• 전송 불가능한 소울바운드 티켓\n• 얼굴 인식으로 안전한 입장\n• 디지털 소장 가치\n\n궁금한 점이 더 있으시면 언제든 물어보세요!`;
+  } else if (userMessage.includes('예매') || userMessage.includes('구매')) {
+    message = `티켓 예매 방법을 안내해드릴게요! 📋\n\n1️⃣ 원하는 콘서트 선택\n2️⃣ 좌석 등급 및 위치 선택\n3️⃣ 결제 진행\n4️⃣ NFT 티켓 발행\n5️⃣ 얼굴 등록 (입장용)\n\n간단하고 안전한 예매 과정입니다!`;
+  } else {
+    message = `안녕하세요! Tickity 고객지원 챗봇입니다! 😊\n\n🎵 콘서트 예매 및 관리\n🎫 NFT 기반 티켓 시스템\n👤 얼굴 인식 입장\n🔒 블록체인 보안\n\n무엇을 도와드릴까요?`;
+  }
+  
+  const suggestions = generateSuggestions('general');
   
   return {
     message,
     suggestions,
-    needsUserInfo: intent === 'my_tickets' && !userId,
-    actionType
+    needsUserInfo: false,
+    actionType: 'general'
   };
 };
 
@@ -370,41 +502,54 @@ export const generateChatResponse = async (
 
     // 콘서트 목록 요청은 AI를 거치지 않고 직접 응답
     if (intent === 'concert_inquiry') {
-      const concerts = await getAllConcerts();
-      if (concerts.length === 0) {
-        message = '현재 예매 가능한 콘서트가 없습니다.';
-      } else {
-        const tableHeader = `
-<table class=\"min-w-full divide-y divide-gray-200 border border-gray-300\">
-  <thead class=\"bg-gray-100\">
-    <tr>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">번호</th>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">제목</th>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">날짜</th>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">장소</th>
-      <th class=\"px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase\">출연자</th>
-    </tr>
-  </thead>
-  <tbody class=\"bg-white divide-y divide-gray-200\">
-`;
-        const tableRows = concerts.slice(0, 10).map((concert, index) => `
-    <tr>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${index + 1}</td>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${concert.title}</td>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${new Date(concert.date).toLocaleDateString('ko-KR')}</td>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${concert.location}</td>
-      <td class=\"px-4 py-2 whitespace-nowrap\">${concert.main_performer}</td>
-    </tr>
-`).join('');
-        const tableFooter = `
-  </tbody>
-</table>
-`;
-        const concertTable = tableHeader + tableRows + tableFooter;
-        message = `현재 예매 가능한 콘서트 목록입니다:<br/><br/>${concertTable}`;
-      }
-      suggestions = generateSuggestions(intent);
+      const concertData = await formatConcertsForAI(1);
+      message = concertData.message;
+      suggestions = generatePaginationSuggestions(concertData.currentPage, concertData.totalPages);
       actionType = 'show_concerts';
+      return {
+        message,
+        suggestions,
+        needsUserInfo: false,
+        actionType
+      };
+    }
+
+    // 페이지네이션 처리
+    if (intent === 'pagination') {
+      const pageMatch = userMessage.match(/(\d+)페이지/) || userMessage.match(/(\d+) ?페이지/);
+      let page = 1;
+      
+      if (pageMatch) {
+        page = parseInt(pageMatch[1]);
+      } else if (userMessage.includes('첫 페이지') || userMessage.includes('돌아가기') || userMessage.includes('첫 페이지로')) {
+        page = 1;
+      } else if (userMessage.includes('다음 페이지') || userMessage.includes('다음')) {
+        // 채팅 히스토리에서 현재 페이지 찾기
+        const currentPage = getCurrentPageFromHistory(chatHistory);
+        page = currentPage + 1;
+      } else if (userMessage.includes('이전 페이지') || userMessage.includes('이전')) {
+        // 채팅 히스토리에서 현재 페이지 찾기
+        const currentPage = getCurrentPageFromHistory(chatHistory);
+        page = Math.max(1, currentPage - 1);
+      }
+      
+      const concertData = await formatConcertsForAI(page);
+      message = concertData.message;
+      suggestions = generatePaginationSuggestions(concertData.currentPage, concertData.totalPages);
+      actionType = 'show_concerts';
+      return {
+        message,
+        suggestions,
+        needsUserInfo: false,
+        actionType
+      };
+    }
+
+    // 예매 방법 안내도 AI를 거치지 않고 직접 응답
+    if (intent === 'booking_help') {
+      message = `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n**💰 결제 후 취소 정책:**\n• 공연 7일 전: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`;
+      suggestions = generateSuggestions(intent);
+      actionType = 'booking_help';
       return {
         message,
         suggestions,
@@ -422,7 +567,11 @@ export const generateChatResponse = async (
         message = '현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!';
       } else {
         const ticketList = activeTickets.map((ticket, index) => {
-          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${ticket.seat?.seat_number} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price.toLocaleString()}원\n   - 예매일: ${new Date(ticket.created_at).toLocaleDateString('ko-KR')}`;
+          const seatInfo = ticket.seat?.label || 
+                          (ticket.seat?.row_idx && ticket.seat?.col_idx ? 
+                           `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음');
+          
+          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price.toLocaleString()}원\n   - 예매일: ${new Date(ticket.created_at).toLocaleDateString('ko-KR')}`;
         }).join('\n\n');
         message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
       }
@@ -445,7 +594,11 @@ export const generateChatResponse = async (
         const ticketList = tickets.map((ticket, index) => {
           const status = ticket.is_used ? '사용됨' : 
                         ticket.canceled_at ? '취소됨' : '예매완료';
-          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${ticket.seat?.seat_number} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price.toLocaleString()}원\n   - 상태: ${status}\n   - 예매일: ${new Date(ticket.created_at).toLocaleDateString('ko-KR')}`;
+          const seatInfo = ticket.seat?.label || 
+                          (ticket.seat?.row_idx && ticket.seat?.col_idx ? 
+                           `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음');
+          
+          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price.toLocaleString()}원\n   - 상태: ${status}\n   - 예매일: ${new Date(ticket.created_at).toLocaleDateString('ko-KR')}`;
         }).join('\n\n');
         message = `회원님의 예매 내역입니다:\n\n${ticketList}`;
       }
@@ -462,7 +615,8 @@ export const generateChatResponse = async (
     // 그 외의 경우에만 AI 사용
     // 필요한 데이터 조회
     if (needsData && dataType === 'concerts') {
-      contextData = await formatConcertsForAI();
+      const concertData = await formatConcertsForAI(1);
+      contextData = concertData.message;
       actionType = 'show_concerts';
     } else if (needsData && dataType === 'tickets' && userId) {
       contextData = await formatUserTicketsForAI(userId);
@@ -475,7 +629,11 @@ export const generateChatResponse = async (
       ).join('\n') : '';
     // Gemini AI 프롬프트 구성
     const prompt = createSafePrompt(userMessage, contextData, historyText);
-    // Gemini AI 호출
+    // Gemini AI 호출 (API 키가 없으면 Mock 응답 사용)
+    if (!model) {
+      return await generateMockResponse(userMessage, userId, chatHistory);
+    }
+    
     const result = await model.generateContent(prompt);
     const response = await result.response;
     message = response.text();
@@ -491,7 +649,7 @@ export const generateChatResponse = async (
     console.error('Gemini AI 응답 생성 오류:', error);
     // API 할당량 초과 또는 기타 오류 시 Mock 응답 사용
     if ((error as any).status === 429 || !process.env.GEMINI_API_KEY) {
-      return await generateMockResponse(userMessage, userId);
+      return await generateMockResponse(userMessage, userId, chatHistory);
     }
     return {
       message: '죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
@@ -506,22 +664,71 @@ export const generateChatResponse = async (
 };
 
 /**
- * 의도별 추천 질문 생성
+ * 채팅 히스토리에서 현재 페이지 추출
  */
+const getCurrentPageFromHistory = (chatHistory?: ChatMessage[]): number => {
+  if (!chatHistory || chatHistory.length === 0) return 1;
+  
+  // 마지막 봇 응답에서 페이지 정보 찾기
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    const message = chatHistory[i];
+    if (message.role === 'assistant') {
+      const pageMatch = message.content.match(/📄 (\d+)페이지/);
+      if (pageMatch) {
+        return parseInt(pageMatch[1]);
+      }
+    }
+  }
+  
+  return 1; // 기본값
+};
+
+/**
+ * 페이지네이션용 동적 제안 생성
+ */
+const generatePaginationSuggestions = (currentPage: number, totalPages: number): string[] => {
+  const suggestions: string[] = [];
+  
+  // 다음 페이지 버튼 (마지막 페이지가 아닐 때)
+  if (currentPage < totalPages) {
+    suggestions.push(`${currentPage + 1}페이지 보기`);
+  }
+  
+  // 이전 페이지 버튼 (1페이지가 아닐 때)
+  if (currentPage > 1) {
+    suggestions.push(`${currentPage - 1}페이지 보기`);
+  }
+  
+  // 첫 페이지 버튼 (1페이지가 아닐 때)
+  if (currentPage > 1) {
+    suggestions.push('첫 페이지로');
+  }
+  
+  // 빈 슬롯이 있으면 다른 유용한 제안 추가
+  if (suggestions.length < 3) {
+    suggestions.push('내 예매 내역 확인');
+  }
+  if (suggestions.length < 3) {
+    suggestions.push('예매 방법 알려줘');
+  }
+  
+  return suggestions.slice(0, 3); // 최대 3개까지
+};
+
 const generateSuggestions = (intent: string): string[] => {
   switch (intent) {
     case 'concert_inquiry':
       return [
-        '인기 콘서트 추천해줘',
-        '이번 주 콘서트 있어?',
-        '좌석 등급별 가격이 궁금해'
+        '2페이지 보기',
+        '내 예매 내역 확인',
+        '예매 방법 알려줘'
       ];
     
     case 'my_tickets':
       return [
         '티켓 취소하고 싶어',
         '환불 정책이 궁금해',
-        '티켓 사용 방법 알려줘'
+        '콘서트 목록 보기'
       ];
     
     case 'cancellation':
@@ -529,6 +736,13 @@ const generateSuggestions = (intent: string): string[] => {
         '환불 정책 자세히 알려줘',
         '취소 수수료가 있어?',
         '고객센터 연결해줘'
+      ];
+    
+    case 'booking_help':
+      return [
+        '콘서트 목록 보기',
+        '내 예매 내역 확인',
+        'NFT 티켓 더 알아보기'
       ];
     
     default:

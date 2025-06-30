@@ -25,6 +25,7 @@ ignition/deployments/chain-31337
 
 # Python 가상환경
 venv310/
+ai-server/venv/
 __pycache__/
 *.pyc
 *.py[cod]
@@ -35,6 +36,8 @@ blockchain/.deployed
 # Build outputs
 dist/                   
 build/
+backend/backend@*
+backend/ts-node-dev
 
 # IDE files
 .vscode/
