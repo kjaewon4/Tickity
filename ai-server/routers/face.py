@@ -1,25 +1,16 @@
-<<<<<<< HEAD
-from fastapi import APIRouter, UploadFile, File, Form
-from services.face_service import register_user_face_db, verify_user_identity
-from services.face_service import register_user_face
-=======
 from fastapi import APIRouter, UploadFile, File, Form, Request
 from fastapi.responses import JSONResponse
 from services.face_service import register_user_face_db, verify_user_identity, register_user_face
 from uuid import uuid4
->>>>>>> 8b66fd53 (Feat: 회원가입 시 임베딩 저장 수정 중)
 
 router = APIRouter()
 embedding_store = {}
 
 @router.post("/register")
-<<<<<<< HEAD
 async def register_face_to_db(
     video: UploadFile = File(...)
 ):
-=======
-async def register_face_to_db(video: UploadFile = File(...)):
->>>>>>> 8b66fd53 (Feat: 회원가입 시 임베딩 저장 수정 중)
+
     """
     사용자의 얼굴 임베딩을 추출하여 프론트로 전달하는 API
     """

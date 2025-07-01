@@ -110,7 +110,3 @@ async def register_user_face(file: UploadFile):
         "embedding_shape": f"{len(embedding)} 차원",
         "embedding": embedding.tolist()
     }
-<<<<<<< HEAD
-=======
-
->>>>>>> 8b66fd53 (Feat: 회원가입 시 임베딩 저장 수정 중)
