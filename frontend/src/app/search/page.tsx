@@ -29,9 +29,8 @@ export default function SearchPage() {
   useEffect(() => {
     setSearchKeyword(query);
     setSelectedCategory(categoryParam);
-    if (query) {
-      fetchSearchResults(query, categoryParam);
-    }
+    // 검색어가 없어도 API 호출하여 전체 콘서트 표시
+    fetchSearchResults(query, categoryParam);
   }, [query, categoryParam]);
 
   const fetchSearchResults = async (keyword: string, category: string = selectedCategory) => {
@@ -65,23 +64,23 @@ export default function SearchPage() {
     e.preventDefault();
     if (searchKeyword.trim()) {
       router.push(`/search?q=${encodeURIComponent(searchKeyword.trim())}`);
+    } else {
+      // 검색어가 비어있으면 검색 파라미터 제거하고 전체 콘서트 표시
+      const url = new URL(window.location.href);
+      url.searchParams.delete('q');
+      router.push(url.toString());
     }
   };
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
-    if (query) {
-      const url = new URL(window.location.href);
-      if (category !== '전체') {
-        url.searchParams.set('category', category);
-      } else {
-        url.searchParams.delete('category');
-      }
-      router.push(url.toString());
+    const url = new URL(window.location.href);
+    if (category !== '전체') {
+      url.searchParams.set('category', category);
     } else {
-      // 검색어가 없으면 현재 카테고리로 검색 실행
-      fetchSearchResults(searchKeyword, category);
+      url.searchParams.delete('category');
     }
+    router.push(url.toString());
   };
 
   const categories = ['전체', '여자아이돌', '남자아이돌', '솔로 가수', '내한공연', '랩/힙합'];
@@ -156,10 +155,15 @@ export default function SearchPage() {
             <>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-semibold text-gray-900">
-                  검색 결과
+                  {query ? '검색 결과' : '전체 콘서트'}
                   {query && (
                     <span className="text-blue-600 ml-2">
                       "{query}" ({concerts.length}개)
+                    </span>
+                  )}
+                  {!query && (
+                    <span className="text-blue-600 ml-2">
+                      ({concerts.length}개)
                     </span>
                   )}
                 </h2>
@@ -169,10 +173,10 @@ export default function SearchPage() {
                 <div className="text-center py-12">
                   <div className="text-gray-400 text-6xl mb-4">🔍</div>
                   <p className="text-gray-600 mb-2">
-                    {query ? `"${query}"에 대한 검색 결과가 없습니다.` : '검색어를 입력해주세요.'}
+                    {query ? `"${query}"에 대한 검색 결과가 없습니다.` : '등록된 콘서트가 없습니다.'}
                   </p>
                   <p className="text-gray-500 text-sm">
-                    다른 키워드로 검색해보세요.
+                    {query ? '다른 키워드로 검색해보세요.' : '새로운 콘서트가 등록될 때까지 기다려주세요.'}
                   </p>
                 </div>
               ) : (
