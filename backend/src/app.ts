@@ -15,6 +15,7 @@ import seatsRouter from './seats/seats.controller';
 import ticketsRouter from './tickets/tickets.controller';
 import authRouter from './auth/auth.controller';
 import chatbotRouter from './chatbot/chatbot.controller';
+import uploadsRouter from './uploads/uploads.controller';
 
 
 // NODE_ENV가 test 가 아닐 때만 스케줄러 구동
@@ -65,5 +66,6 @@ app.use('/seats', seatsRouter);
 app.use('/tickets', ticketsRouter);
 
 app.use('/chatbot', chatbotRouter);
+app.use('/uploads', uploadsRouter);
 
 export default app; 
