@@ -58,6 +58,19 @@ export function createSeoConcertUrl(title: string, id: string): string {
 }
 
 /**
+ * 콘서트 URL 생성 (예약 페이지용)
+ * @param id 콘서트 ID
+ * @param title 공연명 (선택사항)
+ * @returns URL 경로
+ */
+export function createConcertUrl(id: string, title?: string): string {
+  if (title) {
+    return createSeoConcertUrl(title, id);
+  }
+  return createSimpleConcertUrl(id);
+}
+
+/**
  * 슬러그에서 콘서트 ID 추출 (마지막 -이후 8글자)
  * @param slug URL 슬러그
  * @returns 콘서트 ID 일부
