@@ -25,24 +25,22 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // ✅ 모달 외부 클릭 시 닫히게
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
-        setModalOpen(false);
-      }
-    };
-
-    if (modalOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
+  
+useEffect(() => {
+  const handleClickOutside = (event: MouseEvent) => {
+    if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+      setModalOpen(false);
     }
+  };
 
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [modalOpen]);
+  if (modalOpen) {
+    document.addEventListener('click', handleClickOutside); 
+  }
+
+  return () => {
+    document.removeEventListener('click', handleClickOutside);
+  };
+}, [modalOpen]);
 
   // 팝업 위치 계산
   const getPopupPosition = () => {
@@ -50,7 +48,7 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
       const rect = buttonRef.current.getBoundingClientRect();
       return {
         top: rect.bottom + window.scrollY + 8,
-        left: rect.right - 240, // 팝업 너비만큼 왼쪽으로
+        left: rect.right - 240, 
       };
     }
     return { top: 0, left: 0 };
@@ -75,9 +73,11 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
 
   return (
     <nav className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white/80 backdrop-blur-md dark:bg-gray-900/80 dark:border-gray-700">
-      <div className="w-[120px] h-auto">
-        <img src="/images/Tickity.svg" alt="Tickity Logo" className="object-contain" />
-      </div>
+      <Link href="/">
+        <div className="w-[120px] h-auto cursor-pointer">
+          <img src="/images/Tickity.svg" alt="Tickity Logo" className="object-contain" />
+        </div>
+      </Link>
 
       <div className="flex items-center gap-4 relative">
         <form onSubmit={handleSearch} className="relative h-10 w-40 flex justify-end items-center">
@@ -146,13 +146,13 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
                 </div>
                 <button
                   onClick={() => router.push('/mypage')}
-                  className="w-full flex items-center justify-center px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm font-medium text-gray-700"
+                  className="w-full flex items-center justify-center px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm font-medium text-gray-700 cursor-pointer"
                 >
                   마이페이지
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium"
+                  className="w-full flex items-center justify-center px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium cursor-pointer"
                 >
                   로그아웃
                 </button>
