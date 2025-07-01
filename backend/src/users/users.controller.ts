@@ -171,4 +171,90 @@ router.get('/dashboard/:userId', /* authenticateToken, */ async (req: Request, r
   }
 });
 
+/**
+ * 사용자 티켓 상세 정보 조회 (챗봇 스타일 포맷팅)
+ * GET /users/tickets/:userId
+ */
+router.get('/tickets/:userId', /* authenticateToken, */ async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: '사용자 ID가 필요합니다.'
+      });
+    }
+
+    const userTickets = await getUserTickets(userId);
+    
+    if (userTickets.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          tickets: [],
+          formattedTickets: "현재 예매하신 티켓이 없습니다.",
+          stats: {
+            total: 0,
+            used: 0,
+            upcoming: 0,
+            canceled: 0
+          }
+        },
+        message: '티켓 조회 성공 (예매 내역 없음)'
+      });
+    }
+
+    // 챗봇 스타일로 포맷팅된 티켓 정보 생성
+    const formattedTickets = userTickets.map((ticket, index) => {
+      const status = ticket.is_used ? '사용됨' : 
+                    ticket.canceled_at ? '취소됨' : '예매완료';
+      
+      const seatInfo = ticket.seat?.label || 
+                      (ticket.seat?.row_idx && ticket.seat?.col_idx ? 
+                       `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음');
+      
+      return {
+        index: index + 1,
+        concertTitle: ticket.concert?.title || '콘서트 정보 없음',
+        seatInfo: `${seatInfo} (${ticket.seat?.grade_name || '등급 정보 없음'})`,
+        price: ticket.purchase_price.toLocaleString() + '원',
+        status: status,
+        purchaseDate: new Date(ticket.created_at).toLocaleDateString('ko-KR'),
+        concertDate: ticket.concert?.date ? new Date(ticket.concert.date).toLocaleDateString('ko-KR') : '날짜 정보 없음',
+        venueName: ticket.concert?.venue_name || '장소 정보 없음',
+        raw: ticket // 원본 데이터도 포함
+      };
+    });
+
+    // 티켓 통계 계산
+    const ticketStats = {
+      total: userTickets.length,
+      used: userTickets.filter(ticket => ticket.is_used).length,
+      upcoming: userTickets.filter(ticket => 
+        !ticket.is_used && 
+        !ticket.canceled_at && 
+        new Date(ticket.concert?.date || '') > new Date()
+      ).length,
+      canceled: userTickets.filter(ticket => ticket.canceled_at).length
+    };
+
+    res.json({
+      success: true,
+      data: {
+        tickets: userTickets, // 원본 데이터
+        formattedTickets: formattedTickets, // 챗봇 스타일 포맷팅된 배열
+        stats: ticketStats
+      },
+      message: '티켓 조회 성공'
+    });
+  } catch (error) {
+    console.error('티켓 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '티켓 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 export default router; 

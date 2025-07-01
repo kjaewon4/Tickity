@@ -18,10 +18,12 @@ interface NavbarProps {
 
 const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
   const [showSearch, setShowSearch] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
   const [modalOpen, setModalOpen] = useState(false); 
   const router = useRouter();
   const modalRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ✅ 모달 외부 클릭 시 닫히게
   useEffect(() => {
@@ -54,6 +56,23 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
     return { top: 0, left: 0 };
   };
 
+  // 검색 처리
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchKeyword.trim()) {
+      router.push(`/search?q=${encodeURIComponent(searchKeyword.trim())}`);
+      setShowSearch(false);
+      setSearchKeyword('');
+    }
+  };
+
+  // 검색창 열기 시 포커스
+  useEffect(() => {
+    if (showSearch && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [showSearch]);
+
   return (
     <nav className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white/80 backdrop-blur-md dark:bg-gray-900/80 dark:border-gray-700">
       <div className="w-[120px] h-auto">
@@ -61,9 +80,12 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
       </div>
 
       <div className="flex items-center gap-4 relative">
-        <div className="relative h-10 w-40 flex justify-end items-center">
+        <form onSubmit={handleSearch} className="relative h-10 w-40 flex justify-end items-center">
           <input
+            ref={searchInputRef}
             type="text"
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
             placeholder="콘서트명 또는 가수명을 입력하세요."
             className={`
               absolute right-0 h-10 pr-10 pl-4 text-sm bg-white rounded-full
@@ -76,6 +98,7 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
           />
           
           <button
+            type="submit"
             onClick={() => setShowSearch(prev => !prev)}
             className={`
               absolute right-2.5 top-1/2 -translate-y-1/2 z-10
@@ -89,7 +112,7 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
           >
             <FiSearch size={16} />
           </button>
-        </div>
+        </form>
 
         <Link href="/" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">
           Home

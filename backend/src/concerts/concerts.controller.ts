@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getSeatSummary, getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts, getConcertDetail, listSectionAvailability, getConcertDetailByShortId, getConcertByShortId } from './concerts.service';
+import { getSeatSummary, getAllConcerts, createConcert, getConcertById, deleteConcert, getConcerts, getUpcomingConcerts, getConcertDetail, listSectionAvailability, getConcertDetailByShortId, getConcertByShortId, searchConcerts } from './concerts.service';
 import { ApiResponse } from '../types/auth';
 import { supabase } from '../lib/supabaseClient';
 import { requireAdminAuth } from '../auth/auth.middleware';
@@ -32,6 +32,43 @@ router.get('/', async (req: Request, res: Response<ApiResponse>) => {
     res.status(500).json({
       success: false,
       error: '콘서트 목록 조회 중 오류가 발생했습니다.',
+    });
+  }
+});
+
+/**
+ * 콘서트 검색
+ * GET /concerts/search?q=검색어&category=카테고리
+ */
+router.get('/search', async (req: Request, res: Response<ApiResponse>) => {
+  const query = req.query.q as string | undefined;
+  const category = req.query.category as string | undefined;
+
+  try {
+    if (!query || query.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: '검색어를 입력해주세요.',
+      });
+    }
+
+    const concerts = await searchConcerts(query.trim(), category);
+
+    res.json({
+      success: true,
+      data: {
+        concerts,
+        total: concerts.length,
+        query: query.trim(),
+        category: category || '전체'
+      },
+      message: `"${query.trim()}" 검색 결과 (${concerts.length}개)`,
+    });
+  } catch (err: any) {
+    console.error('콘서트 검색 오류:', err.message);
+    res.status(500).json({
+      success: false,
+      error: '콘서트 검색 중 오류가 발생했습니다.',
     });
   }
 });

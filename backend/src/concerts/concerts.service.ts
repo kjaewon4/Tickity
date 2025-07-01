@@ -220,6 +220,7 @@ export const getUpcomingConcerts = async () => {
       title,
       main_performer,
       date,
+      start_date,
       poster_url,
       venues (
         name
@@ -236,8 +237,52 @@ export const getUpcomingConcerts = async () => {
     title: c.title,
     main_performer: c.main_performer,
     date: c.date,
+    start_date: c.start_date || c.date, // start_date가 없으면 date 사용
     poster_url: c.poster_url,
-    venue_name: c.venues?.name || '',
+    venue_name: c.venues?.name || '장소 정보 없음',
+  }));
+};
+
+/**
+ * 콘서트 검색
+ * @param query - 검색어
+ * @param category - 카테고리 필터 (선택사항)
+ * @returns 검색된 콘서트 목록
+ */
+export const searchConcerts = async (query: string, category?: string) => {
+  let searchQuery = supabase
+    .from('concerts')
+    .select(`
+      id,
+      title,
+      main_performer,
+      start_date,
+      poster_url,
+      category,
+      venue_id,
+      venues!concerts_venue_id_fkey (
+        name
+      )
+    `)
+    .or(`title.ilike.%${query}%,main_performer.ilike.%${query}%`)
+    .order('start_date', { ascending: true });
+
+  // 카테고리 필터 적용
+  if (category && category !== '전체') {
+    searchQuery = searchQuery.eq('category', category);
+  }
+
+  const { data, error } = await searchQuery;
+  if (error) throw error;
+
+  return data.map((c: any) => ({
+    id: c.id,
+    title: c.title,
+    main_performer: c.main_performer,
+    start_date: c.start_date,
+    poster_url: c.poster_url,
+    category: c.category,
+    venue_name: c.venues?.name || '장소 정보 없음',
   }));
 };
 
