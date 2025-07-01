@@ -181,6 +181,7 @@ export const getUpcomingConcerts = async () => {
       title,
       main_performer,
       date,
+      start_date,
       poster_url,
       venues (
         name
@@ -197,6 +198,7 @@ export const getUpcomingConcerts = async () => {
     title: c.title,
     main_performer: c.main_performer,
     date: c.date,
+    start_date: c.start_date || c.date, // start_date가 없으면 date 사용
     poster_url: c.poster_url,
     venue_name: c.venues?.name || '장소 정보 없음',
   }));

@@ -23,7 +23,15 @@ interface Concert {
 }
 
 const formatStartDate = (dateStr: string): string => {
+  if (!dateStr || dateStr.trim() === '') {
+    return '날짜 미정';
+  }
+  
   const date = new Date(dateStr);
+  if (isNaN(date.getTime())) {
+    return '날짜 오류';
+  }
+  
   return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
 };
 
