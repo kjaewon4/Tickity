@@ -131,7 +131,9 @@ export const deleteConcert = async (concertId: string): Promise<boolean> => {
 
 
 // 전체 또는 카테고리별 콘서트 조회
-export const getConcerts = async (category?: string) => {
+export const getConcerts = async (category?: string, availableOnly: boolean = false) => {
+  const now = new Date().toISOString();
+  
   let query = supabase
     .from('concerts')
     .select(`
@@ -144,6 +146,9 @@ export const getConcerts = async (category?: string) => {
       poster_url,
       category,
       venue_id,
+      ticket_open_at,
+      valid_from,
+      valid_to,
       venues!concerts_venue_id_fkey (
         name
       )
@@ -154,10 +159,16 @@ export const getConcerts = async (category?: string) => {
     query = query.eq('category', category);
   }
 
+  // 예매 가능한 콘서트만 필터링
+  if (availableOnly) {
+    // 공연 날짜가 오늘보다 뒤에 있어야 함
+    query = query.gte('date', now);
+  }
+
   const { data, error } = await query;
   if (error) throw error;
 
-  return data.map((c: any) => ({
+  let concerts = data.map((c: any) => ({
     id: c.id,
     title: c.title,
     main_performer: c.main_performer,
@@ -167,7 +178,35 @@ export const getConcerts = async (category?: string) => {
     poster_url: c.poster_url,
     category: c.category,
     venue_name: c.venues?.name || '장소 정보 없음',
+    ticket_open_at: c.ticket_open_at,
+    valid_from: c.valid_from,
+    valid_to: c.valid_to,
   }));
+
+  // 추가 필터링 (클라이언트 사이드에서 처리)
+  if (availableOnly) {
+    concerts = concerts.filter(concert => {
+      // 1. 공연 날짜 체크 (start_date가 있으면 우선 사용)
+      const concertDate = concert.start_date || concert.date;
+      if (concertDate && new Date(concertDate) <= new Date()) {
+        return false;
+      }
+
+      // 2. 티켓 오픈 시간 체크
+      if (concert.ticket_open_at && new Date(concert.ticket_open_at) > new Date()) {
+        return false; // 아직 티켓 판매 시작 전
+      }
+
+      // 3. 유효 기간 체크
+      if (concert.valid_to && new Date(concert.valid_to) < new Date()) {
+        return false; // 예매 기간 종료
+      }
+
+      return true;
+    });
+  }
+
+  return concerts;
 };
 
 // 슬라이더용 다가오는 콘서트 8개 조회

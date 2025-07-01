@@ -131,6 +131,7 @@ export default function ChatbotPage() {
         body: JSON.stringify({
           message,
           userId: userId || undefined,
+          chatHistory: messages,
         }),
       });
 
