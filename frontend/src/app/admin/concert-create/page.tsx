@@ -60,6 +60,11 @@ export default function ConcertCreatePage() {
   const [seatPrices, setSeatPrices] = useState<SeatPrice[]>([]);
   const [seatGradesLoading, setSeatGradesLoading] = useState(false);
   
+  // 파일 업로드 상태
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  
   // 관리자 권한 체크 상태
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -94,6 +99,15 @@ export default function ConcertCreatePage() {
     round: 1,
     ticket_open_at: '09:00' // 기본 오픈 시간
   });
+
+  // 미리보기 URL 정리
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   // 로그인 상태 및 권한 확인
   useEffect(() => {
@@ -189,6 +203,72 @@ export default function ConcertCreatePage() {
     }
   };
 
+  // 파일 선택 처리
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 파일 크기 체크 (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('파일 크기는 5MB 이하만 가능합니다.');
+      return;
+    }
+
+    // 이미지 파일 체크
+    if (!file.type.startsWith('image/')) {
+      alert('이미지 파일만 업로드 가능합니다.');
+      return;
+    }
+
+    // 기존 미리보기 URL 정리
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setSelectedFile(file);
+    
+    // 미리보기 URL 생성
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  };
+
+  // 파일 업로드
+  const uploadPosterImage = async (): Promise<string | null> => {
+    if (!selectedFile || !formData.category) {
+      return null;
+    }
+
+    try {
+      setUploadLoading(true);
+      
+      const formDataForUpload = new FormData();
+      formDataForUpload.append('poster', selectedFile);
+      formDataForUpload.append('category', formData.category);
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/uploads/poster`, {
+        method: 'POST',
+        body: formDataForUpload,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      const result = await response.json();
+      
+      if (result.success && result.data?.url) {
+        return result.data.url;
+      } else {
+        throw new Error(result.error || '업로드 실패');
+      }
+    } catch (error) {
+      console.error('포스터 업로드 오류:', error);
+      alert('포스터 업로드에 실패했습니다.');
+      return null;
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
   // 날짜 유효성 검사
   const validateDates = () => {
     const concertDate = new Date(formData.date);
@@ -256,10 +336,27 @@ export default function ConcertCreatePage() {
     if (!validateDates()) {
       return;
     }
+
+    // 카테고리가 선택되지 않았는데 파일이 선택된 경우
+    if (selectedFile && !formData.category) {
+      alert('포스터 이미지를 업로드하려면 카테고리를 먼저 선택해주세요.');
+      return;
+    }
     
     setLoading(true);
 
     try {
+      // 포스터 이미지 업로드 처리
+      let posterUrl: string | undefined = formData.poster_url;
+      if (selectedFile) {
+        const uploadedUrl = await uploadPosterImage();
+        if (!uploadedUrl) {
+          // 업로드 실패 시 중단
+          return;
+        }
+        posterUrl = uploadedUrl;
+      }
+
       // 날짜 유효성 검사 및 안전한 변환 함수
       const safeToISOString = (dateStr: string | undefined, fallback?: string): string => {
         if (!dateStr || dateStr.trim() === '') {
@@ -318,7 +415,7 @@ export default function ConcertCreatePage() {
         round: formData.round || 1,
         
         // 선택적 필드들
-        poster_url: formData.poster_url || null,
+        poster_url: posterUrl || null,
         venue_id: formData.venue_id || null,
         start_date: safeToDateString(formData.start_date),
         start_time: formData.start_time || '19:00',
@@ -490,11 +587,12 @@ export default function ConcertCreatePage() {
 
                 <div>
                   <label htmlFor="venue_id" className="block text-sm font-medium text-gray-700 mb-2">
-                    공연장 {venuesLoading && <span className="text-sm text-gray-500">(로딩 중...)</span>}
+                    공연장 * {venuesLoading && <span className="text-sm text-gray-500">(로딩 중...)</span>}
                   </label>
                   <select
                     id="venue_id"
                     name="venue_id"
+                    required
                     value={formData.venue_id}
                     onChange={handleInputChange}
                     disabled={venuesLoading}
@@ -522,12 +620,11 @@ export default function ConcertCreatePage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">카테고리를 선택하세요</option>
-                    <option value="콘서트">콘서트</option>
-                    <option value="뮤지컬">뮤지컬</option>
-                    <option value="연극">연극</option>
-                    <option value="클래식">클래식</option>
-                    <option value="댄스">댄스</option>
-                    <option value="기타">기타</option>
+                    <option value="여자아이돌">여자아이돌</option>
+                    <option value="남자아이돌">남자아이돌</option>
+                    <option value="솔로 가수">솔로 가수</option>
+                    <option value="내한공연">내한공연</option>
+                    <option value="랩/힙합">랩/힙합</option>
                   </select>
                 </div>
 
@@ -630,18 +727,53 @@ export default function ConcertCreatePage() {
                 </div>
 
                 <div>
-                  <label htmlFor="poster_url" className="block text-sm font-medium text-gray-700 mb-2">
-                    포스터 URL
+                  <label htmlFor="poster" className="block text-sm font-medium text-gray-700 mb-2">
+                    포스터 이미지 *
                   </label>
-                  <input
-                    type="url"
-                    id="poster_url"
-                    name="poster_url"
-                    value={formData.poster_url}
-                    onChange={handleInputChange}
-                    placeholder="https://example.com/poster.jpg"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="space-y-4">
+                    {/* 파일 선택 */}
+                    <input
+                      type="file"
+                      id="poster"
+                      name="poster"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    
+                    {/* 카테고리 미선택 시 경고 */}
+                    {selectedFile && !formData.category && (
+                      <p className="text-sm text-amber-600">
+                        ⚠️ 포스터를 업로드하려면 카테고리를 먼저 선택해주세요.
+                      </p>
+                    )}
+                    
+                    {/* 업로드 진행 중 */}
+                    {uploadLoading && (
+                      <div className="flex items-center space-x-2 text-blue-600">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        <span className="text-sm">포스터 업로드 중...</span>
+                      </div>
+                    )}
+                    
+                    {/* 미리보기 */}
+                    {previewUrl && (
+                      <div className="border rounded-lg p-4 bg-gray-50">
+                        <p className="text-sm font-medium text-gray-700 mb-2">미리보기</p>
+                        <img 
+                          src={previewUrl} 
+                          alt="포스터 미리보기" 
+                          className="max-w-full h-48 object-cover rounded-md"
+                        />
+                      </div>
+                    )}
+                    
+                    <p className="text-xs text-gray-500">
+                      • 이미지 파일만 업로드 가능 (JPG, PNG, GIF 등)<br/>
+                      • 최대 파일 크기: 5MB<br/>
+                      • 카테고리별로 자동 분류: 남자아이돌(boy_group), 여자아이돌(girl_group), 내한공연(overseas), 랩/힙합(rap_hiphop), 솔로 가수(solo)
+                    </p>
+                  </div>
                 </div>
               </div>
 
