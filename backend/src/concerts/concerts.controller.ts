@@ -45,24 +45,30 @@ router.get('/search', async (req: Request, res: Response<ApiResponse>) => {
   const category = req.query.category as string | undefined;
 
   try {
-    if (!query || query.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        error: '검색어를 입력해주세요.',
-      });
-    }
+    let concerts;
+    let message;
 
-    const concerts = await searchConcerts(query.trim(), category);
+    if (!query || query.trim() === '') {
+      // 검색어가 없으면 전체 콘서트 반환
+      concerts = await getConcerts(category);
+      message = category 
+        ? `'${category}' 카테고리 전체 콘서트 (${concerts.length}개)`
+        : `전체 콘서트 (${concerts.length}개)`;
+    } else {
+      // 검색어가 있으면 검색 실행
+      concerts = await searchConcerts(query.trim(), category);
+      message = `"${query.trim()}" 검색 결과 (${concerts.length}개)`;
+    }
 
     res.json({
       success: true,
       data: {
         concerts,
         total: concerts.length,
-        query: query.trim(),
+        query: query?.trim() || '',
         category: category || '전체'
       },
-      message: `"${query.trim()}" 검색 결과 (${concerts.length}개)`,
+      message,
     });
   } catch (err: any) {
     console.error('콘서트 검색 오류:', err.message);

@@ -30,9 +30,11 @@ export interface SoulboundTicketInterface extends Interface {
       | "FEE_NUMERATOR"
       | "approve"
       | "balanceOf"
+      | "cancelTicket"
       | "getApproved"
       | "hasMintedForConcert"
       | "isApprovedForAll"
+      | "isCancelled"
       | "markAsUsed"
       | "markFaceVerified"
       | "mintTicket"
@@ -42,6 +44,7 @@ export interface SoulboundTicketInterface extends Interface {
       | "ownerOf"
       | "registerFaceHash"
       | "renounceOwnership"
+      | "reopenTicket"
       | "safeTransferFrom(address,address,uint256)"
       | "safeTransferFrom(address,address,uint256,bytes)"
       | "setApprovalForAll"
@@ -58,6 +61,7 @@ export interface SoulboundTicketInterface extends Interface {
       | "Approval"
       | "ApprovalForAll"
       | "OwnershipTransferred"
+      | "TicketCancelled"
       | "Transfer"
   ): EventFragment;
 
@@ -78,6 +82,10 @@ export interface SoulboundTicketInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "cancelTicket",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getApproved",
     values: [BigNumberish]
   ): string;
@@ -88,6 +96,10 @@ export interface SoulboundTicketInterface extends Interface {
   encodeFunctionData(
     functionFragment: "isApprovedForAll",
     values: [AddressLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isCancelled",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "markAsUsed",
@@ -118,6 +130,10 @@ export interface SoulboundTicketInterface extends Interface {
   encodeFunctionData(
     functionFragment: "renounceOwnership",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "reopenTicket",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "safeTransferFrom(address,address,uint256)",
@@ -164,6 +180,10 @@ export interface SoulboundTicketInterface extends Interface {
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "cancelTicket",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getApproved",
     data: BytesLike
   ): Result;
@@ -173,6 +193,10 @@ export interface SoulboundTicketInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "isApprovedForAll",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isCancelled",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "markAsUsed", data: BytesLike): Result;
@@ -194,6 +218,10 @@ export interface SoulboundTicketInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "renounceOwnership",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "reopenTicket",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -278,6 +306,19 @@ export namespace OwnershipTransferredEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace TicketCancelledEvent {
+  export type InputTuple = [tokenId: BigNumberish, reopenTime: BigNumberish];
+  export type OutputTuple = [tokenId: bigint, reopenTime: bigint];
+  export interface OutputObject {
+    tokenId: bigint;
+    reopenTime: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace TransferEvent {
   export type InputTuple = [
     from: AddressLike,
@@ -351,6 +392,12 @@ export interface SoulboundTicket extends BaseContract {
 
   balanceOf: TypedContractMethod<[owner: AddressLike], [bigint], "view">;
 
+  cancelTicket: TypedContractMethod<
+    [tokenId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   getApproved: TypedContractMethod<[tokenId: BigNumberish], [string], "view">;
 
   hasMintedForConcert: TypedContractMethod<
@@ -364,6 +411,8 @@ export interface SoulboundTicket extends BaseContract {
     [boolean],
     "view"
   >;
+
+  isCancelled: TypedContractMethod<[arg0: BigNumberish], [boolean], "view">;
 
   markAsUsed: TypedContractMethod<
     [tokenId: BigNumberish],
@@ -403,6 +452,12 @@ export interface SoulboundTicket extends BaseContract {
   >;
 
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
+
+  reopenTicket: TypedContractMethod<
+    [tokenId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
   "safeTransferFrom(address,address,uint256)": TypedContractMethod<
     [from: AddressLike, to: AddressLike, tokenId: BigNumberish],
@@ -481,6 +536,9 @@ export interface SoulboundTicket extends BaseContract {
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[owner: AddressLike], [bigint], "view">;
   getFunction(
+    nameOrSignature: "cancelTicket"
+  ): TypedContractMethod<[tokenId: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "getApproved"
   ): TypedContractMethod<[tokenId: BigNumberish], [string], "view">;
   getFunction(
@@ -497,6 +555,9 @@ export interface SoulboundTicket extends BaseContract {
     [boolean],
     "view"
   >;
+  getFunction(
+    nameOrSignature: "isCancelled"
+  ): TypedContractMethod<[arg0: BigNumberish], [boolean], "view">;
   getFunction(
     nameOrSignature: "markAsUsed"
   ): TypedContractMethod<[tokenId: BigNumberish], [void], "nonpayable">;
@@ -537,6 +598,9 @@ export interface SoulboundTicket extends BaseContract {
   getFunction(
     nameOrSignature: "renounceOwnership"
   ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "reopenTicket"
+  ): TypedContractMethod<[tokenId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "safeTransferFrom(address,address,uint256)"
   ): TypedContractMethod<
@@ -613,6 +677,13 @@ export interface SoulboundTicket extends BaseContract {
     OwnershipTransferredEvent.OutputObject
   >;
   getEvent(
+    key: "TicketCancelled"
+  ): TypedContractEvent<
+    TicketCancelledEvent.InputTuple,
+    TicketCancelledEvent.OutputTuple,
+    TicketCancelledEvent.OutputObject
+  >;
+  getEvent(
     key: "Transfer"
   ): TypedContractEvent<
     TransferEvent.InputTuple,
@@ -652,6 +723,17 @@ export interface SoulboundTicket extends BaseContract {
       OwnershipTransferredEvent.InputTuple,
       OwnershipTransferredEvent.OutputTuple,
       OwnershipTransferredEvent.OutputObject
+    >;
+
+    "TicketCancelled(uint256,uint256)": TypedContractEvent<
+      TicketCancelledEvent.InputTuple,
+      TicketCancelledEvent.OutputTuple,
+      TicketCancelledEvent.OutputObject
+    >;
+    TicketCancelled: TypedContractEvent<
+      TicketCancelledEvent.InputTuple,
+      TicketCancelledEvent.OutputTuple,
+      TicketCancelledEvent.OutputObject
     >;
 
     "Transfer(address,address,uint256)": TypedContractEvent<
