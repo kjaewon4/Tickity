@@ -1,18 +1,17 @@
 from fastapi import APIRouter, UploadFile, File, Form
 from services.face_service import register_user_face_db, verify_user_identity
+from services.face_service import register_user_face
 
 router = APIRouter()
 
 @router.post("/register")
 async def register_face_to_db(
-    user_id: str = Form(...),
-    video: UploadFile = File(...),
-    concert_id: str = Form(None)  # 선택적으로 콘서트 연동 가능
+    video: UploadFile = File(...)
 ):
     """
-    사용자의 얼굴 임베딩을 DB에 등록하는 API
+    사용자의 얼굴 임베딩을 추출하여 프론트로 전달하는 API
     """
-    result = await register_user_face_db(user_id, video, concert_id)
+    result = await register_user_face(video)
     return result
 
 @router.post("/verify")
