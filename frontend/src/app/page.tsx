@@ -170,45 +170,32 @@ export default function HomePage() {
   const categories = ['전체', '여자아이돌', '남자아이돌', '솔로 가수', '내한공연', '랩/힙합'];
 
   return (
-    <main className="px-6 py-10 bg-white min-h-screen max-w-7xl mx-auto">
+    <main className="px-6 pt-30 py-10 bg-white min-h-screen max-w-7xl mx-auto">
     <div className="mb-10 relative -mx-4">
       <Slider {...sliderSettings}>
         {upcomingConcerts.map((concert) => (
-          <div
-            key={concert.id}
-            className="px-4 cursor-pointer"
-            onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
-          >
-            <div className="w-[220px] h-[330px] rounded shadow overflow-hidden bg-white">
-              <div className="relative h-[250px]">
-                <Image
-                  src={
-                    concert.poster_url &&
-                    concert.poster_url.trim() !== '' &&
-                    isValidImageUrl(concert.poster_url)
-                      ? concert.poster_url
-                      : '/images/default-poster.png'
-                  }
-                  alt={concert.title}
-                  fill
-                  className="object-cover"
-                />
-              </div>
-              {/* 콘서트 제목 */}
-              <div className="text-sm text-gray-900 dark:text-white font-semibold leading-snug truncate">
-                {concert.title}
-              </div>
+        <div
+          key={concert.id}
+          className="px-4 cursor-pointer"
+          onClick={() => router.push(`/reservation/${concert.id}`)}
+        >
+          <div className="w-[220px] h-[330px] rounded shadow overflow-hidden bg-white relative">
+            {/* 포스터 이미지 전체 영역 차지 */}
+            <Image
+              src={concert.poster_url?.trim() !== '' ? concert.poster_url : '/images/default-poster.png'}
+              alt={concert.title}
+              fill
+              className="object-cover"
+            />
 
-              {/* 공연장 이름 */}
-              <div className="text-xs text-gray-500 dark:text-gray-400">{concert.venue_name}</div>
-
-              {/* 시작일만 표시 */}
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {formatStartDate(concert.start_date)}
-              </div>
-
+            {/* 아래쪽 불투명 텍스트 오버레이 */}
+            <div className="absolute bottom-0 w-full text-white px-3 py-2">
+              <div className="text-xl truncate text-shadow font-extrabold">{concert.title}</div>
+              <div className="text-xs text-gray-200 text-shadow font-extrabold">{concert.venue_name}</div>
+              <div className="text-xs text-gray-200 text-shadow font-extrabold">{formatStartDate(concert.start_date)}</div>
             </div>
           </div>
+        </div>
         ))}
       </Slider>
     </div>
@@ -219,8 +206,8 @@ export default function HomePage() {
           <button
             key={category}
             onClick={() => setSelectedCategory(category)}
-            className={`px-4 py-1 border rounded-full text-sm ${
-              selectedCategory === category ? 'bg-black text-white' : 'bg-white text-black'
+            className={`px-4 py-1 rounded-full text-sm cursor-pointer shadow-md ${
+              selectedCategory === category ? 'bg-blue-500 text-white' : 'bg-white text-black'
             }`}
           >
             {category}
@@ -240,12 +227,14 @@ export default function HomePage() {
     </div>
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-8">
         {concerts.map((concert) => (
-          <div
-            key={concert.id}
-            onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
-            className="w-[220px] border rounded-lg shadow-sm hover:shadow-md transition bg-white dark:bg-gray-800 p-2 cursor-pointer"
-          >
-            <div className="w-full h-[250px] bg-gray-200 rounded-md overflow-hidden mb-2 relative">
+        <div
+          key={concert.id}
+          onClick={() => router.push(`/reservation/${concert.id}`)}
+          className="cursor-pointer"
+        >
+          <div className="w-[220px]">
+            {/* 이미지에만 테두리 */}
+            <div className="w-full h-[320px] border border-gray-200 rounded-md overflow-hidden relative">
               <Image
                 src={
                   concert.poster_url &&
@@ -260,20 +249,18 @@ export default function HomePage() {
               />
             </div>
 
-            {/* 타이틀 */}
-            <div className="text-sm text-gray-900 dark:text-white font-semibold leading-snug truncate">
-              {concert.title}
-            </div>
-
-            {/* 공연장 */}
-            <div className="text-xs text-gray-500 dark:text-gray-400">{concert.venue_name}</div>
-
-            {/* 시작일만 표시 */}
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              {formatStartDate(concert.start_date)}
+            {/* 텍스트 */}
+            <div className="mt-2">
+              <div className="text-xl text-gray-900 dark:text-white font-extrabold leading-snug truncate">
+                {concert.title}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-extrabold">{concert.venue_name}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-extrabold">
+                {formatStartDate(concert.start_date)}
+              </div>
             </div>
           </div>
-
+        </div>
         ))}
       </div>
 

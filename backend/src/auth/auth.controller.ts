@@ -11,7 +11,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { encryptResidentNumber, encrypt } from '../utils/encryption';
 import { config, getDynamicConfig } from '../config/environment';
-import { BlockchainService } from './blockchain.service';
+import { BlockchainService } from '../blockchain/blockchain.service';
 import axios from 'axios';
 
 const router = Router();
