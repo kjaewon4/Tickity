@@ -3,7 +3,8 @@ export interface SignupRequest {
   email: string;
   password: string;
   name: string;
-  residentNumber: string;
+  resident_number: string;  // ✅ 이 줄 추가
+  embedding?: number[];     // ✅ embedding도 같이 정의 (optional)
 }
 
 // 로그인 요청 타입
