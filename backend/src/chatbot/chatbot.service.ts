@@ -36,23 +36,93 @@ Tickity는 NFT 기반의 안전한 콘서트 티켓팅 플랫폼입니다.
 - 고객센터 및 챗봇을 통한 24시간 문의 지원
 `;
 
-// 날짜 포맷 함수 추가
+// 날짜 포맷 함수 추가 (invalid date 처리 포함)
 function formatShortDate(dateString: string): string {
+  // null, undefined, 빈 문자열 체크
+  if (!dateString || dateString.trim() === '') {
+    return '날짜 미정';
+  }
+  
   const date = new Date(dateString);
+  
+  // Invalid Date 체크
+  if (isNaN(date.getTime())) {
+    console.warn('🚨 유효하지 않은 날짜:', dateString);
+    return '날짜 오류';
+  }
+  
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const day = date.getDate().toString().padStart(2, '0');
   return `${year}.${month}.${day}`;
 }
 
+// 메시지에서 날짜 정보 파싱 함수
+function parseDateFromMessage(message: string): { year?: number; month?: number; } | null {
+  const lowerMessage = message.toLowerCase();
+  console.log('🔍 날짜 파싱 시작 - 입력:', message, '소문자:', lowerMessage);
+  
+  // 월별 매핑
+  const monthMapping: { [key: string]: number } = {
+    '1월': 1, '2월': 2, '3월': 3, '4월': 4, '5월': 5, '6월': 6,
+    '7월': 7, '8월': 8, '9월': 9, '10월': 10, '11월': 11, '12월': 12
+  };
+  
+  let year: number | undefined;
+  let month: number | undefined;
+  
+  // 연도 추출 (2024년, 2025년 등)
+  const yearMatch = lowerMessage.match(/(\d{4})년/);
+  if (yearMatch) {
+    year = parseInt(yearMatch[1]);
+    console.log('📅 연도 발견:', year);
+  }
+  
+  // 월 추출 (10월, 12월 등) - 긴 것부터 먼저 매칭 (11월이 1월보다 먼저 매칭되도록)
+  const sortedMonths = Object.entries(monthMapping).sort((a, b) => b[0].length - a[0].length);
+  for (const [monthStr, monthNum] of sortedMonths) {
+    if (lowerMessage.includes(monthStr)) {
+      month = monthNum;
+      console.log('🗓️ 월 매핑 발견:', monthStr, '->', monthNum);
+      break;
+    }
+  }
+  
+  // 숫자로만 된 월 (10, 11, 12 등)
+  if (!month) {
+    const monthOnlyMatch = lowerMessage.match(/(\d{1,2})월/);
+    if (monthOnlyMatch) {
+      const monthNum = parseInt(monthOnlyMatch[1]);
+      if (monthNum >= 1 && monthNum <= 12) {
+        month = monthNum;
+        console.log('🔢 숫자 월 발견:', monthOnlyMatch[1], '->', monthNum);
+      }
+    }
+  }
+  
+  // 연도가 없으면 2025년으로 기본 설정
+  if (month && !year) {
+    year = 2025;
+    console.log('📅 기본 연도 설정:', year);
+  }
+  
+  const result = year || month ? { year, month } : null;
+  console.log('🎯 파싱 결과:', result);
+  
+  return result;
+}
+
 /**
  * 사용자 질문을 분석하여 의도 파악
  */
-export const analyzeUserIntent = (message: string): {
+export const analyzeUserIntent = async (message: string): Promise<{
   intent: string;
   needsData: boolean;
   dataType?: 'concerts' | 'tickets' | 'user_info';
-} => {
+  artistName?: string;
+  dateFilter?: { year?: number; month?: number; };
+  showAllConcerts?: boolean;
+}> => {
   const lowerMessage = message.toLowerCase();
   
   // NFT 관련 질문은 general로 분류
@@ -61,6 +131,83 @@ export const analyzeUserIntent = (message: string): {
       intent: 'general',
       needsData: false
     };
+  }
+  
+  // 모든 콘서트 보기 요청 감지
+  const showAllKeywords = ['모든', '전체', '모든거', '전부', '있었던', '지난', '과거'];
+  const showAllConcerts = showAllKeywords.some(keyword => lowerMessage.includes(keyword));
+
+  // 날짜 필터링 확인 (월별, 연도별)
+  const dateFilter = parseDateFromMessage(message);
+  if (dateFilter && (dateFilter.year || dateFilter.month)) {
+    return {
+      intent: 'concert_inquiry',
+      needsData: true,
+      dataType: 'concerts',
+      dateFilter,
+      showAllConcerts: showAllConcerts || 
+                       (dateFilter.year ? dateFilter.year < new Date().getFullYear() : false) || 
+                       (dateFilter.month ? dateFilter.month < (new Date().getMonth() + 1) : false)
+    };
+  }
+  
+  // 아티스트 이름이 DB에 있는지 확인 (단순한 단어/이름인 경우)
+  if (message.length <= 50 && !message.includes('?') && !message.includes('어떻게') && 
+      !message.includes('뭐야') && !message.includes('알려줘') && !message.includes('예매') &&
+      !message.includes('콘서트') && !message.includes('티켓')) {
+    try {
+      // 모든 콘서트 보기 요청 감지
+      const showAllKeywords = ['모든', '전체', '모든거', '전부', '있었던', '지난', '과거'];
+      const showAllConcerts = showAllKeywords.some(keyword => lowerMessage.includes(keyword));
+      
+      const concerts = await getConcerts(undefined, !showAllConcerts); // showAllConcerts에 따라 필터링
+      const foundConcert = concerts.find(concert => 
+        concert.main_performer.toLowerCase().includes(lowerMessage) ||
+        lowerMessage.includes(concert.main_performer.toLowerCase())
+      );
+      
+      if (foundConcert) {
+        return {
+          intent: 'concert_inquiry',
+          needsData: true,
+          dataType: 'concerts',
+          artistName: foundConcert.main_performer,
+          showAllConcerts
+        };
+      }
+    } catch (error) {
+      console.error('아티스트 확인 중 오류:', error);
+    }
+  }
+  
+  // "XXX 콘서트" 형태로 입력한 경우에도 확인
+  if (message.includes('콘서트') && message.length <= 100) {
+    try {
+      const artistQuery = message.replace('콘서트', '').trim();
+      
+      // 모든 콘서트 보기 요청 감지
+      const showAllKeywords = ['모든', '전체', '모든거', '전부', '있었던', '지난', '과거'];
+      const showAllConcerts = showAllKeywords.some(keyword => lowerMessage.includes(keyword));
+      
+      const concerts = await getConcerts(undefined, !showAllConcerts); // showAllConcerts에 따라 필터링
+      const foundConcert = concerts.find(concert => 
+        concert.main_performer.toLowerCase().includes(artistQuery.toLowerCase()) ||
+        artistQuery.toLowerCase().includes(concert.main_performer.toLowerCase()) ||
+        concert.title.toLowerCase().includes(artistQuery.toLowerCase())
+      );
+      
+      if (foundConcert) {
+        return {
+          intent: 'concert_inquiry',
+          needsData: true,
+          dataType: 'concerts',
+          artistName: foundConcert.main_performer,
+          showAllConcerts
+        };
+      }
+    } catch (error) {
+      console.error('아티스트 확인 중 오류:', error);
+    }
   }
   
   // 페이지네이션 관련 (가장 구체적인 조건을 먼저 확인)
@@ -116,10 +263,16 @@ export const analyzeUserIntent = (message: string): {
       !lowerMessage.includes('예매 과정') && !lowerMessage.includes('예매 절차') &&
       !lowerMessage.includes('예매목록') && !lowerMessage.includes('예매한') &&
       !lowerMessage.includes('내가 예매한')) {
+    
+    // 모든 콘서트 보기 요청 감지 (위에서 정의한 키워드 재사용)
+    const showAllKeywords = ['모든', '전체', '모든거', '전부', '있었던', '지난', '과거'];
+    const showAllConcerts = showAllKeywords.some(keyword => lowerMessage.includes(keyword));
+    
     return {
       intent: 'concert_inquiry',
       needsData: true,
-      dataType: 'concerts'
+      dataType: 'concerts',
+      showAllConcerts
     };
   }
   
@@ -133,9 +286,73 @@ export const analyzeUserIntent = (message: string): {
 /**
  * 콘서트 데이터를 챗봇용 텍스트로 변환 (페이지네이션 지원)
  */
-const formatConcertsForAI = async (page: number = 1): Promise<{ message: string; currentPage: number; totalPages: number; }> => {
+const formatConcertsForAI = async (page: number = 1, artistName?: string, dateFilter?: { year?: number; month?: number; }, showAllConcerts?: boolean): Promise<{ message: string; currentPage: number; totalPages: number; }> => {
   try {
-    const concerts = await getConcerts();
+    // 모든 콘서트 vs 예매 가능한 콘서트만 조회
+    const availableOnly = !showAllConcerts; // showAllConcerts가 true면 availableOnly는 false
+    let concerts = await getConcerts(undefined, availableOnly);
+    
+    // 특정 아티스트가 지정된 경우 필터링
+    if (artistName) {
+      concerts = concerts.filter(concert => 
+        concert.main_performer.toLowerCase() === artistName.toLowerCase()
+      );
+      
+      if (concerts.length === 0) {
+        return {
+          message: `"${artistName}" 아티스트의 콘서트를 찾을 수 없습니다.`,
+          currentPage: 1,
+          totalPages: 1
+        };
+      }
+    }
+    
+    // 날짜별 필터링 (안전한 날짜 처리)
+    if (dateFilter) {
+      concerts = concerts.filter(concert => {
+        const dateString = concert.date || concert.start_date;
+        
+        // 날짜 정보가 없으면 제외
+        if (!dateString || dateString.trim() === '') {
+          console.warn('🚨 콘서트 날짜 정보 없음:', concert.title);
+          return false;
+        }
+        
+        const concertDate = new Date(dateString);
+        
+        // Invalid Date 체크
+        if (isNaN(concertDate.getTime())) {
+          console.warn('🚨 유효하지 않은 콘서트 날짜:', concert.title, dateString);
+          return false;
+        }
+        
+        const concertYear = concertDate.getFullYear();
+        const concertMonth = concertDate.getMonth() + 1; // 0-based이므로 +1
+        
+        if (dateFilter.year && dateFilter.month) {
+          return concertYear === dateFilter.year && concertMonth === dateFilter.month;
+        } else if (dateFilter.year) {
+          return concertYear === dateFilter.year;
+        } else if (dateFilter.month) {
+          return concertMonth === dateFilter.month;
+        }
+        return true;
+      });
+      
+      if (concerts.length === 0) {
+        const filterDesc = dateFilter.year && dateFilter.month 
+          ? `${dateFilter.year}년 ${dateFilter.month}월`
+          : dateFilter.year 
+          ? `${dateFilter.year}년`
+          : `${dateFilter.month}월`;
+        return {
+          message: `${filterDesc}에 예정된 콘서트를 찾을 수 없습니다.`,
+          currentPage: 1,
+          totalPages: 1
+        };
+      }
+    }
+    
     if (concerts.length === 0) {
       return {
         message: "현재 예매 가능한 콘서트가 없습니다.",
@@ -187,8 +404,28 @@ const formatConcertsForAI = async (page: number = 1): Promise<{ message: string;
     const concertTable = tableHeader + tableRows + tableFooter;
     const pageInfo = `<br/><br/>📄 ${page}페이지 / 총 ${totalPages}페이지 (전체 ${concerts.length}개 콘서트)`;
     
+    let listTitle = showAllConcerts ? '전체 콘서트 목록입니다:' : '현재 예매 가능한 콘서트 목록입니다:';
+    
+    if (artistName && dateFilter) {
+      const filterDesc = dateFilter.year && dateFilter.month 
+        ? `${dateFilter.year}년 ${dateFilter.month}월`
+        : dateFilter.year 
+        ? `${dateFilter.year}년`
+        : `${dateFilter.month}월`;
+      listTitle = `"${artistName}" 아티스트의 ${filterDesc} 콘서트 목록입니다:`;
+    } else if (artistName) {
+      listTitle = `"${artistName}" 아티스트의 콘서트 목록입니다:`;
+    } else if (dateFilter) {
+      const filterDesc = dateFilter.year && dateFilter.month 
+        ? `${dateFilter.year}년 ${dateFilter.month}월`
+        : dateFilter.year 
+        ? `${dateFilter.year}년`
+        : `${dateFilter.month}월`;
+      listTitle = `${filterDesc} 콘서트 목록입니다:`;
+    }
+      
     return {
-      message: `현재 예매 가능한 콘서트 목록입니다:<br/><br/>${concertTable}${pageInfo}`,
+      message: `${listTitle}<br/><br/>${concertTable}${pageInfo}`,
       currentPage: page,
       totalPages
     };
@@ -243,13 +480,13 @@ const generateMockResponse = async (
   userId?: string,
   chatHistory?: ChatMessage[]
 ): Promise<ChatbotResponse> => {
-  const { intent, needsData, dataType } = analyzeUserIntent(userMessage);
+  const { intent, needsData, dataType, artistName, dateFilter } = await analyzeUserIntent(userMessage);
   
   let message = '';
   let actionType: ChatbotResponse['actionType'] = 'general';
   
   if (intent === 'concert_inquiry') {
-    const concertData = await formatConcertsForAI(1);
+    const concertData = await formatConcertsForAI(1, artistName, dateFilter);
     message = concertData.message;
     actionType = 'show_concerts';
     
@@ -265,6 +502,11 @@ const generateMockResponse = async (
   }
   
   if (intent === 'pagination') {
+    // 이전 필터링 조건 가져오기
+    const previousFilter = getFilterFromHistory(chatHistory);
+    const prevArtistName = previousFilter.artistName;
+    const prevDateFilter = previousFilter.dateFilter;
+    
     const pageMatch = userMessage.match(/(\d+)페이지/) || userMessage.match(/(\d+) ?페이지/);
     let page = 1;
     
@@ -282,7 +524,7 @@ const generateMockResponse = async (
       page = Math.max(1, currentPage - 1);
     }
     
-    const concertData = await formatConcertsForAI(page);
+    const concertData = await formatConcertsForAI(page, prevArtistName, prevDateFilter);
     message = concertData.message;
     actionType = 'show_concerts';
     
@@ -480,7 +722,7 @@ export const generateChatResponse = async (
 
   try {
     // 사용자 의도 분석
-    const { intent, needsData, dataType } = analyzeUserIntent(userMessage);
+    const { intent, needsData, dataType, artistName, dateFilter } = await analyzeUserIntent(userMessage);
     let contextData = '';
     let actionType: ChatbotResponse['actionType'] = 'general';
     let message = '';
@@ -502,7 +744,8 @@ export const generateChatResponse = async (
 
     // 콘서트 목록 요청은 AI를 거치지 않고 직접 응답
     if (intent === 'concert_inquiry') {
-      const concertData = await formatConcertsForAI(1);
+      const { showAllConcerts: showAll } = await analyzeUserIntent(userMessage);
+      const concertData = await formatConcertsForAI(1, artistName, dateFilter, showAll);
       message = concertData.message;
       suggestions = generatePaginationSuggestions(concertData.currentPage, concertData.totalPages);
       actionType = 'show_concerts';
@@ -516,6 +759,12 @@ export const generateChatResponse = async (
 
     // 페이지네이션 처리
     if (intent === 'pagination') {
+      // 이전 필터링 조건 가져오기
+      const previousFilter = getFilterFromHistory(chatHistory);
+      const prevArtistName = previousFilter.artistName;
+      const prevDateFilter = previousFilter.dateFilter;
+      const prevShowAllConcerts = previousFilter.showAllConcerts;
+      
       const pageMatch = userMessage.match(/(\d+)페이지/) || userMessage.match(/(\d+) ?페이지/);
       let page = 1;
       
@@ -533,7 +782,7 @@ export const generateChatResponse = async (
         page = Math.max(1, currentPage - 1);
       }
       
-      const concertData = await formatConcertsForAI(page);
+      const concertData = await formatConcertsForAI(page, prevArtistName, prevDateFilter, prevShowAllConcerts);
       message = concertData.message;
       suggestions = generatePaginationSuggestions(concertData.currentPage, concertData.totalPages);
       actionType = 'show_concerts';
@@ -598,7 +847,7 @@ export const generateChatResponse = async (
                           (ticket.seat?.row_idx && ticket.seat?.col_idx ? 
                            `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음');
           
-          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price.toLocaleString()}원\n   - 상태: ${status}\n   - 예매일: ${new Date(ticket.created_at).toLocaleDateString('ko-KR')}`;
+          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price?.toLocaleString() || '가격 정보 없음'}원\n   - 상태: ${status}\n   - 예매일: ${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('ko-KR') : '날짜 정보 없음'}`;
         }).join('\n\n');
         message = `회원님의 예매 내역입니다:\n\n${ticketList}`;
       }
@@ -615,7 +864,7 @@ export const generateChatResponse = async (
     // 그 외의 경우에만 AI 사용
     // 필요한 데이터 조회
     if (needsData && dataType === 'concerts') {
-      const concertData = await formatConcertsForAI(1);
+      const concertData = await formatConcertsForAI(1, artistName, dateFilter);
       contextData = concertData.message;
       actionType = 'show_concerts';
     } else if (needsData && dataType === 'tickets' && userId) {
@@ -681,6 +930,94 @@ const getCurrentPageFromHistory = (chatHistory?: ChatMessage[]): number => {
   }
   
   return 1; // 기본값
+};
+
+/**
+ * 채팅 히스토리에서 이전 필터링 조건 추출
+ */
+const getFilterFromHistory = (chatHistory?: ChatMessage[]): { artistName?: string; dateFilter?: { year?: number; month?: number; }; showAllConcerts?: boolean; } => {
+  if (!chatHistory || chatHistory.length === 0) return {};
+  
+  // 마지막 콘서트 목록 응답에서 필터링 조건 찾기
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    const message = chatHistory[i];
+    if (message.role === 'assistant' && message.content.includes('콘서트 목록입니다:')) {
+      // HTML 태그 제거하고 텍스트만 추출, 개행과 공백 정리
+      const cleanContent = message.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      console.log('🔍 필터 히스토리 검색 - 정리된 내용:', cleanContent.substring(0, 150) + '...');
+      
+      // showAllConcerts 감지
+      const showAllConcerts = cleanContent.includes('전체 콘서트 목록입니다');
+      
+      // 아티스트 필터링 확인 (더 유연한 패턴)
+      const artistMatch = cleanContent.match(/"([^"]+)" 아티스트의.*?콘서트 목록입니다/);
+      if (artistMatch) {
+        const artistName = artistMatch[1];
+        console.log('🎭 아티스트 필터 발견:', artistName);
+        
+        // 아티스트 + 날짜 필터링 확인
+        const artistDateMatch = cleanContent.match(/"([^"]+)" 아티스트의\s*(\d{4})년\s*(\d{1,2})월\s*콘서트 목록입니다/);
+        if (artistDateMatch) {
+          const result = {
+            artistName: artistDateMatch[1],
+            dateFilter: { year: parseInt(artistDateMatch[2]), month: parseInt(artistDateMatch[3]) },
+            showAllConcerts
+          };
+          console.log('📅 아티스트+날짜 필터 반환:', result);
+          return result;
+        }
+        
+        console.log('🎭 아티스트 필터만 반환:', { artistName });
+        return { artistName, showAllConcerts };
+      }
+      
+      // 날짜 필터링만 확인 (더 유연한 패턴)
+      const dateMatch = cleanContent.match(/(\d{4})년\s*(\d{1,2})월\s*콘서트 목록입니다/);
+      if (dateMatch) {
+        const result = {
+          dateFilter: { year: parseInt(dateMatch[1]), month: parseInt(dateMatch[2]) },
+          showAllConcerts
+        };
+        console.log('📅 연도+월 필터 반환:', result);
+        return result;
+      }
+      
+      // 월만 확인 (연도 없음, 더 유연한 패턴)
+      const monthMatch = cleanContent.match(/(\d{1,2})월\s*콘서트 목록입니다/);
+      if (monthMatch) {
+        const result = {
+          dateFilter: { year: 2025, month: parseInt(monthMatch[1]) },
+          showAllConcerts
+        };
+        console.log('📅 월 필터 반환 (기본 연도 2025):', result);
+        return result;
+      }
+      
+      // 연도만 확인 (더 유연한 패턴)
+      const yearMatch = cleanContent.match(/(\d{4})년\s*콘서트 목록입니다/);
+      if (yearMatch) {
+        const result = {
+          dateFilter: { year: parseInt(yearMatch[1]) },
+          showAllConcerts
+        };
+        console.log('📅 연도 필터 반환:', result);
+        return result;
+      }
+      
+      // 필터링 조건은 없지만 showAllConcerts가 감지된 경우
+      if (showAllConcerts) {
+        console.log('📋 전체 콘서트 모드 반환');
+        return { showAllConcerts };
+      }
+      
+      console.log('❌ 필터 조건을 찾을 수 없음 - 원본:', message.content.substring(0, 100));
+      console.log('❌ 필터 조건을 찾을 수 없음 - 정리:', cleanContent.substring(0, 100));
+      break; // 첫 번째 콘서트 목록 응답만 확인
+    }
+  }
+  
+  console.log('❌ 콘서트 목록 메시지를 찾을 수 없음');
+  return {};
 };
 
 /**
