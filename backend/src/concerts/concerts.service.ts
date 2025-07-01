@@ -138,15 +138,17 @@ export const getConcerts = async (category?: string) => {
       id,
       title,
       main_performer,
+      date,
       start_date,
       start_time,
       poster_url,
       category,
-      venues (
+      venue_id,
+      venues!concerts_venue_id_fkey (
         name
       )
     `)
-    .order('ticket_open_at', { ascending: true });
+    .order('date', { ascending: true });
 
   if (category) {
     query = query.eq('category', category);
@@ -159,11 +161,12 @@ export const getConcerts = async (category?: string) => {
     id: c.id,
     title: c.title,
     main_performer: c.main_performer,
+    date: c.date,
     start_date: c.start_date,
     start_time: c.start_time,
     poster_url: c.poster_url,
     category: c.category,
-    venue_name: c.venues?.name || '',
+    venue_name: c.venues?.name || '장소 정보 없음',
   }));
 };
 

@@ -30,12 +30,14 @@ export interface TicketWithDetails extends Ticket {
     id: string;
     title: string;
     date: string;
-    location: string;
+    venue_name: string;
     poster_url?: string;
   };
   seat?: {
     id: string;
-    seat_number: string;
+    label?: string;
+    row_idx?: number;
+    col_idx?: number;
     grade_name: string;
   };
 }
@@ -104,8 +106,14 @@ export const getUserTickets = async (
     .from('tickets')
     .select(`
       *,
-      concerts ( id, title, date, location, poster_url ),
-      seats    ( id, seat_number, seat_grades ( grade_name ) )
+      concerts ( 
+        id, 
+        title, 
+        date, 
+        poster_url,
+        venues ( name )
+      ),
+      seats ( id, label, row_idx, col_idx, seat_grades ( grade_name ) )
     `)
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
@@ -121,13 +129,15 @@ export const getUserTickets = async (
       id:         t.concerts.id,
       title:      t.concerts.title,
       date:       t.concerts.date,
-      location:   t.concerts.location,
+      venue_name: t.concerts.venues?.name || '장소 정보 없음',
       poster_url: t.concerts.poster_url,
     },
     seat: t.seats && {
-      id:          t.seats.id,
-      seat_number: t.seats.seat_number,
-      grade_name:  t.seats.seat_grades?.grade_name || ''
+      id:        t.seats.id,
+      label:     t.seats.label,
+      row_idx:   t.seats.row_idx,
+      col_idx:   t.seats.col_idx,
+      grade_name: t.seats.seat_grades?.grade_name || ''
     }
   }));
 };
@@ -143,8 +153,14 @@ export const getTicketById = async (
     .from('tickets')
     .select(`
       *,
-      concerts ( id, title, date, location, poster_url ),
-      seats    ( id, seat_number, seat_grades ( grade_name ) )
+      concerts ( 
+        id, 
+        title, 
+        date, 
+        poster_url,
+        venues ( name )
+      ),
+      seats ( id, label, row_idx, col_idx, seat_grades ( grade_name ) )
     `)
     .eq('id', ticketId)
     .eq('user_id', userId)
@@ -162,13 +178,15 @@ export const getTicketById = async (
       id:         data.concerts.id,
       title:      data.concerts.title,
       date:       data.concerts.date,
-      location:   data.concerts.location,
+      venue_name: data.concerts.venues?.name || '장소 정보 없음',
       poster_url: data.concerts.poster_url,
     },
     seat: data.seats && {
-      id:          data.seats.id,
-      seat_number: data.seats.seat_number,
-      grade_name:  data.seats.seat_grades?.grade_name || ''
+      id:        data.seats.id,
+      label:     data.seats.label,
+      row_idx:   data.seats.row_idx,
+      col_idx:   data.seats.col_idx,
+      grade_name: data.seats.seat_grades?.grade_name || ''
     }
   };
 };
@@ -181,8 +199,8 @@ export const setSeatReserved = async (
   reserved: boolean
 ) => {
   const { error } = await supabase
-    .from('seats')
-    .update({ is_reserved: reserved })
+    .from('concert_seats')
+    .update({ current_status: reserved ? 'reserved' : 'available' })
     .eq('id', seatId);
 
   if (error) {
