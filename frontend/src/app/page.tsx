@@ -221,8 +221,16 @@ export default function HomePage() {
       </div>
 
 
-    <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">콘서트 둘러보기</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-8">
+    <div className="flex justify-between items-center mb-4">
+      <h2 className="text-xl font-bold text-gray-800 dark:text-white">콘서트 둘러보기</h2>
+      <button
+        onClick={() => router.push('/search')}
+        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+      >
+        검색하기
+      </button>
+    </div>
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-8">
         {concerts.map((concert) => (
           <div
             key={concert.id}
