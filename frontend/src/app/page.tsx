@@ -177,7 +177,7 @@ export default function HomePage() {
         <div
           key={concert.id}
           className="px-4 cursor-pointer"
-          onClick={() => router.push(`/reservation/${concert.id}`)}
+          onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
         >
           <div className="w-[220px] h-[330px] rounded shadow overflow-hidden bg-white relative">
             {/* 포스터 이미지 전체 영역 차지 */}
@@ -185,6 +185,7 @@ export default function HomePage() {
               src={concert.poster_url?.trim() !== '' ? concert.poster_url : '/images/default-poster.png'}
               alt={concert.title}
               fill
+              sizes="220px"
               className="object-cover"
             />
 
@@ -229,8 +230,8 @@ export default function HomePage() {
         {concerts.map((concert) => (
         <div
           key={concert.id}
-          onClick={() => router.push(`/reservation/${concert.id}`)}
-          className="cursor-pointer"
+          className="px-4 cursor-pointer"
+          onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
         >
           <div className="w-[220px]">
             {/* 이미지에만 테두리 */}
@@ -245,6 +246,7 @@ export default function HomePage() {
                 }
                 alt={concert.title}
                 fill
+                sizes="220px"
                 className="object-cover"
               />
             </div>
