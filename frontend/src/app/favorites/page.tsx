@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getFavoriteConcerts, removeFromFavorites } from '@/utils/favoriteUtils';
 import { createSeoConcertUrl } from '@/utils/urlUtils';
+import LazyImage from '@/components/LazyImage';
 
 interface FavoriteConcert {
   id: string;
@@ -228,19 +229,19 @@ const FavoritesPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {favorites.map((favorite) => (
               <div key={favorite.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="relative">
-                  <img
-                    src={favorite.concerts.poster_url || '/default-poster.jpg'}
+                <div className="relative h-48">
+                  <LazyImage
+                    src={favorite.concerts.poster_url || '/images/default-poster.png'}
                     alt={favorite.concerts.title}
-                    className="w-full h-48 object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = '/default-poster.jpg';
-                    }}
+                    fill
+                    className="object-cover"
+                    quality={70}
+                    priority={false}
+                    imageSize="small"
                   />
                   <button
                     onClick={() => handleRemoveFavorite(favorite.concerts.id)}
-                    className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+                    className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-10"
                     title="찜하기 삭제"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

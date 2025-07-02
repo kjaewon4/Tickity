@@ -160,7 +160,8 @@ export const analyzeUserIntent = async (message: string): Promise<{
       const showAllKeywords = ['모든', '전체', '모든거', '전부', '있었던', '지난', '과거'];
       const showAllConcerts = showAllKeywords.some(keyword => lowerMessage.includes(keyword));
       
-      const concerts = await getConcerts(undefined, !showAllConcerts); // showAllConcerts에 따라 필터링
+      // 아티스트 검색 시에는 예매 시작 여부와 관계없이 모든 콘서트를 검색 대상에 포함
+      const concerts = await getConcerts(undefined, false); // 모든 콘서트 조회
       const foundConcert = concerts.find(concert => 
         concert.main_performer.toLowerCase().includes(lowerMessage) ||
         lowerMessage.includes(concert.main_performer.toLowerCase())
@@ -189,7 +190,8 @@ export const analyzeUserIntent = async (message: string): Promise<{
       const showAllKeywords = ['모든', '전체', '모든거', '전부', '있었던', '지난', '과거'];
       const showAllConcerts = showAllKeywords.some(keyword => lowerMessage.includes(keyword));
       
-      const concerts = await getConcerts(undefined, !showAllConcerts); // showAllConcerts에 따라 필터링
+      // 아티스트 검색 시에는 예매 시작 여부와 관계없이 모든 콘서트를 검색 대상에 포함
+      const concerts = await getConcerts(undefined, false); // 모든 콘서트 조회
       const foundConcert = concerts.find(concert => 
         concert.main_performer.toLowerCase().includes(artistQuery.toLowerCase()) ||
         artistQuery.toLowerCase().includes(concert.main_performer.toLowerCase()) ||
@@ -288,8 +290,8 @@ export const analyzeUserIntent = async (message: string): Promise<{
  */
 const formatConcertsForAI = async (page: number = 1, artistName?: string, dateFilter?: { year?: number; month?: number; }, showAllConcerts?: boolean): Promise<{ message: string; currentPage: number; totalPages: number; }> => {
   try {
-    // 모든 콘서트 vs 예매 가능한 콘서트만 조회
-    const availableOnly = !showAllConcerts; // showAllConcerts가 true면 availableOnly는 false
+    // 특정 아티스트 검색이나 날짜 필터링인 경우 모든 콘서트를 대상으로 검색
+    const availableOnly = (artistName || dateFilter) ? false : !showAllConcerts;
     let concerts = await getConcerts(undefined, availableOnly);
     
     // 특정 아티스트가 지정된 경우 필터링
@@ -307,10 +309,10 @@ const formatConcertsForAI = async (page: number = 1, artistName?: string, dateFi
       }
     }
     
-    // 날짜별 필터링 (안전한 날짜 처리)
+    // 날짜별 필터링 (start_date 우선 사용)
     if (dateFilter) {
       concerts = concerts.filter(concert => {
-        const dateString = concert.date || concert.start_date;
+        const dateString = concert.start_date;
         
         // 날짜 정보가 없으면 제외
         if (!dateString || dateString.trim() === '') {

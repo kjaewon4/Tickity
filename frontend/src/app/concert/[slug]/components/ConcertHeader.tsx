@@ -1,6 +1,7 @@
 import React from 'react';
 import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { TicketInfo } from '../types';
+import LazyImage from '@/components/LazyImage';
 
 interface ConcertHeaderProps {
   ticketInfo: Pick<TicketInfo, 'image' | 'title' | 'subtitle' | 'location' | 'dateRange' | 'runtime' | 'price'>;
@@ -18,7 +19,18 @@ const ConcertHeader: React.FC<ConcertHeaderProps> = ({
   return (
     <div className="rounded-2xl p-6 shadow-xl flex flex-col gap-4">
       <div className="flex gap-6 items-start">
-        <img src={ticketInfo.image} alt="concert" className="w-40 h-40 object-cover rounded-lg" />
+        <div className="relative w-40 h-40">
+          <LazyImage 
+            src={ticketInfo.image} 
+            alt="concert" 
+            fill
+            sizes="160px"
+            className="object-cover rounded-lg"
+            quality={70}
+            priority={true} // 상세페이지 메인 이미지는 우선 로드
+            imageSize="small"
+          />
+        </div>
         <div className="flex-1">
           <div className="flex justify-between items-start">
             <h2 className="text-lg font-bold flex items-center gap-2">

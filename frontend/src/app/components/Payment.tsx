@@ -5,28 +5,40 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import apiClient from '@/lib/apiClient';
 
-export default function PaymentPage() {
+export default function Payment() {
   const router = useRouter();
 
   const [concert, setConcert] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedSeatInfo, setSelectedSeatInfo] = useState<string | null>(null);
+  const [ticketPrice, setTicketPrice] = useState<number>(0);
+  const [bookingFee, setBookingFee] = useState<number>(0); 
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const bookingFee = 2000;
-  const deliveryFee = 0;
-  const ticketPrice = concert?.price || 0;
-  const total = ticketPrice + bookingFee + deliveryFee;
+  const total = ticketPrice + bookingFee; 
 
   useEffect(() => {
     const concertData = localStorage.getItem('concert');
-    if (concertData) setConcert(JSON.parse(concertData));
+    if (concertData) {
+      setConcert(JSON.parse(concertData));
+    } else {
+      const title = localStorage.getItem('concertTitle');
+      if (title) {
+        setConcert({ title });
+      }
+    }
 
     setSelectedDate(localStorage.getItem('selectedDate'));
     setSelectedTime(localStorage.getItem('selectedTime'));
     setSelectedSeatInfo(localStorage.getItem('selectedSeatInfo'));
+
+    const storedPrice = localStorage.getItem('concertPrice');
+    setTicketPrice(storedPrice ? Number(storedPrice) : 0);
+
+    const storedFee = localStorage.getItem('bookingFee');
+    setBookingFee(storedFee ? Number(storedFee) : 0); 
 
     const fetchUser = async () => {
       const token = localStorage.getItem('accessToken');
@@ -53,10 +65,25 @@ export default function PaymentPage() {
     const seatId = localStorage.getItem('selectedSeatId');
     const seatNumber = selectedSeatInfo || '';
     const userId = user?.id;
-    const price = localStorage.getItem('concertPrice');
+    const price = ticketPrice + bookingFee; 
+
+    console.log('결제 데이터 확인:', {
+      concertId,
+      seatId,
+      seatNumber,
+      userId,
+      price,
+    });
 
     if (!concertId || !seatId || !userId || !price) {
       alert('결제 정보가 부족합니다.');
+      console.warn('누락된 필드:', {
+        concertId,
+        seatId,
+        seatNumber,
+        userId,
+        price,
+      });
       return;
     }
 
@@ -68,15 +95,19 @@ export default function PaymentPage() {
       price: Number(price),
     };
 
+    console.log('서버로 보낼 payload:', payload);
+
     try {
       const res = await apiClient.post('/tickets', payload);
+      console.log('응답 결과:', res);
+
       if (res.success) {
         router.push('/complete');
       } else {
         alert('결제 실패: ' + res.message);
       }
     } catch (err) {
-      console.error('결제 오류:', err);
+      console.error('결제 요청 중 오류:', err);
       alert('결제 중 오류가 발생했습니다.');
     }
   };
@@ -102,7 +133,9 @@ export default function PaymentPage() {
             <input type="radio" checked disabled className="accent-blue-500" />
             현장수령
           </label>
-          <p className="text-xs text-gray-500 ml-6">공연 당일 현장 교부처에서 예매번호 및 본인 확인 후 티켓을 수령하여 입장이 가능합니다.</p>
+          <p className="text-xs text-gray-500 ml-6">
+            공연 당일 현장 교부처에서 예매번호 및 본인 확인 후 티켓을 수령하여 입장이 가능합니다.
+          </p>
         </div>
 
         <div className="bg-gray-50 p-4 rounded border mb-6">
@@ -150,7 +183,9 @@ export default function PaymentPage() {
               <span>티켓금액의 30%</span>
             </div>
           </div>
-          <p className="text-xs text-gray-500 mt-2">- 예매 당일 취소할 경우에는 예매수수료 및 취소수수료는 환불가능 합니다. (취소수수료는 취소 기한 내에 한함)</p>
+          <p className="text-xs text-gray-500 mt-2">
+            - 예매 당일 취소할 경우에는 예매수수료 및 취소수수료는 환불가능 합니다. (취소수수료는 취소 기한 내에 한함)
+          </p>
         </div>
       </div>
 
@@ -161,7 +196,7 @@ export default function PaymentPage() {
         </div>
 
         <div className="border p-2 mb-4">
-          <div className="text-sm font-bold leading-snug">{concert?.title}</div>
+          <div className="text-sm font-bold leading-snug">{concert?.title || '콘서트 제목 없음'}</div>
           <div className="text-xs text-gray-500 mt-1">
             {selectedDate} {selectedTime}
           </div>
@@ -188,10 +223,6 @@ export default function PaymentPage() {
             <div className="flex justify-between">
               <span>예매수수료</span>
               <span>{bookingFee.toLocaleString()}원</span>
-            </div>
-            <div className="flex justify-between">
-              <span>배송료</span>
-              <span>{deliveryFee.toLocaleString()}원</span>
             </div>
           </div>
           <div className="flex justify-between mt-3 font-bold border-t pt-2 text-lg text-green-600">

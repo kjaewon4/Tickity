@@ -33,7 +33,9 @@ async function main() {
   console.log('✅ SoulboundTicket deployed to:', deployedAddress);
 
   // 6) .deployed 파일에 기록
-  writeFileSync('.deployed', `TICKET_MANAGER_ADDRESS=${deployedAddress}\n`);
+  const envPath = path.resolve(__dirname, '../../backend/.env');
+
+  writeFileSync(envPath, `TICKET_MANAGER_ADDRESS=${deployedAddress}\n`);
 }
 
 main().catch((e) => {
