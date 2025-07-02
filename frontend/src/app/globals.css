@@ -24,3 +24,18 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes modal-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0px rgba(0, 0, 0, 0);
+    border-color: #d1d5db; /* gray-300 */
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    border-color: black;
+  }
+}
+
+.animate-modal-pulse {
+  animation: modal-pulse 0.6s ease-in-out 3;
+}
