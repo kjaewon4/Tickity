@@ -40,8 +40,16 @@ export const getAllConcerts = async (): Promise<Concert[]> => {
   try {
     const { data: concertsData, error } = await supabase
       .from('concerts')
-      .select('*')
-      .order('date', { ascending: true });
+      .select(`
+        *,
+        venues!concerts_venue_id_fkey (
+          id,
+          name,
+          address,
+          capacity
+        )
+      `)
+      .order('start_date', { ascending: false });
 
     if (error) {
       console.error('콘서트 목록 조회 오류:', error);
