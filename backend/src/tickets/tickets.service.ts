@@ -8,6 +8,8 @@ import { ethers, Contract, Wallet } from 'ethers';
 // artifacts 폴더 내 생성된 JSON ABI 파일을 가져옵니다.
 // tickets.service.ts 기준으로 ../../../blockchain/artifacts/... 경로
 import TicketJSON from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
+import { BlockchainService } from '../blockchain/blockchain.service';
+import { generateMetadataForTicket } from './metadata.service';
 
 // 로컬 체인 배포 주소 등 불러올 .deployed
 dotenv.config({ path: path.resolve(__dirname, '../../../blockchain/.deployed') });
@@ -62,39 +64,95 @@ export const getAllTickets = async (): Promise<Ticket[]> => {
 // ───────────────────────────────────────────────────────────
 // 티켓 생성 (예매)
 // ───────────────────────────────────────────────────────────
-export const createTicket = async (
-  payload: Omit<Ticket, 'id' | 'created_at'>
-): Promise<Ticket> => {
-  // issued_at이 없으면 현재 시간으로 설정
-  const ticketData = {
-    ...payload,
-    issued_at: payload.issued_at || new Date().toISOString()
-  };
+// export async function updateTicketMintInfo(
+//   ticketId: string,
+//   tokenId: number,
+//   txHash: string
+// ) {
+//   const { error } = await supabase
+//     .from('tickets')
+//     .update({ token_id: tokenId, tx_hash: txHash })
+//     .eq('id', ticketId);
 
+//   if (error) throw error;
+// }
+
+
+const blockchain = new BlockchainService();
+
+export const createAndMintTicket = async (
+  payload: Omit<Ticket, 'id' | 'created_at'>
+): Promise<Ticket & { token_id: number; tx_hash: string }> => {
+  // 1. 티켓 생성
+  const ticket = await createTicket(payload);
+
+  // 2. 메타데이터 URI 생성
+  const metadataURI = await generateMetadataForTicket(ticket.id); // 구현 필요
+
+  // 3. NFT 민팅
+  const { txHash, tokenId } = await blockchain.mintTicket(
+    ticket.user_id,
+    Number(ticket.concert_id), // uint256 변환
+    ticket.seat_number,
+    metadataURI,
+    (ticket.price / 1e18).toString() // Ether 단위 문자열
+  );
+
+  // 4. DB에 민팅 정보 업데이트
+  await updateTicketMintInfo(ticket.id, tokenId, txHash);
+
+  return { ...ticket, token_id: tokenId, tx_hash: txHash };
+};
+
+
+// 티켓 생성
+export async function createTicket(payload: {
+  concert_id: string;
+  seat_id: string;
+  user_id: string;
+  seat_number: string;
+  price: number;
+}) {
   const { data, error } = await supabase
     .from('tickets')
-    .insert([ticketData]);
-
-  if (error) {
-    console.error('createTicket 오류:', error);
-    throw error;
-  }
-
-  // insert 후 select로 다시 조회
-  const { data: inserted, error: selectError } = await supabase
-    .from('tickets')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(1)
+    .insert({
+      concert_id: payload.concert_id,
+      seat_id: payload.seat_id,
+      user_id: payload.user_id,
+      seat_number: payload.seat_number,
+      purchase_price: payload.price,
+      created_at: new Date().toISOString(),
+    })
+    .select('*') // 생성된 행을 반환
     .single();
 
-  if (selectError) {
-    console.error('createTicket select 오류:', selectError);
-    throw selectError;
+  if (error || !data) {
+    throw new Error(`티켓 생성 실패: ${error?.message}`);
   }
 
-  return inserted as Ticket;
-};
+  return data;
+}
+
+// NFT 민팅 후 티켓 정보 업데이트
+export async function updateTicketMintInfo(
+  ticketId: string,
+  tokenId: number,
+  txHash: string
+) {
+  const { error } = await supabase
+    .from('tickets')
+    .update({
+      nft_token_id: tokenId.toString(),
+      tx_hash: txHash,
+      issued_at: new Date().toISOString(),
+    })
+    .eq('id', ticketId);
+
+  if (error) {
+    throw new Error(`민팅 정보 업데이트 실패: ${error.message}`);
+  }
+}
+
 
 // ───────────────────────────────────────────────────────────
 // 사용자별 예매 티켓 목록 조회
