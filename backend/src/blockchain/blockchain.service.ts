@@ -22,6 +22,7 @@ const FUND_AMOUNT  = '0.1';                               // 새 지갑에 충�
 export class BlockchainService {
   private contract: Contract;
 
+
   constructor() {
     const addr = process.env.TICKET_MANAGER_ADDRESS!;
     if (!addr) throw new Error('TICKET_MANAGER_ADDRESS가 없습니다');
@@ -53,8 +54,8 @@ export class BlockchainService {
     seat: string,
     uri: string,
     priceEth: string
-  ) {
-    // -- 1) Supabase에서 사용자 정보 조회 --
+  ): Promise<{ txHash: string; tokenId: number }> {
+    // 1. 사용자 키 조회
     const { data: userData, error: userErr } = await supabase
       .from('users')
       .select('wallet_address, private_key_encrypted')
@@ -63,14 +64,14 @@ export class BlockchainService {
     if (userErr) throw new Error(`DB 조회 실패: ${userErr.message}`);
     if (!userData?.private_key_encrypted) throw new Error('사용자 키 정보 없음');
 
-    // -- 2) AES 복호화로 개인키 복원 --
+    // 2. 개인키 복호화
     const privateKey = decrypt(userData.private_key_encrypted);
 
-    // -- 3) ethers 지갑 연결 --
+    // 3. 서명자 지갑 연결
     const signer = new Wallet(privateKey, PROVIDER);
     const contractWithSigner = this.contract.connect(signer) as any;
 
-    // -- 4) 트랜잭션 보내기 --
+    // 4. 트랜잭션 실행
     const price = parseEther(priceEth);
     const tx = await contractWithSigner.mintTicket(
       concertId,
@@ -79,6 +80,18 @@ export class BlockchainService {
       price,
       { value: price }
     );
-    return tx.wait();
+    const receipt = await tx.wait();
+
+    // 5. 토큰 ID 추출 (첫 번째 이벤트 로그에서)
+    // 민팅된 티켓이 몇 번 토큰인지 기록해야 나중에 티켓 검증, 조회, 얼굴 인증 등에 사용
+    const tokenId =
+      receipt?.events?.find((e:any) => e.event === 'Transfer')?.args?.tokenId?.toNumber?.() ??
+      -1;
+
+    return {
+      txHash: tx.hash,
+      tokenId,
+    };
   }
+
 }

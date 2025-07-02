@@ -1,10 +1,12 @@
 // src/tickets/tickets.controller.ts
 import { Router, Request, Response } from 'express';
 import * as ticketsService from './tickets.service';
-
+import { generateMetadataForTicket } from './metadata.service';
+import { BlockchainService } from '../blockchain/blockchain.service';
 import { ApiResponse } from '../types/auth';
 
 const router = Router();
+const blockchain = new BlockchainService();
 
 /**
  * 전체 티켓 조회
@@ -26,23 +28,63 @@ router.get(
 );
 
 /**
- * 티켓 발급(예매)
+ * 티켓 발급(예매) (결제 완료 시 호출)
  * POST /tickets
  */
-router.post(
-  '/',
-  async (req: Request, res: Response<ApiResponse & { data?: any }>) => {
-    try {
-      const ticket = await ticketsService.createTicket(req.body);
-      res.status(201).json({ success: true, data: ticket });
-    } catch (err) {
-      console.error('티켓 생성 오류:', err);
-      res
-        .status(500)
-        .json({ success: false, error: '티켓 생성 중 오류가 발생했습니다.' });
-    }
+router.post('/', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const {
+      concertId,
+      seatId,
+      userId,
+      seatNumber,
+      price, // number 단위 (ex: 132000)
+    } = req.body;
+
+    // 1. DB에 티켓 생성
+    const ticket = await ticketsService.createTicket({
+      concert_id: concertId,
+      seat_id: seatId,
+      user_id: userId,
+      seat_number: seatNumber,
+      price,
+    });
+    console.log('✅ 티켓 생성 완료, ID:', ticket.id);
+
+    // 2. 메타데이터 생성 → Supabase Storage 업로드
+    const metadataURI = await generateMetadataForTicket(ticket.id);
+
+    // 3. NFT 민팅 실행 (seatNumber는 on-chain에 저장됨)
+    const { tokenId, txHash } = await blockchain.mintTicket(
+      userId,
+      Number(concertId),
+      seatNumber,
+      metadataURI,
+      (price / 1e18).toString() // Ether 단위 문자열
+    );
+
+    // 4. 민팅 결과 DB에 업데이트
+    await ticketsService.updateTicketMintInfo(ticket.id, tokenId, txHash);
+
+    // 5. 응답
+    res.status(201).json({
+      success: true,
+      data: {
+        ...ticket,
+        token_id: tokenId,
+        tx_hash: txHash,
+        metadata_uri: metadataURI,
+      },
+    });
+  } catch (err: any) {
+    console.error('티켓 발급 오류:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message || '티켓 발급 중 오류가 발생했습니다.',
+    });
   }
-);
+});
+
 
 /**
  * 사용자별 예매 티켓 목록 조회
