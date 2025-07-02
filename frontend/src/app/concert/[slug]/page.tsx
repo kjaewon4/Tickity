@@ -5,12 +5,14 @@ import '../../globals.css';
 import { useParams } from 'next/navigation';
 import { useConcertData, useAuth, useFavorite } from './hooks';
 import { ConcertHeader, ConcertInfoTabs, BookingBox } from './components';
+import OneTicketModal from '@/app/modal/OneTicketModal';
 
 const ConcertDetail = () => {
   const { slug } = useParams();
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [activeTab, setActiveTab] = useState('공연정보');
+  const [showLimitModal, setShowLimitModal] = useState(true);
 
   // 커스텀 훅들 사용
   const { concert, policies, ticketInfo, loading, error } = useConcertData();
@@ -64,6 +66,10 @@ const ConcertDetail = () => {
 
   return (
     <div className="flex flex-col lg:flex-row justify-center gap-6 p-6 bg-white text-[#222]">
+      {/* 모달 렌더링 */}
+      {showLimitModal && (
+        <OneTicketModal onClose={() => setShowLimitModal(false)} />
+      )}
       <div className="flex flex-col gap-4 w-full lg:w-[600px]">
         {/* 콘서트 헤더 */}
         <ConcertHeader
@@ -90,7 +96,11 @@ const ConcertDetail = () => {
         onDateChange={setSelectedDate}
         onTimeChange={setSelectedTime}
         onReservation={handleReservation}
-        concert={concert}
+        concert={{
+          start_date: concert.start_date,
+          start_time: concert.start_time,
+          ticket_open_at: concert.ticket_open_at, 
+        }}
         price={ticketInfo.price}
         calendarDays={calendarDays}
       />
