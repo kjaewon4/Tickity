@@ -18,10 +18,9 @@ const router = Router();
 const bc = new BlockchainService();
 
 // 회원가입
-// 회원가입
 router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response<ApiResponse>) => {
   try {
-    const { email, password, name, resident_number, temp_id } = req.body;
+    const { email, password, name, resident_number} = req.body;
     const dynamicConfig = getDynamicConfig(req);
     let embedding = null;
 
@@ -30,26 +29,6 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
       return res.status(400).json({
         success: false,
         error: '모든 필드를 입력해주세요.'
-      });
-    }
-
-    if (!temp_id || temp_id === 'undefined') {
-      return res.status(400).json({
-        success: false,
-        error: 'temp_id가 없습니다. 얼굴 등록을 완료해주세요.'
-      });
-    }
-
-    // ✅ embedding 조회
-    try {
-      const embeddingRes = await axios.get(`http://localhost:8000/face/api/embedding-temp/${temp_id}`);
-      embedding = embeddingRes.data.embedding;
-      console.log('✅ embedding 가져옴:', embedding.slice(0, 5));
-    } catch (err) {
-      console.error('❌ embedding fetch 실패:', err);
-      return res.status(400).json({
-        success: false,
-        error: '얼굴 등록 정보를 불러오지 못했습니다.'
       });
     }
 
@@ -205,24 +184,6 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
       }
     }
 
-    // ✅ embedding DB 저장
-    if (embedding && Array.isArray(embedding)) {
-      const { error: embeddingError } = await supabase
-        .from('face_embeddings')
-        .insert([{
-          user_id: userId,
-          embedding
-        }]);
-
-      if (embeddingError) {
-        console.error('임베딩 저장 오류:', embeddingError);
-      } else {
-        console.log('✅ 임베딩이 face_embeddings 테이블에 저장되었습니다.');
-      }
-    } else {
-      console.warn('임베딩 값이 없거나 배열이 아님');
-    }
-
     // ✅ 응답 반환
     if (signUpData.user && !signUpData.session) {
       res.json({
@@ -245,7 +206,6 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
   }
 });
 
-// 로그인
 router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<ApiResponse>) => {
   try {
     const { email, password } = req.body;
@@ -303,7 +263,8 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
         return res.json({
           success: true,
           data: {
-            user: newUserInfo
+            user: newUserInfo,
+            hasEmbedding: false // 신규 사용자는 embedding 없음으로 반환
           }
         });
       }
@@ -324,10 +285,28 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
       createdAt: userData.created_at
     };
 
+    // ✅ 로그인 성공 후 embedding 존재 여부 확인
+    const { data: embeddingData, error: embeddingError } = await supabase
+      .from('face_embeddings')
+      .select('embedding')
+      .eq('user_id', userData.id)
+      .maybeSingle();
+
+    if (embeddingError) {
+      console.error('임베딩 조회 오류:', embeddingError);
+      return res.status(500).json({
+        success: false,
+        error: '임베딩 조회 중 오류가 발생했습니다.'
+      });
+    }
+
+    const hasEmbedding = !!embeddingData;
+
     const authResponse: AuthResponse = {
       user: userInfo,
       accessToken: authData.session.access_token,
-      refreshToken: authData.session.refresh_token
+      refreshToken: authData.session.refresh_token,
+      hasEmbedding // ✅ 추가
     };
 
     res.json({
@@ -344,6 +323,7 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
     });
   }
 });
+
 
 // 로그아웃
 router.post('/logout', async (req: Request, res: Response<ApiResponse>) => {

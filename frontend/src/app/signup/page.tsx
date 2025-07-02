@@ -21,32 +21,6 @@ export default function SignupPage() {
   const [emailMessage, setEmailMessage] = useState<string>('');
   const [emailToCheck, setEmailToCheck] = useState<string>(''); // 검증할 이메일 저장
 
-  const [embedding, setEmbedding] = useState<number[] | null>(null);
-  const searchParams = useSearchParams();
-  const tempId = searchParams.get('temp_id');
-useEffect(() => {
-  const fetchEmbedding = async () => {
-    if (!tempId || tempId === 'undefined') {
-      console.warn('❌ tempId 가 undefined 입니다. embedding fetch 스킵.');
-      return;
-    }
-    try {
-      const res = await fetch(`http://localhost:8000/face/api/embedding-temp/${tempId}`);
-      const data = await res.json();
-      if (res.ok) {
-        setEmbedding(data.embedding);
-        console.log('✅ embedding 불러옴:', data.embedding.slice(0, 5));
-      } else {
-        console.error('❌ embedding 불러오기 실패:', data.error);
-      }
-    } catch (err) {
-      console.error('❌ embedding fetch 에러:', err);
-    }
-  };
-  fetchEmbedding();
-}, [tempId]);
-
-
   // 주민번호 형식 검증
   const validateResidentNumber = (number: string): boolean => {
     return /^\d{7}$/.test(number);
@@ -183,8 +157,6 @@ useEffect(() => {
           password,
           name: name.trim(),
           resident_number: residentNumber,
-          embedding, // embedding 포함
-          temp_id: tempId // ✅ temp_id 추가
         })
       });
 

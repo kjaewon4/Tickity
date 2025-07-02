@@ -21,7 +21,7 @@ def validate_uuid_or_test_id(user_id: str) -> str:
 def is_test_id(user_id: str) -> bool:
     """테스트용 ID인지 확인"""
     return user_id in ['test-embedding-only', 'test-user', 'demo-user']
-
+    
 async def register_user_face_db(user_id: str, file: UploadFile, concert_id: str = None):
     # ✅ UUID 형식 검증 (테스트용 ID 허용)
     user_id = validate_uuid_or_test_id(user_id)
@@ -50,7 +50,6 @@ async def register_user_face_db(user_id: str, file: UploadFile, concert_id: str 
     data = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
-        "concert_id": concert_id,
         "embedding": embedding.tolist()
     }
 
