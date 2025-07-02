@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiClient } from '@/lib/apiClient';
-
+import { useSearchParams } from 'next/navigation';
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string>('');
@@ -15,11 +15,37 @@ export default function SignupPage() {
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
   const [isSigningUp, setIsSigningUp] = useState<boolean>(false);
-  
+
   // 이메일 중복 체크 관련 상태
   const [emailStatus, setEmailStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'error'>('idle');
   const [emailMessage, setEmailMessage] = useState<string>('');
   const [emailToCheck, setEmailToCheck] = useState<string>(''); // 검증할 이메일 저장
+
+  const [embedding, setEmbedding] = useState<number[] | null>(null);
+  const searchParams = useSearchParams();
+  const tempId = searchParams.get('temp_id');
+useEffect(() => {
+  const fetchEmbedding = async () => {
+    if (!tempId || tempId === 'undefined') {
+      console.warn('❌ tempId 가 undefined 입니다. embedding fetch 스킵.');
+      return;
+    }
+    try {
+      const res = await fetch(`http://localhost:8000/face/api/embedding-temp/${tempId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setEmbedding(data.embedding);
+        console.log('✅ embedding 불러옴:', data.embedding.slice(0, 5));
+      } else {
+        console.error('❌ embedding 불러오기 실패:', data.error);
+      }
+    } catch (err) {
+      console.error('❌ embedding fetch 에러:', err);
+    }
+  };
+  fetchEmbedding();
+}, [tempId]);
+
 
   // 주민번호 형식 검증
   const validateResidentNumber = (number: string): boolean => {
@@ -93,13 +119,13 @@ export default function SignupPage() {
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const newEmail = e.target.value;
     setEmail(newEmail);
-    
+
     // 이메일이 변경되면 검증 상태 초기화
     if (emailStatus !== 'idle') {
       setEmailStatus('idle');
       setEmailMessage('');
     }
-    
+
     // 이메일 변경 시 에러 메시지 초기화
     if (error && error.includes('이메일')) {
       setError('');
@@ -110,23 +136,23 @@ export default function SignupPage() {
   const handleSignup = async (): Promise<void> => {
     setError('');
     setSuccess('');
-    
+
     // 이메일 중복 체크
     if (emailStatus === 'taken') {
       setError('이미 가입된 이메일입니다. 다른 이메일을 사용하거나 로그인해주세요.');
       return;
     }
-    
+
     if (emailStatus === 'checking') {
       setError('이메일 확인 중입니다. 잠시 후 다시 시도해주세요.');
       return;
     }
-    
+
     if (emailStatus === 'error') {
       setError('이메일 확인에 실패했습니다. 다시 시도해주세요.');
       return;
     }
-    
+
     if (password !== passwordCheck) {
       setError('비밀번호가 일치하지 않습니다.');
       return;
@@ -139,10 +165,10 @@ export default function SignupPage() {
       setError('주민번호는 7자리 숫자로 입력해주세요.');
       return;
     }
-    
+
     try {
       setIsSigningUp(true);
-      
+
       console.log('=== 프론트엔드 회원가입 시작 ===');
       console.log('API URL:', process.env.NEXT_PUBLIC_API_URL);
 
@@ -156,7 +182,9 @@ export default function SignupPage() {
           email: email.trim(),
           password,
           name: name.trim(),
-          resident_number: residentNumber
+          resident_number: residentNumber,
+          embedding, // embedding 포함
+          temp_id: tempId // ✅ temp_id 추가
         })
       });
 
@@ -164,7 +192,7 @@ export default function SignupPage() {
 
       if (!response.ok) {
         console.error('회원가입 오류:', result);
-        
+
         // Rate limit 에러 처리
         if (response.status === 429) {
           setError('이메일 전송이 너무 많습니다. 잠시 후 다시 시도해주세요. (1-2분 후)');
@@ -263,13 +291,13 @@ export default function SignupPage() {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
       <div className="w-full max-w-md bg-white p-8 rounded shadow">
         <h1 className="text-2xl font-bold mb-6 text-center">Tickity 회원가입</h1>
-        
+
         <div className="text-center text-gray-400 my-2">이메일로 회원가입</div>
-        
+
         <div className="text-sm text-gray-600 mb-2">
           이메일을 입력하고 확인 버튼을 눌러주세요
         </div>
-        
+
         <input
           className="w-full mb-2 p-2 border rounded"
           placeholder="이름"
@@ -310,11 +338,10 @@ export default function SignupPage() {
               type="button"
               onClick={handleEmailCheck}
               disabled={!email || emailStatus === 'checking'}
-              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                !email || emailStatus === 'checking'
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
+              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${!email || emailStatus === 'checking'
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
             >
               {emailStatus === 'checking' ? '확인 중...' : '확인'}
             </button>
@@ -351,11 +378,10 @@ export default function SignupPage() {
           onChange={handlePasswordCheckChange}
         />
         <button
-          className={`w-full py-2 rounded font-semibold ${
-            isSigningUp || emailStatus !== 'available'
-              ? 'bg-gray-400 cursor-not-allowed' 
-              : 'bg-blue-600 hover:bg-blue-700'
-          } text-white`}
+          className={`w-full py-2 rounded font-semibold ${isSigningUp || emailStatus !== 'available'
+            ? 'bg-gray-400 cursor-not-allowed'
+            : 'bg-blue-600 hover:bg-blue-700'
+            } text-white`}
           onClick={handleSignup}
           disabled={isSigningUp || emailStatus !== 'available'}
         >
@@ -372,7 +398,7 @@ export default function SignupPage() {
             )}
           </div>
         )}
-        
+
         <div className="mt-4 text-center">
           <span className="text-gray-600">이미 계정이 있으신가요? </span>
           <Link href="/login" className="text-blue-600 hover:underline">

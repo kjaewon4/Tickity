@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { supabase } from '../lib/supabaseClient';
-import { 
-  SignupRequest, 
-  LoginRequest, 
-  ApiResponse, 
+import {
+  SignupRequest,
+  LoginRequest,
+  ApiResponse,
   AuthResponse,
-  UserInfo 
+  UserInfo
 } from '../types/auth';
 import { createClient } from '@supabase/supabase-js';
 import { encryptResidentNumber, encrypt } from '../utils/encryption';
@@ -15,19 +15,41 @@ import { BlockchainService } from '../blockchain/blockchain.service';
 import axios from 'axios';
 
 const router = Router();
-const bc     = new BlockchainService();
+const bc = new BlockchainService();
 
+// 회원가입
 // 회원가입
 router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response<ApiResponse>) => {
   try {
-    const { email, password, name, resident_number } = req.body;
+    const { email, password, name, resident_number, temp_id } = req.body;
     const dynamicConfig = getDynamicConfig(req);
+    let embedding = null;
 
     // 입력 검증
     if (!email || !password || !name || !resident_number) {
       return res.status(400).json({
         success: false,
         error: '모든 필드를 입력해주세요.'
+      });
+    }
+
+    if (!temp_id || temp_id === 'undefined') {
+      return res.status(400).json({
+        success: false,
+        error: 'temp_id가 없습니다. 얼굴 등록을 완료해주세요.'
+      });
+    }
+
+    // ✅ embedding 조회
+    try {
+      const embeddingRes = await axios.get(`http://localhost:8000/face/api/embedding-temp/${temp_id}`);
+      embedding = embeddingRes.data.embedding;
+      console.log('✅ embedding 가져옴:', embedding.slice(0, 5));
+    } catch (err) {
+      console.error('❌ embedding fetch 실패:', err);
+      return res.status(400).json({
+        success: false,
+        error: '얼굴 등록 정보를 불러오지 못했습니다.'
       });
     }
 
@@ -48,7 +70,7 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
     // 이메일 중복 체크
     console.log('이메일 중복 체크 시작...');
     const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-    
+
     if (authError) {
       console.error('Supabase Auth 사용자 조회 오류:', authError);
       return res.status(500).json({
@@ -58,7 +80,7 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
     }
 
     // Supabase Auth에서 이메일로 사용자 찾기
-    const existingAuthUser = authUsers.users.find(user => 
+    const existingAuthUser = authUsers.users.find(user =>
       user.email?.toLowerCase() === email.trim().toLowerCase()
     );
 
@@ -95,15 +117,15 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
 
     console.log('이메일 중복 체크 통과');
 
-    // Supabase Auth로 회원가입 (이메일 인증 포함)
+    // ✅ Supabase Auth로 회원가입 (이메일 인증 포함)
     const signUpOptions = {
       email: email.trim(),
       password,
       options: {
         data: {
           name: name.trim(),
-          resident_number: resident_number,
-          password_hash: 'email_signup' // 가입자 유형 저장
+          resident_number,
+          password_hash: 'email_signup'
         },
         emailRedirectTo: `${dynamicConfig.FRONTEND_URL}/confirm-email`
       }
@@ -111,15 +133,15 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
 
     console.log('Supabase SignUp Options:', JSON.stringify(signUpOptions, null, 2));
 
-    const { data, error: signUpError } = await supabase.auth.signUp(signUpOptions);
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp(signUpOptions);
 
     if (signUpError) {
       console.error('회원가입 오류:', signUpError);
-      
+
       // Rate limit 에러 처리
-      if (signUpError.code === 'over_email_send_rate_limit' || 
-          signUpError.message.includes('rate limit') || 
-          signUpError.message.includes('429')) {
+      if (signUpError.code === 'over_email_send_rate_limit' ||
+        signUpError.message.includes('rate limit') ||
+        signUpError.message.includes('429')) {
         return res.status(429).json({
           success: false,
           error: '이메일 전송이 너무 많습니다. 잠시 후 다시 시도해주세요. (1-2분 후)'
@@ -136,8 +158,7 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
         });
       }
     }
-
-    // 회원가입 성공 시에만 이메일 유효성 검증 수행
+    // ✅ 회원가입 성공 시에만 이메일 유효성 검증 수행
     const mailboxlayerApiKeys = [
       process.env.MAILBOXLAYER_API_KEY1,
       process.env.MAILBOXLAYER_API_KEY2,
@@ -152,7 +173,7 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
         break; // 성공하면 반복 종료
       } catch (err) {
         mailboxError = err;
-        // 2번째 키로 재시도
+        // 다음 키로 재시도
       }
     }
     if (mailboxError || !mailboxRes) {
@@ -164,14 +185,51 @@ router.post('/signup', async (req: Request<{}, {}, SignupRequest>, res: Response
       }
     }
 
-    if (data.user && !data.session) {
-      // 이메일 인증이 필요한 경우
+    // ✅ userId 가져오기
+    let userId = signUpData.user?.id;
+
+    if (!userId) {
+      console.warn("❌ signUpData.user.id 없음, Admin API로 조회 시도");
+      const { data: usersList, error: listError } = await supabase.auth.admin.listUsers();
+      if (listError) {
+        console.error("❌ Supabase Admin listUsers 오류:", listError);
+        return res.status(500).json({ success: false, error: '사용자 조회 실패' });
+      }
+
+      const user = usersList.users.find(u => u.email === email.trim().toLowerCase());
+      if (user) {
+        console.log("✅ Admin API로 user id 획득:", user.id);
+        userId = user.id;
+      } else {
+        return res.status(400).json({ success: false, error: '회원가입 후 user id를 찾을 수 없습니다.' });
+      }
+    }
+
+    // ✅ embedding DB 저장
+    if (embedding && Array.isArray(embedding)) {
+      const { error: embeddingError } = await supabase
+        .from('face_embeddings')
+        .insert([{
+          user_id: userId,
+          embedding
+        }]);
+
+      if (embeddingError) {
+        console.error('임베딩 저장 오류:', embeddingError);
+      } else {
+        console.log('✅ 임베딩이 face_embeddings 테이블에 저장되었습니다.');
+      }
+    } else {
+      console.warn('임베딩 값이 없거나 배열이 아님');
+    }
+
+    // ✅ 응답 반환
+    if (signUpData.user && !signUpData.session) {
       res.json({
         success: true,
         message: '회원가입이 완료되었습니다! 이메일을 확인하여 인증을 완료해주세요.'
       });
     } else {
-      // 이메일 인증이 필요하지 않은 경우 (즉시 인증됨)
       res.json({
         success: true,
         message: '회원가입이 완료되었습니다!'
@@ -231,7 +289,7 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
       // 사용자가 데이터베이스에 없는 경우 (Google OAuth 신규 사용자)
       if (userError.code === 'PGRST116') {
         console.log('Google OAuth 신규 사용자 발견:', authData.user.id);
-        
+
         // 신규 사용자 정보만 반환 (데이터베이스에 저장하지 않음)
         const newUserInfo: UserInfo = {
           id: authData.user.id,
@@ -299,7 +357,7 @@ router.post('/logout', async (req: Request, res: Response<ApiResponse>) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    
+
     // 세션 무효화
     const { error } = await supabase.auth.admin.signOut(token);
 
@@ -329,7 +387,7 @@ router.post('/logout', async (req: Request, res: Response<ApiResponse>) => {
 router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader) {
       return res.status(401).json({
         success: false,
@@ -338,7 +396,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    
+
     // 토큰으로 사용자 정보 조회
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
@@ -360,7 +418,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
       // 사용자가 데이터베이스에 없는 경우 (Google OAuth 신규 사용자)
       if (userError.code === 'PGRST116') {
         console.log('Google OAuth 신규 사용자 발견:', user.id);
-        
+
         // 신규 사용자 정보만 반환 (데이터베이스에 저장하지 않음)
         const newUserInfo: UserInfo = {
           id: user.id,
@@ -415,7 +473,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
 router.get('/check-email/:email', async (req: Request, res: Response<ApiResponse>) => {
   try {
     const { email } = req.params;
-    
+
     if (!email) {
       return res.status(400).json({
         success: false,
@@ -428,7 +486,7 @@ router.get('/check-email/:email', async (req: Request, res: Response<ApiResponse
 
     // 1. Supabase Auth에서 사용자 확인
     const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-    
+
     if (authError) {
       console.error('Supabase Auth 사용자 조회 오류:', authError);
       return res.status(500).json({
@@ -438,7 +496,7 @@ router.get('/check-email/:email', async (req: Request, res: Response<ApiResponse
     }
 
     // Supabase Auth에서 이메일로 사용자 찾기
-    const authUser = authUsers.users.find(user => 
+    const authUser = authUsers.users.find(user =>
       user.email?.toLowerCase() === email.toLowerCase()
     );
 
@@ -463,7 +521,7 @@ router.get('/check-email/:email', async (req: Request, res: Response<ApiResponse
 
     // 3. 결과 판단
     const exists = !!(authUser || dbUser);
-    
+
     console.log('최종 결과 - 이메일 존재:', exists);
 
     res.json({
@@ -488,7 +546,7 @@ router.get('/check-email/:email', async (req: Request, res: Response<ApiResponse
 router.get('/google', async (req: Request, res: Response) => {
   try {
     const dynamicConfig = getDynamicConfig(req);
-    
+
     // 프론트엔드에서 OAuth 처리 후 사용자 정보 확인하여 적절한 페이지로 이동
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -568,7 +626,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
     // 지갑 생성
     let address = '';
     let encryptedKey = '';
-    
+
     try {
       const { address: walletAddress, privateKey } = await bc.createUserWallet();
       address = walletAddress;
@@ -596,7 +654,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
     // 사용자가 없으면 데이터베이스에 사용자 정보 저장
     if (!existingUser) {
       needsSignupComplete = !name || !residentNumber;
-      
+
       const { error: dbInsertError } = await supabase
         .from('users')
         .insert([{
@@ -619,10 +677,10 @@ router.get('/google/callback', async (req: Request, res: Response) => {
       }
     } else {
       // 기존 사용자이지만 이름이나 주민번호가 없는 경우 signup/complete 필요
-      needsSignupComplete = !existingUser.name || 
-                           !existingUser.resident_number_encrypted || 
-                           existingUser.resident_number_encrypted === 'not_provided' ||
-                           existingUser.name.trim() === '';
+      needsSignupComplete = !existingUser.name ||
+        !existingUser.resident_number_encrypted ||
+        existingUser.resident_number_encrypted === 'not_provided' ||
+        existingUser.name.trim() === '';
     }
 
     // 리다이렉트 결정
@@ -763,7 +821,7 @@ router.post('/google-user', async (req: Request, res: Response<ApiResponse>) => 
     // 지갑 생성
     let address = '';
     let encryptedKey = '';
-    
+
     try {
       const { address: walletAddress, privateKey } = await bc.createUserWallet();
       address = walletAddress;
@@ -830,32 +888,32 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
     console.log('=== 이메일 인증 확인 시작 ===');
     console.log('Query parameters:', req.query);
     console.log('Headers:', req.headers);
-    
+
     const dynamicConfig = getDynamicConfig(req);
     const { token_hash, type, already_verified } = req.query;
-    
+
     console.log('Token hash:', token_hash);
     console.log('Type:', type);
     console.log('Already verified:', already_verified);
-    
+
     // 이미 인증된 경우 (access_token이 전달된 경우)
     if (already_verified === 'true' && token_hash) {
       console.log('이미 인증된 사용자 처리 시작...');
-      
+
       // access_token으로 사용자 정보 조회
       const { data: { user }, error: authError } = await supabase.auth.getUser(token_hash as string);
-      
+
       if (authError || !user) {
         console.error('이미 인증된 사용자 정보 조회 오류:', authError);
         return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=user_not_found`);
       }
-      
+
       console.log('이미 인증된 사용자 발견:', user.id);
-      
+
       // 사용자 메타데이터에서 정보 추출
       const userMetadata = user.user_metadata;
       console.log('사용자 메타데이터:', userMetadata);
-      
+
       const name = userMetadata?.name || '';
       const residentNumber = userMetadata?.resident_number || '';
       const passwordHash = userMetadata?.password_hash || 'email_signup'; // 기본값을 email_signup으로 설정
@@ -878,7 +936,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
       // 지갑 생성
       let address = '';
       let encryptedKey = '';
-      
+
       try {
         const { address: walletAddress, privateKey } = await bc.createUserWallet();
         address = walletAddress;
@@ -937,7 +995,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
       res.redirect(`${dynamicConfig.FRONTEND_URL}/login?message=email_confirmed`);
       return;
     }
-    
+
     if (!token_hash || type !== 'signup') {
       console.log('토큰 해시 또는 타입이 유효하지 않음');
       return res.redirect(`${dynamicConfig.FRONTEND_URL}/login?error=invalid_confirmation`);
@@ -965,7 +1023,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
     // 사용자 메타데이터에서 정보 추출
     const userMetadata = data.user.user_metadata;
     console.log('사용자 메타데이터:', userMetadata);
-    
+
     const name = userMetadata?.name || '';
     const residentNumber = userMetadata?.resident_number || '';
     const passwordHash = userMetadata?.password_hash || 'email_signup'; // 기본값을 email_signup으로 설정
@@ -987,7 +1045,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
     // 지갑 생성
     let address = '';
     let encryptedKey = '';
-    
+
     try {
       const { address: walletAddress, privateKey } = await bc.createUserWallet();
       address = walletAddress;
@@ -1076,13 +1134,13 @@ router.post('/validate-email', async (req: Request, res: Response<ApiResponse>) 
       process.env.MAILBOXLAYER_API_KEY2,
       process.env.MAILBOXLAYER_API_KEY3
     ];
-    
+
     let mailboxRes, mailboxError;
     for (let i = 0; i < mailboxlayerApiKeys.length; i++) {
       if (!mailboxlayerApiKeys[i]) continue;
-      
+
       console.log(`API 키 ${i + 1} 사용:`, mailboxlayerApiKeys[i]);
-      
+
       try {
         const mailboxlayerUrl = `http://apilayer.net/api/check?access_key=${mailboxlayerApiKeys[i]}&email=${encodeURIComponent(email.trim())}&smtp=1&format=1`;
         mailboxRes = await axios.get(mailboxlayerUrl);
@@ -1104,13 +1162,13 @@ router.post('/validate-email', async (req: Request, res: Response<ApiResponse>) 
     }
 
     const { format_valid, smtp_check, mx_found } = mailboxRes.data;
-    
+
     if (!format_valid || !smtp_check || !mx_found) {
       return res.status(200).json({
         success: true,
-        data: { 
-          valid: false, 
-          message: '유효하지 않은 이메일 주소입니다. 올바른 이메일을 입력해주세요.' 
+        data: {
+          valid: false,
+          message: '유효하지 않은 이메일 주소입니다. 올바른 이메일을 입력해주세요.'
         }
       });
     }
