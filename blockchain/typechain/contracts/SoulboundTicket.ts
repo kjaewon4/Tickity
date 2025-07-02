@@ -91,7 +91,7 @@ export interface SoulboundTicketInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "hasMintedForConcert",
-    values: [AddressLike, BigNumberish]
+    values: [AddressLike, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "isApprovedForAll",
@@ -111,7 +111,7 @@ export interface SoulboundTicketInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "mintTicket",
-    values: [BigNumberish, string, string, BigNumberish]
+    values: [BytesLike, string, string, BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
   encodeFunctionData(
@@ -401,7 +401,7 @@ export interface SoulboundTicket extends BaseContract {
   getApproved: TypedContractMethod<[tokenId: BigNumberish], [string], "view">;
 
   hasMintedForConcert: TypedContractMethod<
-    [arg0: AddressLike, arg1: BigNumberish],
+    [arg0: AddressLike, arg1: BytesLike],
     [boolean],
     "view"
   >;
@@ -428,7 +428,7 @@ export interface SoulboundTicket extends BaseContract {
 
   mintTicket: TypedContractMethod<
     [
-      concertId: BigNumberish,
+      concertId: BytesLike,
       seatNumber: string,
       uri: string,
       price: BigNumberish
@@ -488,8 +488,8 @@ export interface SoulboundTicket extends BaseContract {
   tickets: TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [bigint, string, bigint, bigint, boolean, boolean, string] & {
-        concertId: bigint;
+      [string, string, bigint, bigint, boolean, boolean, string] & {
+        concertId: string;
         seatNumber: string;
         issuedAt: bigint;
         price: bigint;
@@ -544,7 +544,7 @@ export interface SoulboundTicket extends BaseContract {
   getFunction(
     nameOrSignature: "hasMintedForConcert"
   ): TypedContractMethod<
-    [arg0: AddressLike, arg1: BigNumberish],
+    [arg0: AddressLike, arg1: BytesLike],
     [boolean],
     "view"
   >;
@@ -568,7 +568,7 @@ export interface SoulboundTicket extends BaseContract {
     nameOrSignature: "mintTicket"
   ): TypedContractMethod<
     [
-      concertId: BigNumberish,
+      concertId: BytesLike,
       seatNumber: string,
       uri: string,
       price: BigNumberish
@@ -629,8 +629,8 @@ export interface SoulboundTicket extends BaseContract {
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [bigint, string, bigint, bigint, boolean, boolean, string] & {
-        concertId: bigint;
+      [string, string, bigint, bigint, boolean, boolean, string] & {
+        concertId: string;
         seatNumber: string;
         issuedAt: bigint;
         price: bigint;

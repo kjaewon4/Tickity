@@ -2,7 +2,7 @@
 
 import dotenv from 'dotenv';
 import path   from 'path';
-import { Wallet, Contract, JsonRpcProvider, parseEther, parseUnits } from 'ethers';
+import { Wallet, Contract, JsonRpcProvider, parseEther, parseUnits, Log } from 'ethers';
 import { supabase } from '../lib/supabaseClient';
 import { decrypt }   from '../utils/encryption';
 import TicketArtifact from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
@@ -17,11 +17,12 @@ const PROVIDER = new JsonRpcProvider(RPC_URL);
 const ADMIN_KEY = process.env.ADMIN_PRIVATE_KEY!;
 if (!ADMIN_KEY) throw new Error('ADMIN_PRIVATE_KEY가 없습니다');
 const adminWallet = new Wallet(ADMIN_KEY, PROVIDER);
-const FUND_AMOUNT  = '1.0';                               // 새 지갑에 충전할 ETH (예: 0.1 ETH)
+const FUND_AMOUNT  = '2.0';                               // 새 지갑에 충전할 ETH (예: 0.1 ETH)
 
 // const price = parseEther(priceEth);  // 예: "0.0325" → 32500000000000000n
 const maxFeePerGas = parseUnits('2.5', 'gwei');         // 2500000000n
 const maxPriorityFeePerGas = parseUnits('1.5', 'gwei'); // 1500000000n
+
 
 export class BlockchainService {
   private contract: Contract;
@@ -55,61 +56,90 @@ export class BlockchainService {
   /**
    * 서버에서 티켓 민팅
    */
+
   async mintTicket(
     userId: string,
-    concertId: number,
+    concertId: string,
     seat: string,
     uri: string,
     priceEth: string
   ): Promise<{ txHash: string; tokenId: number }> {
-
-    
-    // 1. 사용자 키 조회
     const { data: userData, error: userErr } = await supabase
       .from('users')
       .select('wallet_address, private_key_encrypted')
       .eq('id', userId)
       .single();
+
     if (userErr) throw new Error(`DB 조회 실패: ${userErr.message}`);
     if (!userData?.private_key_encrypted) throw new Error('사용자 키 정보 없음');
 
-    console.log('🔐 Encrypted Key:', userData.private_key_encrypted);
-
-    // 2. 개인키 복호화
     const privateKey = decrypt(userData.private_key_encrypted);
-    console.log('🔓 Decrypted Key:', privateKey);
-
-
-    // 3. 서명자 지갑 연결
     const signer = new Wallet(privateKey, PROVIDER);
-    const contractWithSigner = this.contract.connect(signer) as any;
-
-    // 4. 트랜잭션 실행
+    const contractWithSigner = this.contract.connect(signer);
     const price = parseEther(priceEth);
-    const tx = await contractWithSigner.mintTicket(
-      concertId,
-      seat,
-      uri,
-      price,
-      { value: price,
-        gasLimit: 300000n,                            // 적절한 가스 리밋 수동 설정
-        maxFeePerGas,     // EIP-1559 수수료 수동 설정
-        maxPriorityFeePerGas 
+
+    try {
+      const tx = await contractWithSigner.mintTicket(
+        concertId,
+        seat,
+        uri,
+        price,
+        {
+          value: price,
+          gasLimit: 800_000n,
+          maxFeePerGas,
+          maxPriorityFeePerGas,
+        }
+      );
+      const receipt = await tx.wait();
+      console.log('📦 receipt.events:', JSON.stringify(receipt?.events, null, 2));
+
+      let tokenId: number | undefined = undefined;
+      for (const log of receipt.logs as Log[]) {
+        try {
+          const parsed = this.contract.interface.parseLog(log);
+          console.log('✅ Parsed log:', parsed);
+          if (parsed?.name === 'Transfer') {
+            const idRaw = parsed.args?.[2];
+            tokenId = Number(idRaw); // BigInt이든 number이든 변환됨
+            break;
+          }
+
+        } catch (err) {
+          console.log('❌ Failed to parse log:', log);
+          continue;
+        }
       }
-    );
-    const receipt = await tx.wait();
-    console.log("💸 price (wei):", price.toString());
 
-    // 5. 토큰 ID 추출 (첫 번째 이벤트 로그에서)
-    // 민팅된 티켓이 몇 번 토큰인지 기록해야 나중에 티켓 검증, 조회, 얼굴 인증 등에 사용
-    const tokenId =
-      receipt?.events?.find((e:any) => e.event === 'Transfer')?.args?.tokenId?.toNumber?.() ??
-      -1;
+      if (tokenId === undefined) {
+        throw new Error('토큰 ID를 추출하지 못했습니다.');
+      }
 
-    return {
-      txHash: tx.hash,
-      tokenId,
-    };
+      return {
+        txHash: tx.hash,
+        tokenId,
+      };
+
+    } catch (err) {
+      console.error('🧨 민팅 실패! 메타데이터 및 DB 롤백 시도');
+
+      // 🧹 메타데이터 및 DB 정리
+      const ticketId = uri.split('/').pop()?.replace('.json', ''); // URI에서 ID 추출
+      if (ticketId) {
+        // 메타데이터 삭제
+        await supabase.storage
+          .from('metadata')
+          .remove([`tickets/${ticketId}.json`]);
+
+        // DB 레코드 삭제
+        await supabase
+          .from('tickets')
+          .delete()
+          .eq('id', ticketId);
+      }
+
+      throw err; // 에러 다시 던져서 controller에 알려줌
+    }
   }
 
 }

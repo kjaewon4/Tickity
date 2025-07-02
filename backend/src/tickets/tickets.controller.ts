@@ -5,6 +5,7 @@ import { generateMetadataForTicket } from './metadata.service';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { ApiResponse } from '../types/auth';
 import { supabase } from '../lib/supabaseClient';
+import { keccak256, toUtf8Bytes } from 'ethers';
 
 const router = Router();
 const blockchain = new BlockchainService();
@@ -66,9 +67,13 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
       .single();
 
 
-    if (seatError || !seat) {
-      throw new Error('존재하지 않는 좌석입니다.');
+    if (!seat) {
+      return res.status(404).json({ success: false, error: '해당 좌표에 좌석이 없습니다.' });
     }
+    if (seatError) {
+      return res.status(500).json({ success: false, error: `좌석 조회 오류: ${(seatError as any).message}` });
+    }
+
 
     const seatId = seat.id;
 
@@ -85,14 +90,25 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
     // 2. 메타데이터 생성 → Supabase Storage 업로드
     const metadataURI = await generateMetadataForTicket(ticket.id);
 
+    // 원화 → ETH 변환 (toFixed로 지수 표기 방지), 1 ETH = 4,000,000원 기준
+    const ethPerWon = 1 / 4_000_000;
+    const ethAmount = (price * ethPerWon).toFixed(6); // 소수점 6자리 제한 (지수 표기 방지) 예: "0.033025"
+
+    const concertHash = keccak256(toUtf8Bytes(concertId)); // bytes32 변환
+
     // 3. NFT 민팅 실행 (seatNumber는 on-chain에 저장됨)
     const { tokenId, txHash } = await blockchain.mintTicket(
       userId,
-      Number(concertId),
+      concertHash,
       seatNumber,
       metadataURI,
-      (price / 1e18).toString() // Ether 단위 문자열
+      ethAmount // 지수 표기 제거된 string
     );
+
+
+    if (tokenId === -1) {
+      throw new Error('토큰 ID를 추출하지 못했습니다.');
+    }
 
     // 4. 민팅 결과 DB에 업데이트
     await ticketsService.updateTicketMintInfo(ticket.id, tokenId, txHash);

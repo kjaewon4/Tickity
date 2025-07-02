@@ -16,7 +16,7 @@ contract SoulboundTicket is ERC721, Ownable {
 
     /// @notice 티켓 정보 구조체
     struct Ticket {
-        uint256 concertId;
+        bytes32 concertId;
         string  seatNumber;
         uint256 issuedAt;
         uint256 price;           // 실제 보관된 금액 (msg.value - fee)
@@ -28,7 +28,7 @@ contract SoulboundTicket is ERC721, Ownable {
     /// @notice 토큰ID → Ticket
     mapping(uint256 => Ticket) public tickets;
     /// @notice (사용자 주소, 공연ID) 쌍으로 중복 mint 방지
-    mapping(address => mapping(uint256 => bool)) public hasMintedForConcert;
+    mapping(address => mapping(bytes32 => bool)) public hasMintedForConcert;
     /// @notice 토큰ID → tokenURI
     mapping(uint256 => string) private _tokenURIs;
 
@@ -46,7 +46,7 @@ contract SoulboundTicket is ERC721, Ownable {
     /// @param uri         메타데이터 URI
     /// @param price       백엔드에서 전달한 티켓 가격 (msg.value 와 동일해야 함)
     function mintTicket(
-        uint256 concertId,
+        bytes32 concertId,
         string calldata seatNumber,
         string calldata uri,
         uint256 price
