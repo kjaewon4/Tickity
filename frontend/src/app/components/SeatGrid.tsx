@@ -3,6 +3,7 @@
 import { FC, useEffect, useState } from 'react';
 
 interface Seat {
+  id: string;
   row: number;
   col: number;
   status: 'available' | 'sold' | 'hold';
@@ -12,7 +13,7 @@ interface Seat {
 interface SeatGridProps {
   concertId: string;
   sectionId: string;
-  onSeatSelect?: (info: string) => void;
+  onSeatSelect?: (info: string, sectionId: string, seatId: string) => void;
 }
 
 const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => {
@@ -56,8 +57,9 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
     if (!seat || seat.status === 'sold') return;
 
     const seatKey = `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`;
+    const seatInfo = `${floor} ${seatKey}`;
     setSelectedSeat(seatKey);
-    if (onSeatSelect) onSeatSelect(`${floor} ${seatKey}`);
+    if (onSeatSelect) onSeatSelect(seatInfo, sectionId, seat.id);
   };
 
   let visualRowNumber = 1;
