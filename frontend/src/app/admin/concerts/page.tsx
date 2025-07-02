@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createSeoConcertUrl } from '@/utils/urlUtils';
+import AuthGuard from '@/app/components/AuthGuard';
 
 interface Venue {
   id: string;
@@ -37,101 +38,41 @@ export default function AdminConcertsPage() {
   const [concerts, setConcerts] = useState<Concert[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
 
-  // 로그인 상태 및 권한 확인
+  // 콘서트 목록 로드
   useEffect(() => {
-    const checkAuthAndPermission = async () => {
-      try {
-        setAuthLoading(true);
-        const accessToken = localStorage.getItem('accessToken');
-        
-        if (!accessToken) {
-          setIsLoggedIn(false);
-          setIsAdmin(false);
-          return;
-        }
-
-        // 사용자 정보 조회 및 권한 확인을 한 번에 처리
-        const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/user`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (!userResponse.ok) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          setIsLoggedIn(false);
-          setIsAdmin(false);
-          return;
-        }
-
-        const userData = await userResponse.json();
-        
-        if (userData.success && userData.data?.user) {
-          setIsLoggedIn(true);
-          
-          // 관리자 권한 확인
-          const adminAddress = '0x030fd25c452078627Db888f8B22aF1c0fEcDCf97';
-          const userWalletAddress = userData.data.user.walletAddress;
-          
-          if (userWalletAddress?.toLowerCase() === adminAddress.toLowerCase()) {
-            setIsAdmin(true);
-            // 권한이 있으면 바로 콘서트 목록 로드
-            loadConcerts();
-          } else {
-            setIsAdmin(false);
-          }
-        } else {
-          setIsLoggedIn(false);
-          setIsAdmin(false);
-        }
-      } catch (error) {
-        console.error('인증 상태 확인 오류:', error);
-        setIsLoggedIn(false);
-        setIsAdmin(false);
-      } finally {
-        setAuthLoading(false);
-      }
-    };
-
-    // 콘서트 목록 로드 함수
-    const loadConcerts = async () => {
-      try {
-        setLoading(true);
-        const accessToken = localStorage.getItem('accessToken');
-        
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/admin`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('콘서트 목록을 불러오는데 실패했습니다.');
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.data) {
-          const concerts = data.data.concerts || data.data || [];
-          setConcerts(concerts);
-        }
-      } catch (error) {
-        console.error('콘서트 목록 로드 실패:', error);
-        alert('콘서트 목록을 불러오는데 실패했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAuthAndPermission();
+    loadConcerts();
   }, []);
+
+  const loadConcerts = async () => {
+    try {
+      setLoading(true);
+      const accessToken = localStorage.getItem('accessToken');
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/admin`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('콘서트 목록을 불러오는데 실패했습니다.');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        const concerts = data.data.concerts || data.data || [];
+        setConcerts(concerts);
+      }
+    } catch (error) {
+      console.error('콘서트 목록 로드 실패:', error);
+      alert('콘서트 목록을 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 콘서트 삭제
   const handleDelete = async (concertId: string, title: string) => {
@@ -201,59 +142,11 @@ export default function AdminConcertsPage() {
     return `${fromDate.toLocaleDateString('ko-KR')} ~ ${toDate.toLocaleDateString('ko-KR')}`;
   };
 
-  // 인증 로딩 중
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">관리자 권한을 확인하는 중...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 로그인 안됨
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">로그인이 필요합니다</h1>
-          <p className="text-gray-600 mb-6">관리자 페이지에 접근하려면 로그인해주세요.</p>
-          <button
-            onClick={() => router.push('/login')}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            로그인하기
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 관리자 권한 없음
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">접근 권한이 없습니다</h1>
-          <p className="text-gray-600 mb-6">관리자 권한이 필요한 페이지입니다.</p>
-          <button
-            onClick={() => router.push('/')}
-            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-          >
-            홈으로 돌아가기
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 콘서트 목록 로딩 중
-  if (loading) {
-    return (
+  return (
+    <AuthGuard adminOnly={true}>
       <div className="min-h-screen bg-gray-50 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* 헤더 */}
           <div className="bg-white shadow rounded-lg mb-6">
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex justify-between items-center">
@@ -269,211 +162,180 @@ export default function AdminConcertsPage() {
                 </Link>
               </div>
             </div>
-          </div>
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="px-6 py-12 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">콘서트 목록을 불러오는 중...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* 헤더 */}
-        <div className="bg-white shadow rounded-lg mb-6">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">콘서트 관리</h1>
-                <p className="mt-1 text-sm text-gray-600">등록된 콘서트 목록을 관리합니다</p>
+            {/* 검색 */}
+            <div className="px-6 py-4">
+              <div className="max-w-md">
+                <input
+                  type="text"
+                  placeholder="콘서트 제목 또는 아티스트 검색..."
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
-              <Link
-                href="/admin/concert-create"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                새 콘서트 등록
-              </Link>
             </div>
           </div>
 
-          {/* 검색 */}
-          <div className="px-6 py-4">
-            <div className="max-w-md">
-              <input
-                type="text"
-                placeholder="콘서트 제목 또는 아티스트 검색..."
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+          {/* 콘서트 목록 */}
+          <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">
+                전체 콘서트 ({filteredConcerts.length}개)
+              </h2>
             </div>
-          </div>
-        </div>
 
-        {/* 콘서트 목록 */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">
-              전체 콘서트 ({filteredConcerts.length}개)
-            </h2>
-          </div>
+            {loading ? (
+              <div className="px-6 py-12 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">콘서트 목록을 불러오는 중...</p>
+              </div>
+            ) : filteredConcerts.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <p className="text-gray-500">
+                  {searchKeyword ? '검색 결과가 없습니다.' : '등록된 콘서트가 없습니다.'}
+                </p>
+                {!searchKeyword && (
+                  <Link
+                    href="/admin/concert-create"
+                    className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                  >
+                    첫 번째 콘서트 등록하기
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        콘서트 정보
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        공연 일시
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        공연장
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        예매 기간
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        상태
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        관리
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredConcerts.map((concert) => {
+                      const now = new Date();
+                      const validFrom = new Date(concert.valid_from);
+                      const validTo = new Date(concert.valid_to);
+                      const concertDate = new Date(concert.start_date);
+                      
+                      let status = '';
+                      let statusColor = '';
+                      
+                      // 날짜가 유효하지 않으면 상태를 미정으로 표시
+                      if (isNaN(validFrom.getTime()) || isNaN(validTo.getTime()) || isNaN(concertDate.getTime())) {
+                        status = '상태 미정';
+                        statusColor = 'text-gray-600 bg-gray-100';
+                      } else if (now < validFrom) {
+                        status = '예매 대기';
+                        statusColor = 'text-yellow-600 bg-yellow-100';
+                      } else if (now >= validFrom && now <= validTo) {
+                        status = '예매 중';
+                        statusColor = 'text-green-600 bg-green-100';
+                      } else if (now > validTo && now < concertDate) {
+                        status = '예매 종료';
+                        statusColor = 'text-red-600 bg-red-100';
+                      } else {
+                        status = '공연 완료';
+                        statusColor = 'text-gray-600 bg-gray-100';
+                      }
 
-          {filteredConcerts.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <p className="text-gray-500">
-                {searchKeyword ? '검색 결과가 없습니다.' : '등록된 콘서트가 없습니다.'}
-              </p>
-              {!searchKeyword && (
-                <Link
-                  href="/admin/concert-create"
-                  className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                >
-                  첫 번째 콘서트 등록하기
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      콘서트 정보
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      공연 일시
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      공연장
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      예매 기간
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      상태
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      관리
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredConcerts.map((concert) => {
-                    const now = new Date();
-                    const validFrom = new Date(concert.valid_from);
-                    const validTo = new Date(concert.valid_to);
-                    const concertDate = new Date(concert.start_date);
-                    
-                    let status = '';
-                    let statusColor = '';
-                    
-                    // 날짜가 유효하지 않으면 상태를 미정으로 표시
-                    if (isNaN(validFrom.getTime()) || isNaN(validTo.getTime()) || isNaN(concertDate.getTime())) {
-                      status = '상태 미정';
-                      statusColor = 'text-gray-600 bg-gray-100';
-                    } else if (now < validFrom) {
-                      status = '예매 대기';
-                      statusColor = 'text-yellow-600 bg-yellow-100';
-                    } else if (now >= validFrom && now <= validTo) {
-                      status = '예매 중';
-                      statusColor = 'text-green-600 bg-green-100';
-                    } else if (now > validTo && now < concertDate) {
-                      status = '예매 종료';
-                      statusColor = 'text-red-600 bg-red-100';
-                    } else {
-                      status = '공연 완료';
-                      statusColor = 'text-gray-600 bg-gray-100';
-                    }
-
-                    return (
-                      <tr key={concert.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            {concert.poster_url && (
-                              <div className="flex-shrink-0 h-10 w-10 relative">
-                                <Image
-                                  className="h-10 w-10 rounded object-cover"
-                                  src={concert.poster_url}
-                                  alt={concert.title}
-                                  width={40}
-                                  height={40}
-                                  unoptimized={true}
-                                />
+                      return (
+                        <tr key={concert.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              {concert.poster_url && (
+                                <div className="flex-shrink-0 h-10 w-10 relative">
+                                  <Image
+                                    className="h-10 w-10 rounded object-cover"
+                                    src={concert.poster_url}
+                                    alt={concert.title}
+                                    width={40}
+                                    height={40}
+                                    unoptimized={true}
+                                  />
+                                </div>
+                              )}
+                              <div className={concert.poster_url ? "ml-4" : ""}>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {concert.title}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {concert.main_performer}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  {concert.category} • {concert.age_rating}
+                                </div>
                               </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div>{formatDate(concert.start_date)}</div>
+                            <div className="text-xs text-gray-500">
+                              {concert.start_time} • {concert.round}회차
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {concert.venues ? (
+                              <div>
+                                <div className="font-medium">{concert.venues.name}</div>
+                                <div className="text-xs text-gray-500">{concert.venues.address}</div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">장소 미정</span>
                             )}
-                            <div className={concert.poster_url ? "ml-4" : ""}>
-                              <div className="text-sm font-medium text-gray-900">
-                                {concert.title}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {concert.main_performer}
-                              </div>
-                              <div className="text-xs text-gray-400">
-                                {concert.category} • {concert.age_rating}
-                              </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatPeriod(concert.valid_from, concert.valid_to)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                              {status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex justify-end space-x-2">
+                              <Link
+                                href={createSeoConcertUrl(concert.title, concert.id)}
+                                className="text-blue-600 hover:text-blue-900"
+                              >
+                                보기
+                              </Link>
+                              <button
+                                onClick={() => handleDelete(concert.id, concert.title)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                삭제
+                              </button>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div>{formatDate(concert.start_date)}</div>
-                          <div className="text-xs text-gray-500">
-                            {concert.start_time} • {concert.round}회차
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {concert.venues ? (
-                            <div>
-                              <div className="font-medium">{concert.venues.name}</div>
-                              <div className="text-xs text-gray-500">{concert.venues.address}</div>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400">장소 미정</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatPeriod(concert.valid_from, concert.valid_to)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
-                            {status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex justify-end space-x-2">
-                            <Link
-                              href={createSeoConcertUrl(concert.title, concert.id)}
-                              className="text-indigo-600 hover:text-indigo-900"
-                            >
-                              보기
-                            </Link>
-                            <Link
-                              href={`/admin/concerts/${concert.id}/edit`}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              수정
-                            </Link>
-                            <button
-                              onClick={() => handleDelete(concert.id, concert.title)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              삭제
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </AuthGuard>
   );
 } 
