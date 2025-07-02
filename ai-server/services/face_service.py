@@ -97,3 +97,16 @@ async def verify_user_identity(user_id: str, live: UploadFile, idcard: UploadFil
         "similarity_face": round(sim_face, 4),
         "similarity_id": round(sim_id, 4)
     }
+async def register_user_face(file: UploadFile):
+    video_bytes = await file.read()
+    embedding = extract_embedding_from_video(video_bytes)
+    
+    if embedding is None:
+        raise HTTPException(status_code=400, detail="❌ 얼굴을 감지하지 못했습니다.")
+    
+    # 프론트엔드로 임베딩 배열을 반환
+    return {
+        "message": "✅ 얼굴 등록 완료",
+        "embedding_shape": f"{len(embedding)} 차원",
+        "embedding": embedding.tolist()
+    }
