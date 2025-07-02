@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { createSeoConcertUrl } from '@/utils/urlUtils';
 import AuthGuard from '@/app/components/AuthGuard';
+import LazyImage from '@/components/LazyImage';
 
 interface Venue {
   id: string;
@@ -263,13 +263,15 @@ export default function AdminConcertsPage() {
                             <div className="flex items-center">
                               {concert.poster_url && (
                                 <div className="flex-shrink-0 h-10 w-10 relative">
-                                  <Image
+                                  <LazyImage
                                     className="h-10 w-10 rounded object-cover"
                                     src={concert.poster_url}
                                     alt={concert.title}
                                     width={40}
                                     height={40}
-                                    unoptimized={true}
+                                    quality={50}
+                                    priority={false}
+                                    imageSize="thumbnail"
                                   />
                                 </div>
                               )}
