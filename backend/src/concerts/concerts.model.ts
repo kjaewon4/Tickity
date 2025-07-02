@@ -1,7 +1,9 @@
 export interface Concert {
   id: string;
   title: string;
-  date: string;
+  date?: string; // 선택적 필드로 변경 - 하위 호환성을 위해 유지
+  start_date: string; // 공연 시작 날짜 (YYYY-MM-DD 형태)
+  start_time: string; // 공연 시작 시간 (HH:mm 형태)
   venue_id: string;
   poster_url?: string;
   created_at: string;
@@ -13,8 +15,8 @@ export interface Concert {
   main_performer: string;
   booking_fee: number;
   shipping_note: string;
-  valid_from: string;
-  valid_to: string;
+  valid_from: string; // 예매 시작일 (ISO 8601 date 형태: YYYY-MM-DD)
+  valid_to: string; // 예매 종료일 (ISO 8601 date 형태: YYYY-MM-DD)
   mobile_ticket_supported: boolean;
   android_min_version: string;
   ios_min_version: string;
@@ -26,8 +28,6 @@ export interface Concert {
   seller_contact: string;
   seller_address: string;
   category: string;
-  start_date?: string;
-  start_time?: string;
   round?: number;
-  ticket_open_at?: string;
+  ticket_open_at?: string; // 티켓 오픈 시간 (ISO 8601 형태: YYYY-MM-DDTHH:mm:ss.sssZ)
 } 
