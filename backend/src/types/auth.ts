@@ -4,8 +4,6 @@ export interface SignupRequest {
   password: string;
   name: string;
   resident_number: string;  // ✅ 이 줄 추가
-  embedding?: number[];     // ✅ embedding도 같이 정의 (optional) 
-  temp_id?: string;       // 👈 추가
 }
 
 // 로그인 요청 타입
@@ -37,4 +35,5 @@ export interface AuthResponse {
   user: UserInfo;
   accessToken: string;
   refreshToken: string;
+  hasEmbedding?: boolean; // ✅ 추가
 } 
