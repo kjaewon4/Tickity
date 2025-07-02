@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { createSeoConcertUrl } from '@/utils/urlUtils';
+import LazyImage from '@/components/LazyImage';
+import { isValidImageUrl } from '@/utils/imageOptimization';
 
 interface Concert {
   id: string;
@@ -84,10 +85,6 @@ export default function SearchPage() {
   };
 
   const categories = ['전체', '여자아이돌', '남자아이돌', '솔로 가수', '내한공연', '랩/힙합'];
-
-  const isValidImageUrl = (url: string): boolean => {
-    return Boolean(url && url.startsWith('http'));
-  };
 
   const formatStartDate = (dateString: string): string => {
     if (!dateString) return '날짜 미정';
@@ -188,7 +185,7 @@ export default function SearchPage() {
                       className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
                     >
                       <div className="relative h-48">
-                        <Image
+                        <LazyImage
                           src={
                             concert.poster_url &&
                             concert.poster_url.trim() !== '' &&
@@ -199,6 +196,9 @@ export default function SearchPage() {
                           alt={concert.title}
                           fill
                           className="object-cover"
+                          quality={70}
+                          priority={false}
+                          imageSize="small"
                         />
                       </div>
                       <div className="p-4">

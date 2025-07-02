@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Slider from "react-slick";
-import Image from "next/image";
 import { apiClient } from "@/lib/apiClient";
 import { UserInfo } from "@/types/auth";
 import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
@@ -11,6 +10,8 @@ import 'slick-carousel/slick/slick-theme.css';
 import { useRouter } from "next/navigation";
 import ChatbotModal from "./layout/ChatbotModal";
 import { createSimpleConcertUrl, createSeoConcertUrl } from "@/utils/urlUtils";
+import LazyImage from "@/components/LazyImage";
+import { isValidImageUrl } from "@/utils/imageOptimization";
 
 interface Concert {
   id: string;
@@ -33,20 +34,6 @@ const formatStartDate = (dateStr: string): string => {
   }
   
   return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
-};
-
-// 이미지 URL 검증 함수 추가
-const isValidImageUrl = (url: string): boolean => {
-  if (!url || url.trim() === '') return false;
-  
-  // example.com이나 유효하지 않은 도메인 필터링
-  const invalidDomains = ['example.com', 'placeholder.com', 'dummy.com'];
-  try {
-    const urlObj = new URL(url);
-    return !invalidDomains.some(domain => urlObj.hostname.includes(domain));
-  } catch {
-    return false;
-  }
 };
 
 function SampleNextArrow({ onClick }: { onClick?: () => void }) {
@@ -181,12 +168,15 @@ export default function HomePage() {
         >
           <div className="w-[220px] h-[330px] rounded shadow overflow-hidden bg-white relative">
             {/* 포스터 이미지 전체 영역 차지 */}
-            <Image
+            <LazyImage
               src={concert.poster_url?.trim() !== '' ? concert.poster_url : '/images/default-poster.png'}
               alt={concert.title}
               fill
               sizes="220px"
               className="object-cover"
+              quality={70}
+              priority={true} // 슬라이더는 우선 로드
+              imageSize="small"
             />
 
             {/* 아래쪽 불투명 텍스트 오버레이 */}
@@ -236,7 +226,7 @@ export default function HomePage() {
           <div className="w-[220px]">
             {/* 이미지에만 테두리 */}
             <div className="w-full h-[320px] border border-gray-200 rounded-md overflow-hidden relative">
-              <Image
+              <LazyImage
                 src={
                   concert.poster_url &&
                   concert.poster_url.trim() !== '' &&
@@ -248,6 +238,9 @@ export default function HomePage() {
                 fill
                 sizes="220px"
                 className="object-cover"
+                quality={70}
+                priority={false} // 그리드는 레이지 로딩
+                imageSize="small"
               />
             </div>
 
