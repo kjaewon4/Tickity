@@ -182,14 +182,6 @@ export default function PaymentPage() {
               <span>{ticketPrice.toLocaleString()}원</span>
             </div>
             <div className="flex justify-between text-gray-500">
-              <span>가격할인</span>
-              <span>0원</span>
-            </div>
-            <div className="flex justify-between text-gray-500">
-              <span>쿠폰할인</span>
-              <span>0원</span>
-            </div>
-            <div className="flex justify-between text-gray-500">
               <span>공연예매권</span>
               <span>0원</span>
             </div>
