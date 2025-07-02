@@ -1,5 +1,8 @@
 import React from 'react';
 import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
+import { HiOutlineLocationMarker } from 'react-icons/hi';
+import { MdOutlineCalendarToday } from 'react-icons/md';
+import { LuClock } from 'react-icons/lu';
 import { TicketInfo } from '../types';
 import LazyImage from '@/components/LazyImage';
 
@@ -27,7 +30,7 @@ const ConcertHeader: React.FC<ConcertHeaderProps> = ({
             sizes="160px"
             className="object-cover rounded-lg"
             quality={70}
-            priority={true} // 상세페이지 메인 이미지는 우선 로드
+            priority={true}
             imageSize="small"
           />
         </div>
@@ -48,9 +51,18 @@ const ConcertHeader: React.FC<ConcertHeaderProps> = ({
           </div>
           <p className="text-sm text-gray-500">{ticketInfo.subtitle}</p>
           <div className="mt-3 space-y-1 text-sm text-gray-700">
-            <div>📍 {ticketInfo.location}</div>
-            <div>📅 {ticketInfo.dateRange}</div>
-            <div>⏱ {ticketInfo.runtime}</div>
+            <div className="flex items-center gap-2 text-gray-500">
+              <HiOutlineLocationMarker className="text-base" />
+              <span>{ticketInfo.location}</span>
+            </div>
+            <div className="flex items-center gap-2 text-gray-500">
+              <MdOutlineCalendarToday className="text-base" />
+              <span>{ticketInfo.dateRange}</span>
+            </div>
+            <div className="flex items-center gap-2 text-gray-500">
+              <LuClock className="text-base" />
+              <span>{ticketInfo.runtime}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -62,4 +74,4 @@ const ConcertHeader: React.FC<ConcertHeaderProps> = ({
   );
 };
 
-export default ConcertHeader; 
+export default ConcertHeader;

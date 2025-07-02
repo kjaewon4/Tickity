@@ -7,7 +7,7 @@ interface BookingBoxProps {
   onDateChange: (date: string) => void;
   onTimeChange: (time: string) => void;
   onReservation: () => void;
-  concert: Pick<Concert, 'start_date' | 'start_time'>;
+  concert: Pick<Concert, 'start_date' | 'start_time' | 'ticket_open_at'>;
   price: string;
   calendarDays: Array<number | null>;
 }
@@ -22,6 +22,23 @@ const BookingBox: React.FC<BookingBoxProps> = ({
   price,
   calendarDays
 }) => {
+  const now = new Date();
+  const ticketOpenAt = concert.ticket_open_at ? new Date(concert.ticket_open_at) : null;
+  const isBeforeOpen = ticketOpenAt ? now < ticketOpenAt : false;
+
+  // 예매일 텍스트: 무조건 YYYY년 M월 D일 HH:mm 형식
+  const renderOpenDate = () => {
+    if (!ticketOpenAt) return null;
+
+    const year = ticketOpenAt.getFullYear();
+    const month = ticketOpenAt.getMonth() + 1;
+    const date = ticketOpenAt.getDate();
+    const hours = String(ticketOpenAt.getHours()).padStart(2, '0');
+    const minutes = String(ticketOpenAt.getMinutes()).padStart(2, '0');
+
+    return `${year}년 ${month}월 ${date}일 ${hours}:${minutes} | 예정`;
+  };
+
   return (
     <div className="w-full lg:w-96 rounded-2xl p-6 shadow-md">
       <h3 className="text-base font-semibold mb-3">관람일 선택</h3>
@@ -40,7 +57,7 @@ const BookingBox: React.FC<BookingBoxProps> = ({
 
           const baseDate = new Date(concert.start_date);
           const year = baseDate.getFullYear();
-          const month = baseDate.getMonth() + 1; // 0-based → 1-based
+          const month = baseDate.getMonth() + 1;
           const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
           const isAvailable = date === concert.start_date;
@@ -86,14 +103,22 @@ const BookingBox: React.FC<BookingBoxProps> = ({
       <div className="text-sm font-medium mb-4">{selectedDate} {selectedTime}</div>
       <div className="text-sm font-semibold text-blue-600 mb-4">{price}</div>
 
-      <button
-        className="w-full bg-blue-600 text-white rounded-md py-3 font-semibold hover:bg-blue-700"
-        onClick={onReservation}
-      >
-        예약하기
-      </button>
+      {/* 예매 버튼 또는 예정 안내 */}
+      {isBeforeOpen ? (
+        <div className="w-full text-center text-sm text-gray-500 py-3 bg-gray-100 rounded-md">
+          {renderOpenDate()}
+        </div>
+      ) : (
+        <button
+          className="w-full bg-blue-600 text-white rounded-md py-3 font-semibold hover:bg-blue-700 disabled:bg-gray-300"
+          onClick={onReservation}
+          disabled={!selectedTime}
+        >
+          예약하기
+        </button>
+      )}
     </div>
   );
 };
 
-export default BookingBox; 
+export default BookingBox;
