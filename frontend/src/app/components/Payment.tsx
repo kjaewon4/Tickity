@@ -79,7 +79,7 @@ export default function Payment() {
       price,
     });
 
-    if (!concertId || !row || !col || !userId || !price) {
+    if (!concertId || row === undefined || col === undefined || !userId || !price) {
       alert('결제 정보가 부족합니다.');
       console.warn('누락된 필드:', {
       concertId,
