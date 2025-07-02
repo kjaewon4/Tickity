@@ -13,6 +13,7 @@ export interface Concert {
   booking_fee: number;
   valid_from: string;
   valid_to: string;
+  ticket_open_at: string;
   venues: {
     name: string;
     address: string;
