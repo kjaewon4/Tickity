@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { generateMetadataForTicket } from '../tickets/metadata.service';
+import { parseEther, keccak256, toUtf8Bytes } from 'ethers';
 
 dotenv.config();
 
@@ -9,6 +10,19 @@ const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+const ethPerWon = 1 / 4_000_000;
+
+/**
+ * 원화(KRW)를 Wei로 환산
+ * @param priceWon 원화 가격 (예: 130000)
+ * @param ethPerWon 환율 (1 ETH = 4,000,000원일 때 기본값은 1 / 4_000_000)
+ * @returns Wei 단위 BigInt
+ */
+function convertWonToWei(priceWon: number, ethPerWon = 1 / 4_000_000) {
+  const eth = priceWon * ethPerWon;
+  return parseEther(eth.toFixed(8)); // 소수점 8자리까지 고정 (ethers 내부적으로 정밀도 처리)
+}
 
 // 테스트용 콘서트 및 유저
 const CONCERT_ID = '551461cc-9a9b-416b-8fdb-eb2ecee020ba';
@@ -83,12 +97,23 @@ async function main() {
 
     // 5. NFT 민팅
     const blockchain = new BlockchainService();
+
+    // 💡 가격 환산 (130000원 → Wei)
+    const priceInWei = convertWonToWei(ticket.purchase_price);
+console.log('💰 구매 가격 (원):', ticket.purchase_price);
+console.log('💸 환산 ETH:', (ticket.purchase_price * ethPerWon).toFixed(8));
+console.log('📦 최종 value (Wei):', priceInWei.toString());
+
+
+// 예: 사용자가 얼굴 인증 안 했을 경우 임시 해시
+// const dummyHash = keccak256(toUtf8Bytes('default-face'));
+
     const { tokenId, txHash } = await blockchain.mintTicket(
       ticket.user_id,
       1, // 또는 실제 체인용 concert id 넘버
       ticket.seat_number,
       metadataURI,
-      ticket.purchase_price.toString()
+      (ticket.purchase_price * ethPerWon).toFixed(8), // ← ETH 단위 문자열
     );
 
     // 6. DB 업데이트

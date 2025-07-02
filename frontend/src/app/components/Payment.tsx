@@ -62,34 +62,42 @@ export default function Payment() {
 
   const handlePayment = async () => {
     const concertId = localStorage.getItem('concertId');
-    const seatId = localStorage.getItem('selectedSeatId');
+    const row = Number(localStorage.getItem('selectedRow'));
+    const col = Number(localStorage.getItem('selectedCol'));
+    const sectionId = localStorage.getItem('selectedZoneId');
     const seatNumber = selectedSeatInfo || '';
     const userId = user?.id;
     const price = ticketPrice + bookingFee; 
 
     console.log('결제 데이터 확인:', {
       concertId,
-      seatId,
+      sectionId,
+      row,
+      col,
       seatNumber,
       userId,
       price,
     });
 
-    if (!concertId || !seatId || !userId || !price) {
+    if (!concertId || !row || !col || !userId || !price) {
       alert('결제 정보가 부족합니다.');
       console.warn('누락된 필드:', {
-        concertId,
-        seatId,
-        seatNumber,
-        userId,
-        price,
+      concertId,
+      sectionId,
+      row,
+      col,
+      seatNumber,
+      userId,
+      price,
       });
       return;
     }
 
     const payload = {
       concertId,
-      seatId,
+      sectionId,
+      row,
+      col,
       seatNumber,
       userId,
       price: Number(price),

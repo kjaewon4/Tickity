@@ -9,7 +9,8 @@ import Payment from '../components/Payment';
 export default function SeatPage() {
   const [sectionId, setSectionId] = useState<string | null>(null);
   const [selectedSeatInfo, setSelectedSeatInfo] = useState<string | null>(null);
-  const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null); 
+  const [selectedRow, setSelectedRow] = useState<number | null>(null);
+  const [selectedCol, setSelectedCol] = useState<number | null>(null);
   const [isConfirmed, setIsConfirmed] = useState(false);
 
   const [concertId, setConcertId] = useState<string | null>(null);
@@ -38,10 +39,11 @@ export default function SeatPage() {
     if (sectionId) {
       localStorage.setItem('selectedZoneId', sectionId);
     }
-    if (selectedSeatId) {
-      localStorage.setItem('selectedSeatId', selectedSeatId);
+    if (selectedRow !== null && selectedCol !== null) {
+      localStorage.setItem('selectedRow', String(selectedRow));
+      localStorage.setItem('selectedCol', String(selectedCol));
     }
-  }, [selectedSeatInfo, sectionId, selectedSeatId]);
+  }, [selectedSeatInfo, sectionId, selectedRow, selectedCol]);
 
   // 상태 변경 로그
   useEffect(() => {
@@ -53,10 +55,17 @@ export default function SeatPage() {
     setSectionId(id);
   };
 
-  const handleSeatSelect = (seatInfo: string, seatId: string) => {
-    console.log('좌석 선택됨:', seatInfo, seatId);
+  const handleSeatSelect = (
+    seatInfo: string,
+    sectionId: string,
+    row: number,
+    column: number
+  ) => {
+    console.log('좌석 선택됨:', seatInfo, row, column);
     setSelectedSeatInfo(seatInfo);
-    setSelectedSeatId(seatId);
+    setSectionId(sectionId);
+    setSelectedRow(row);
+    setSelectedCol(column);
   };
 
   return (

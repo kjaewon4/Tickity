@@ -4,6 +4,7 @@ import * as ticketsService from './tickets.service';
 import { generateMetadataForTicket } from './metadata.service';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { ApiResponse } from '../types/auth';
+import { supabase } from '../lib/supabaseClient';
 
 const router = Router();
 const blockchain = new BlockchainService();
@@ -35,11 +36,41 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
   try {
     const {
       concertId,
-      seatId,
+      sectionId,
+      row,
+      col,
       userId,
       seatNumber,
-      price, // number 단위 (ex: 132000)
+      price,
     } = req.body;
+
+    // 입력값 검증
+    if (!concertId || !sectionId || row == null || col == null || !userId || !seatNumber || !price) {
+      return res.status(400).json({
+        success: false,
+        error: '필수 입력값이 누락되었습니다.',
+      });
+    }
+
+    console.log('🎟️ 티켓 생성 요청:', JSON.stringify(req.body, null, 2));
+
+    // 1. seats 테이블에서 seat_id 조회
+    const { data: seat, error: seatError } = await supabase
+      .from('seats') 
+      .select('id') 
+      .match({
+        section_id: sectionId,
+        row_idx: row,
+        col_idx: col,
+      })
+      .single();
+
+
+    if (seatError || !seat) {
+      throw new Error('존재하지 않는 좌석입니다.');
+    }
+
+    const seatId = seat.id;
 
     // 1. DB에 티켓 생성
     const ticket = await ticketsService.createTicket({

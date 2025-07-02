@@ -13,7 +13,12 @@ interface Seat {
 interface SeatGridProps {
   concertId: string;
   sectionId: string;
-  onSeatSelect?: (info: string, sectionId: string, seatId: string) => void;
+  onSeatSelect?: (
+    info: string,
+    sectionId: string,
+    row: number,
+    column: number
+  ) => void;
 }
 
 const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => {
@@ -59,7 +64,10 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
     const seatKey = `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`;
     const seatInfo = `${floor} ${seatKey}`;
     setSelectedSeat(seatKey);
-    if (onSeatSelect) onSeatSelect(seatInfo, sectionId, seat.id);
+
+    if (onSeatSelect) {
+      onSeatSelect(seatInfo, sectionId, rowIdx, colIdx); // rowIdx, colIdx 넘기기
+    }  
   };
 
   let visualRowNumber = 1;
