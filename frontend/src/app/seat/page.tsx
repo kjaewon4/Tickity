@@ -9,6 +9,7 @@ import Payment from '../components/Payment';
 export default function SeatPage() {
   const [sectionId, setSectionId] = useState<string | null>(null);
   const [selectedSeatInfo, setSelectedSeatInfo] = useState<string | null>(null);
+  const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null); 
   const [isConfirmed, setIsConfirmed] = useState(false);
 
   const [concertId, setConcertId] = useState<string | null>(null);
@@ -16,6 +17,7 @@ export default function SeatPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [concertTitle, setConcertTitle] = useState<string | null>(null);
+  const [bookingFee, setBookingFee] = useState<number>(0);
 
   useEffect(() => {
     setConcertId(localStorage.getItem('concertId'));
@@ -23,10 +25,38 @@ export default function SeatPage() {
     setSelectedDate(localStorage.getItem('selectedDate'));
     setSelectedTime(localStorage.getItem('selectedTime'));
     setConcertTitle(localStorage.getItem('concertTitle'));
+
+    const fee = localStorage.getItem('bookingFee');
+    setBookingFee(fee ? Number(fee) : 0);
   }, []);
 
+  // 로컬스토리지 저장
+  useEffect(() => {
+    if (selectedSeatInfo) {
+      localStorage.setItem('selectedSeatInfo', selectedSeatInfo);
+    }
+    if (sectionId) {
+      localStorage.setItem('selectedZoneId', sectionId);
+    }
+    if (selectedSeatId) {
+      localStorage.setItem('selectedSeatId', selectedSeatId);
+    }
+  }, [selectedSeatInfo, sectionId, selectedSeatId]);
+
+  // 상태 변경 로그
+  useEffect(() => {
+    console.log('isConfirmed 상태 변경됨:', isConfirmed);
+  }, [isConfirmed]);
+
   const handleSectionSelect = (id: string) => {
+    console.log('구역 선택됨:', id);
     setSectionId(id);
+  };
+
+  const handleSeatSelect = (seatInfo: string, seatId: string) => {
+    console.log('좌석 선택됨:', seatInfo, seatId);
+    setSelectedSeatInfo(seatInfo);
+    setSelectedSeatId(seatId);
   };
 
   return (
@@ -55,11 +85,9 @@ export default function SeatPage() {
               />
             ) : sectionId ? (
               <SeatGrid
-                concertId={concertId}
-                sectionId={sectionId}
-                selectedDate={selectedDate}
-                selectedTime={selectedTime}
-                onSeatSelect={setSelectedSeatInfo}
+                concertId={concertId!}
+                sectionId={sectionId!}
+                onSeatSelect={handleSeatSelect}
               />
             ) : (
               <SeatSelection
@@ -78,9 +106,16 @@ export default function SeatPage() {
               selectedDate={selectedDate}
               selectedTime={selectedTime}
               selectedSeatInfo={selectedSeatInfo ?? undefined}
-              onViewAll={() => setSectionId(null)}
+              selectedZone={sectionId}
+              onViewAll={() => {
+                console.log('전체보기 클릭됨');
+                setSectionId(null);
+              }}
               onSectionSelect={handleSectionSelect}
-              onConfirmSeat={() => setIsConfirmed(true)}
+              onConfirmSeat={() => {
+                console.log('좌석 선택 완료 버튼 클릭됨');
+                setIsConfirmed(true);
+              }}
             />
           </div>
         )}
