@@ -25,7 +25,8 @@ interface SeatPrice {
 
 interface ConcertFormData {
   title: string;
-  date: string;
+  start_date: string; // 공연 시작 날짜 (YYYY-MM-DD 형태)
+  start_time: string; // 공연 시작 시간 (HH:mm 형태)
   main_performer: string;
   organizer: string;
   promoter: string;
@@ -34,8 +35,8 @@ interface ConcertFormData {
   age_rating: string;
   booking_fee: number;
   shipping_note: string;
-  valid_from: string;
-  valid_to: string;
+  valid_from: string; // 예매 시작일 (YYYY-MM-DD 형태)
+  valid_to: string; // 예매 종료일 (YYYY-MM-DD 형태)
   seller_name: string;
   seller_rep: string;
   seller_reg_no: string;
@@ -45,10 +46,8 @@ interface ConcertFormData {
   category: string;
   venue_id?: string;
   poster_url?: string;
-  start_date?: string;
-  start_time?: string;
   round: number;
-  ticket_open_at?: string;
+  ticket_open_at?: string; // 티켓 오픈 시간 (HH:mm 형태)
 }
 
 export default function ConcertCreatePage() {
@@ -74,7 +73,8 @@ export default function ConcertCreatePage() {
   const today = new Date().toISOString().split('T')[0];
   const [formData, setFormData] = useState<ConcertFormData>({
     title: '',
-    date: `${new Date().toISOString().split('T')[0]}T19:00`, // 오늘 날짜 + 19:00 기본값
+    start_date: today, // 오늘 날짜 기본값
+    start_time: '19:00', // 19:00 기본값
     main_performer: '',
     organizer: '',
     promoter: '',
@@ -94,8 +94,6 @@ export default function ConcertCreatePage() {
     category: '',
     venue_id: '',
     poster_url: '',
-    start_date: '',
-    start_time: '',
     round: 1,
     ticket_open_at: '09:00' // 기본 오픈 시간
   });
@@ -271,7 +269,7 @@ export default function ConcertCreatePage() {
 
   // 날짜 유효성 검사
   const validateDates = () => {
-    const concertDate = new Date(formData.date);
+    const concertDate = new Date(formData.start_date);
     const validFromDate = new Date(formData.valid_from);
     const validToDate = new Date(formData.valid_to);
 
@@ -390,7 +388,8 @@ export default function ConcertCreatePage() {
       const processedData = {
         // 기본 필수 필드들
         title: formData.title,
-        date: safeToISOString(formData.date),
+        start_date: safeToDateString(formData.start_date),
+        start_time: formData.start_time,
         main_performer: formData.main_performer,
         organizer: formData.organizer,
         promoter: formData.promoter,
@@ -417,9 +416,6 @@ export default function ConcertCreatePage() {
         // 선택적 필드들
         poster_url: posterUrl || null,
         venue_id: formData.venue_id || null,
-        start_date: safeToDateString(formData.start_date),
-        start_time: formData.start_time || '19:00',
-        // 티켓 오픈은 예매 시작일에 사용자가 선택한 시간으로 설정
         ticket_open_at: formData.valid_from 
           ? `${formData.valid_from}T${formData.ticket_open_at || '09:00'}`
           : safeToISOString(new Date().toISOString().split('T')[0] + 'T09:00'),
@@ -546,41 +542,32 @@ export default function ConcertCreatePage() {
                 </div>
 
                 <div>
-                  <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-2">
                     공연 날짜 *
                   </label>
                   <input
                     type="date"
-                    id="date"
-                    name="date"
+                    id="start_date"
+                    name="start_date"
                     required
                     min={today}
-                    value={formData.date.split('T')[0]} // 날짜 부분만 표시
-                    onChange={(e) => {
-                      // 날짜가 변경되면 시간은 19:00으로 기본 설정
-                      const newDateTime = `${e.target.value}T19:00`;
-                      setFormData(prev => ({ ...prev, date: newDateTime }));
-                    }}
+                    value={formData.start_date}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="start_time" className="block text-sm font-medium text-gray-700 mb-2">
                     공연 시간 *
                   </label>
                   <input
                     type="time"
-                    id="time"
-                    name="time"
+                    id="start_time"
+                    name="start_time"
                     required
-                    value={formData.date.split('T')[1] || '19:00'} // 시간 부분만 표시
-                    onChange={(e) => {
-                      // 시간이 변경되면 날짜와 결합
-                      const dateOnly = formData.date.split('T')[0] || new Date().toISOString().split('T')[0];
-                      const newDateTime = `${dateOnly}T${e.target.value}`;
-                      setFormData(prev => ({ ...prev, date: newDateTime }));
-                    }}
+                    value={formData.start_time}
+                    onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
