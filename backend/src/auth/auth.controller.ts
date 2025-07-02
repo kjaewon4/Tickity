@@ -13,6 +13,7 @@ import { encryptResidentNumber, encrypt } from '../utils/encryption';
 import { config, getDynamicConfig } from '../config/environment';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import axios from 'axios';
+import dns from 'dns';
 
 const router = Router();
 const bc = new BlockchainService();
@@ -1087,7 +1088,7 @@ router.get('/confirm-email', async (req: Request, res: Response) => {
   }
 });
 
-// 이메일 유효성 검증 (MailboxLayer API 사용)
+// 이메일 유효성 검증 (MX 레코드 기반)
 router.post('/validate-email', async (req: Request, res: Response<ApiResponse>) => {
   try {
     const { email } = req.body;
@@ -1108,56 +1109,20 @@ router.post('/validate-email', async (req: Request, res: Response<ApiResponse>) 
       });
     }
 
-    // MailboxLayer API를 사용한 이메일 유효성 검증
-    const mailboxlayerApiKeys = [
-      process.env.MAILBOXLAYER_API_KEY1,
-      process.env.MAILBOXLAYER_API_KEY2,
-      process.env.MAILBOXLAYER_API_KEY3
-    ];
-
-    let mailboxRes, mailboxError;
-    for (let i = 0; i < mailboxlayerApiKeys.length; i++) {
-      if (!mailboxlayerApiKeys[i]) continue;
-
-      console.log(`API 키 ${i + 1} 사용:`, mailboxlayerApiKeys[i]);
-
-      try {
-        const mailboxlayerUrl = `http://apilayer.net/api/check?access_key=${mailboxlayerApiKeys[i]}&email=${encodeURIComponent(email.trim())}&smtp=1&format=1`;
-        mailboxRes = await axios.get(mailboxlayerUrl);
-        mailboxError = null;
-        break; // 성공하면 반복 종료
-      } catch (err) {
-        mailboxError = err;
-        console.log(`API 키 ${i + 1} 실패:`, err);
-        // 다음 키로 재시도
+    // MX 레코드 체크
+    const domain = email.trim().split('@')[1];
+    dns.resolveMx(domain, (err, addresses) => {
+      if (err || !addresses || addresses.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: { valid: false, message: '유효하지 않은 이메일 입니다.' }
+        });
       }
-    }
-
-    if (mailboxError || !mailboxRes) {
-      console.error('MailboxLayer API 오류:', mailboxError);
-      return res.status(500).json({
-        success: false,
-        error: '이메일 유효성 검증 중 오류가 발생했습니다.'
-      });
-    }
-
-    const { format_valid, smtp_check, mx_found } = mailboxRes.data;
-
-    if (!format_valid || !smtp_check || !mx_found) {
-      return res.status(200).json({
+      return res.json({
         success: true,
-        data: {
-          valid: false,
-          message: '유효하지 않은 이메일 주소입니다. 올바른 이메일을 입력해주세요.'
-        }
+        data: { valid: true }
       });
-    }
-
-    res.json({
-      success: true,
-      data: { valid: true }
     });
-
   } catch (error) {
     console.error('이메일 유효성 검증 오류:', error);
     res.status(500).json({
