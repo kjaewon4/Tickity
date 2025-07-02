@@ -258,37 +258,6 @@ npm run dev
 
 ## API 문서
 
-### 주요 엔드포인트
-
-#### 콘서트 관련
-```
-GET    /concerts              # 전체 콘서트 목록
-GET    /concerts?category=여자아이돌  # 카테고리별 콘서트
-GET    /concerts/search       # 콘서트 검색
-GET    /concerts/upcoming     # 다가오는 콘서트
-GET    /concerts/:id          # 콘서트 상세 정보
-```
-
-#### 사용자 관련
-```
-GET    /users/profile/:id     # 사용자 프로필
-PUT    /users/profile/:id     # 프로필 수정
-GET    /users/dashboard/:id   # 마이페이지 대시보드
-```
-
-#### 인증 관련
-```
-POST   /auth/signup          # 회원가입
-POST   /auth/login           # 로그인
-GET    /auth/user            # 사용자 정보 조회
-```
-
-#### 티켓 관련
-```
-GET    /tickets/user/:id     # 사용자 티켓 목록
-POST   /tickets/purchase     # 티켓 구매
-PUT    /tickets/transfer     # 티켓 양도
-```
 
 ## 팀원 소개
 
