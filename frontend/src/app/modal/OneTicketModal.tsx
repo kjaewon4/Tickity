@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { IoClose } from 'react-icons/io5';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -7,16 +7,40 @@ interface OneTicketModalProps {
 }
 
 const OneTicketModal: React.FC<OneTicketModalProps> = ({ onClose }) => {
+  const [highlight, setHighlight] = useState(false);
+
+  const handleBackdropClick = () => {
+    setHighlight(true);
+    setTimeout(() => setHighlight(false), 1000); // 깜빡임 지속 시간
+  };
+
   return (
     <AnimatePresence>
+      {/* 클릭 감지 가능한 배경 */}
+      <motion.div
+        className="fixed inset-0 z-40 bg-transparent"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        onClick={handleBackdropClick}
+      />
+
+      {/* 모달 */}
       <motion.div
         className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        initial={{ opacity: 0, scale: 0.95, y: 30 }}   
-        animate={{ opacity: 1, scale: 1, y: 0 }}        
-        exit={{ opacity: 0, scale: 0.95, y: 30 }}       
-        transition={{ duration: 0.3, ease: 'easeOut' }} 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
       >
-        <div className="bg-white rounded-xl shadow-xl w-[90vw] max-w-sm p-6 relative border border-gray-300">
+        <motion.div
+            className={`bg-white rounded-xl w-[90vw] max-w-sm p-6 relative shadow-xl border ${
+                highlight ? 'animate-modal-pulse' : 'border-gray-300'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+        >
+        
           {/* X 버튼 */}
           <button
             onClick={onClose}
@@ -28,9 +52,10 @@ const OneTicketModal: React.FC<OneTicketModalProps> = ({ onClose }) => {
           {/* 내용 */}
           <h3 className="text-lg font-semibold mb-4 text-center">알림</h3>
           <p className="text-sm text-gray-700 text-center">
-            해당 콘서트는 <span className="text-red-500 font-semibold">1인 1매</span>만 예매 가능합니다.
+            해당 콘서트는{' '}
+            <span className="text-red-500 font-semibold">1인 1매</span>만 예매 가능합니다.
           </p>
-        </div>
+        </motion.div>
       </motion.div>
     </AnimatePresence>
   );
