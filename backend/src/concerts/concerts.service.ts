@@ -99,7 +99,7 @@ export const createConcert = async (concert: Omit<Concert, 'id' | 'created_at'>)
     const concertData = {
       ...concert,
       date: concert.start_date && concert.start_time 
-        ? `${concert.start_date}T${concert.start_time}:00.000Z` 
+        ? `${concert.start_date}T${concert.start_time}` 
         : concert.date || null
     };
 
@@ -188,7 +188,7 @@ export const getConcerts = async (category?: string, availableOnly: boolean = fa
     id: c.id,
     title: c.title,
     main_performer: c.main_performer,
-    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}:00.000Z` : null,
+    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}` : null,
     start_date: c.start_date,
     start_time: c.start_time,
     poster_url: c.poster_url,
@@ -252,7 +252,7 @@ export const getUpcomingConcerts = async () => {
     id: c.id,
     title: c.title,
     main_performer: c.main_performer,
-    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}:00.000Z` : null,
+    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}` : null,
     start_date: c.start_date,
     start_time: c.start_time,
     poster_url: c.poster_url,
@@ -298,7 +298,7 @@ export const searchConcerts = async (query: string, category?: string) => {
     id: c.id,
     title: c.title,
     main_performer: c.main_performer,
-    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}:00.000Z` : null,
+    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}` : null,
     start_date: c.start_date,
     start_time: c.start_time,
     poster_url: c.poster_url,
