@@ -3,7 +3,12 @@ export interface SignupRequest {
   email: string;
   password: string;
   name: string;
-  resident_number: string;
+  resident_number: string;  // ✅ 이 줄 추가
+  embedding?: number[];     // ✅ embedding도 같이 정의 (optional)
+<<<<<<< HEAD
+=======
+  temp_id?: string;       // 👈 추가
+>>>>>>> 8b66fd53 (Feat: 회원가입 시 임베딩 저장 수정 중)
 }
 
 // 로그인 요청 타입

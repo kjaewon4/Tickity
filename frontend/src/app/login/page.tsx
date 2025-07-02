@@ -212,7 +212,8 @@ export default function LoginPage() {
         
         <div className="mt-4 text-center">
           <span className="text-gray-600">계정이 없으신가요? </span>
-          <Link href="/signup" className="text-blue-600 hover:underline">
+          <Link href="http://localhost:8000/static/face_register.html" 
+          className="text-blue-600 hover:underline">
             회원가입하기
           </Link>
         </div>
