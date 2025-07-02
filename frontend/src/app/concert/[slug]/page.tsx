@@ -43,6 +43,8 @@ const ConcertDetail = () => {
     localStorage.setItem('venueId', concert.venue_id);
     localStorage.setItem('selectedDate', selectedDate);
     localStorage.setItem('selectedTime', selectedTime);
+    localStorage.setItem('bookingFee', concert.booking_fee.toString());
+    
 
     const width = 1172, height = 812;
     const left = window.screenX + (window.outerWidth - width) / 2;
