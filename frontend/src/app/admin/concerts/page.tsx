@@ -16,7 +16,8 @@ interface Venue {
 interface Concert {
   id: string;
   title: string;
-  date: string;
+  start_date: string;
+  start_time: string;
   main_performer: string;
   organizer: string;
   category: string;
@@ -366,7 +367,7 @@ export default function AdminConcertsPage() {
                     const now = new Date();
                     const validFrom = new Date(concert.valid_from);
                     const validTo = new Date(concert.valid_to);
-                    const concertDate = new Date(concert.date);
+                    const concertDate = new Date(concert.start_date);
                     
                     let status = '';
                     let statusColor = '';
@@ -419,9 +420,9 @@ export default function AdminConcertsPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(concert.date)}
+                          <div>{formatDate(concert.start_date)}</div>
                           <div className="text-xs text-gray-500">
-                            {concert.round}회차
+                            {concert.start_time} • {concert.round}회차
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

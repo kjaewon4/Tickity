@@ -87,9 +87,17 @@ export const getConcertById = async (concertId: string): Promise<Concert | null>
  */
 export const createConcert = async (concert: Omit<Concert, 'id' | 'created_at'>): Promise<Concert | null> => {
   try {
+    // start_date와 start_time이 있으면 자동으로 date 생성
+    const concertData = {
+      ...concert,
+      date: concert.start_date && concert.start_time 
+        ? `${concert.start_date}T${concert.start_time}:00.000Z` 
+        : concert.date || null
+    };
+
     const { data: newConcert, error } = await supabase
       .from('concerts')
-      .insert([concert])
+      .insert([concertData])
       .select()
       .single();
 
@@ -153,7 +161,7 @@ export const getConcerts = async (category?: string, availableOnly: boolean = fa
         name
       )
     `)
-    .order('date', { ascending: true });
+    .order('start_date', { ascending: true });
 
   if (category) {
     query = query.eq('category', category);
@@ -161,8 +169,8 @@ export const getConcerts = async (category?: string, availableOnly: boolean = fa
 
   // 예매 가능한 콘서트만 필터링
   if (availableOnly) {
-    // 공연 날짜가 오늘보다 뒤에 있어야 함
-    query = query.gte('date', now);
+    // 공연 날짜가 오늘보다 뒤에 있어야 함 (start_date 우선 사용)
+    query = query.gte('start_date', now.split('T')[0]);
   }
 
   const { data, error } = await query;
@@ -172,7 +180,7 @@ export const getConcerts = async (category?: string, availableOnly: boolean = fa
     id: c.id,
     title: c.title,
     main_performer: c.main_performer,
-    date: c.date,
+    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}:00.000Z` : null,
     start_date: c.start_date,
     start_time: c.start_time,
     poster_url: c.poster_url,
@@ -186,9 +194,8 @@ export const getConcerts = async (category?: string, availableOnly: boolean = fa
   // 추가 필터링 (클라이언트 사이드에서 처리)
   if (availableOnly) {
     concerts = concerts.filter(concert => {
-      // 1. 공연 날짜 체크 (start_date가 있으면 우선 사용)
-      const concertDate = concert.start_date || concert.date;
-      if (concertDate && new Date(concertDate) <= new Date()) {
+      // 1. 공연 날짜 체크 (start_date 사용)
+      if (concert.start_date && new Date(concert.start_date) <= new Date()) {
         return false;
       }
 
@@ -211,7 +218,7 @@ export const getConcerts = async (category?: string, availableOnly: boolean = fa
 
 // 슬라이더용 다가오는 콘서트 8개 조회
 export const getUpcomingConcerts = async () => {
-  const now = new Date().toISOString();
+  const now = new Date().toISOString().split('T')[0]; // 오늘 날짜
 
   const { data, error } = await supabase
     .from('concerts')
@@ -221,13 +228,14 @@ export const getUpcomingConcerts = async () => {
       main_performer,
       date,
       start_date,
+      start_time,
       poster_url,
       venues (
         name
       )
     `)
-    .gte('date', now)
-    .order('date', { ascending: true })
+    .gte('start_date', now)
+    .order('start_date', { ascending: true })
     .limit(8);
 
   if (error) throw error;
@@ -236,8 +244,9 @@ export const getUpcomingConcerts = async () => {
     id: c.id,
     title: c.title,
     main_performer: c.main_performer,
-    date: c.date,
-    start_date: c.start_date || c.date, // start_date가 없으면 date 사용
+    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}:00.000Z` : null,
+    start_date: c.start_date,
+    start_time: c.start_time,
     poster_url: c.poster_url,
     venue_name: c.venues?.name || '장소 정보 없음',
   }));
@@ -256,7 +265,9 @@ export const searchConcerts = async (query: string, category?: string) => {
       id,
       title,
       main_performer,
+      date,
       start_date,
+      start_time,
       poster_url,
       category,
       venue_id,
@@ -279,7 +290,9 @@ export const searchConcerts = async (query: string, category?: string) => {
     id: c.id,
     title: c.title,
     main_performer: c.main_performer,
+    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}:00.000Z` : null,
     start_date: c.start_date,
+    start_time: c.start_time,
     poster_url: c.poster_url,
     category: c.category,
     venue_name: c.venues?.name || '장소 정보 없음',
