@@ -3,6 +3,8 @@ import { getAllUsers, createUser, getUserProfile, updateUserProfile } from './us
 import { getUserTickets } from '../tickets/tickets.service';
 import { authenticateToken } from '../auth/auth.middleware';
 import { ApiResponse, UserInfo } from '../types/auth';
+import { decryptResidentNumber } from '../utils/encryption';
+import { supabase } from '../lib/supabaseClient';
 
 const router = Router();
 
@@ -254,6 +256,41 @@ router.get('/tickets/:userId', /* authenticateToken, */ async (req: Request, res
       success: false,
       error: '티켓 조회 중 오류가 발생했습니다.'
     });
+  }
+});
+
+/**
+ * 사용자 주민번호 7자리 조회 (복호화)
+ * GET /users/resident-number/:userId
+ */
+router.get('/resident-number/:userId', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ success: false, error: '사용자 ID가 필요합니다.' });
+    }
+    // 사용자 정보 조회
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('resident_number_encrypted')
+      .eq('id', userId)
+      .single();
+    if (userError || !userData) {
+      return res.status(404).json({ success: false, error: '사용자 정보를 찾을 수 없습니다.' });
+    }
+    if (!userData.resident_number_encrypted) {
+      return res.status(404).json({ success: false, error: '주민번호 정보가 없습니다.' });
+    }
+    // 복호화
+    let residentNumber;
+    try {
+      residentNumber = decryptResidentNumber(userData.resident_number_encrypted);
+    } catch (e) {
+      return res.status(500).json({ success: false, error: '주민번호 복호화에 실패했습니다.' });
+    }
+    return res.json({ success: true, data: { residentNumber }, message: '주민번호 조회 성공' });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: '알 수 없는 오류가 발생했습니다.' });
   }
 });
 
