@@ -96,17 +96,9 @@ export const getConcertById = async (concertId: string): Promise<Concert | null>
  */
 export const createConcert = async (concert: Omit<Concert, 'id' | 'created_at'>): Promise<Concert | null> => {
   try {
-    // start_date와 start_time이 있으면 자동으로 date 생성
-    const concertData = {
-      ...concert,
-      date: concert.start_date && concert.start_time 
-        ? `${concert.start_date}T${concert.start_time}` 
-        : concert.date || null
-    };
-
     const { data: newConcert, error } = await supabase
       .from('concerts')
-      .insert([concertData])
+      .insert([concert])
       .select()
       .single();
 
@@ -157,7 +149,6 @@ export const getConcerts = async (category?: string, availableOnly: boolean = fa
       id,
       title,
       main_performer,
-      date,
       start_date,
       start_time,
       poster_url,
@@ -235,7 +226,6 @@ export const getUpcomingConcerts = async () => {
       id,
       title,
       main_performer,
-      date,
       start_date,
       start_time,
       poster_url,
@@ -274,7 +264,6 @@ export const searchConcerts = async (query: string, category?: string) => {
       id,
       title,
       main_performer,
-      date,
       start_date,
       start_time,
       poster_url,
