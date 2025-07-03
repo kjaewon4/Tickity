@@ -38,7 +38,7 @@ export default function CompleteSignupPage() {
 
     // 로컬 스토리지에서 토큰 확인 (Google OAuth 또는 일반 로그인)
     const accessToken = localStorage.getItem('accessToken');
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = localStorage.getItem('refreshToken');2
 
     if (accessToken && refreshToken) {
       // 현재 로그인된 사용자 정보 가져오기

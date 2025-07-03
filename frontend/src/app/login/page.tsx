@@ -54,6 +54,11 @@ export default function LoginPage() {
 
             if (response.success && response.data) {
               const user = response.data.user;
+              if (user.hasEmbedding === false) {
+                console.log('임베딩 없음, 얼굴 등록 페이지로 이동');
+                window.location.href = `http://localhost:8000/static/face_register.html?user_id=${user.id}`;
+                return;
+              }
 
               // 사용자 정보가 완전한지 확인
               if (user.name && user.residentNumber && user.residentNumber !== '1900-01-01' && user.residentNumber !== '') {

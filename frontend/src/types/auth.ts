@@ -27,6 +27,7 @@ export interface UserInfo {
   residentNumber: string;
   walletAddress: string;
   createdAt: string;
+  hasEmbedding?: boolean; // ✅ 추가
 }
 
 // API 응답 타입
