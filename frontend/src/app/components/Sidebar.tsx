@@ -38,6 +38,7 @@ const Sidebar: FC<SidebarProps> = ({
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const isMouseDown = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!concertId) return;
@@ -79,25 +80,109 @@ const Sidebar: FC<SidebarProps> = ({
   };
 
   const isSelected = (zone: string) => selectedZone === zone;
-  const handleZoomIn = () => setZoom((z) => Math.min(z + 0.2, 2));
-  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.2, 0.5));
+  
+  // 초기화 함수
+  const handleReset = () => {
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  };
+  
+  // 드래그 범위 제한 함수
+  const constrainOffset = (newOffset: { x: number; y: number }, currentZoom: number) => {
+    const imageWidth = 260;
+    const imageHeight = 150;
+    const containerWidth = 288; // w-72 = 288px (실제 크기)
+    const containerHeight = 180; // h-[180px] (높이 확장)
+    
+    // 기본 배율일 때는 드래그 비활성화
+    if (currentZoom <= 1) {
+      return { x: 0, y: 0 };
+    }
+    
+    // 여백 추가 (좌석이 아슬아슬하게 짤리지 않도록)
+    const margin = 15;
+    
+    const scaledWidth = imageWidth * currentZoom;
+    const scaledHeight = imageHeight * currentZoom;
+    
+    // 확대된 이미지가 컨테이너보다 큰 부분 계산
+    const excessWidth = Math.max(0, scaledWidth - containerWidth);
+    const excessHeight = Math.max(0, scaledHeight - containerHeight);
+    
+    // 균형있는 드래그 범위 계산 (중심 기준)
+    const halfExcessX = excessWidth / 2;
+    const halfExcessY = excessHeight / 2;
+    
+    // 좌우 균등한 범위 
+    const maxOffsetX = halfExcessX + margin;
+    const minOffsetX = -(halfExcessX + margin);
+    
+    // 상하 균등한 범위
+    const maxOffsetY = halfExcessY + margin;
+    const minOffsetY = -(halfExcessY + margin);
+    
+    return {
+      x: Math.max(minOffsetX, Math.min(maxOffsetX, newOffset.x)),
+      y: Math.max(minOffsetY, Math.min(maxOffsetY, newOffset.y))
+    };
+  };
+  
+  // 확대/축소 범위 조정: 최소 1 (기본 배율), 최대 2.5 (3-4번 확대 가능)
+  const handleZoomIn = () => {
+    const newZoom = Math.min(zoom + 0.5, 2.5); // 0.5씩 증가, 최대 2.5
+    setZoom(newZoom);
+    // 확대 시 offset 조정
+    setOffset(prev => constrainOffset(prev, newZoom));
+  };
+  
+  const handleZoomOut = () => {
+    const newZoom = Math.max(zoom - 0.5, 1); // 0.5씩 감소, 최소 1
+    setZoom(newZoom);
+    // 축소 시 offset 조정
+    setOffset(prev => constrainOffset(prev, newZoom));
+  };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
     isMouseDown.current = true;
     dragStart.current = { x: e.clientX, y: e.clientY };
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'grabbing';
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isMouseDown.current || !dragStart.current) return;
+    
+    e.preventDefault();
     const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
-    setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+    
+    const dragSensitivity = 1.2;
+    
+    setOffset((prev) => {
+      const newX = prev.x + dx * dragSensitivity;
+      const newY = prev.y + dy * dragSensitivity;
+      
+      // 범위 제한 적용
+      return constrainOffset({ x: newX, y: newY }, zoom);
+    });
+    
     dragStart.current = { x: e.clientX, y: e.clientY };
   };
 
   const handleMouseUp = () => {
     isMouseDown.current = false;
     dragStart.current = null;
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'grab';
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isMouseDown.current) {
+      handleMouseUp();
+    }
   };
 
   useEffect(() => {
@@ -134,6 +219,9 @@ const Sidebar: FC<SidebarProps> = ({
     onConfirmSeat();
   };
 
+  const isVIP = (name: string) =>
+    name.replace(/\s+/g, '').toLowerCase().includes('vip');
+
   return (
     <div className="w-72 h-[calc(100vh-48px)] bg-white border border-gray-300 p-4 shadow-md flex flex-col justify-between">
       <div>
@@ -143,16 +231,20 @@ const Sidebar: FC<SidebarProps> = ({
 
         <div className="relative mb-4">
           <div
-            className="overflow-hidden flex justify-start items-start h-[160px] border rounded bg-gray-100"
+            ref={containerRef}
+            className="overflow-hidden flex justify-start items-start h-[180px] border rounded bg-gray-100"
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
-            style={{ cursor: isMouseDown.current ? 'grabbing' : 'grab' }}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+            style={{ cursor: 'grab' }}
           >
             <div
               style={{
                 transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
-                transformOrigin: 'top left',
-                transition: isMouseDown.current ? 'none' : 'transform 0.2s ease',
+                transformOrigin: 'center center',
+                transition: isMouseDown.current ? 'none' : 'transform 0.1s ease-out',
+                willChange: 'transform',
               }}
             >
               <Image
@@ -160,13 +252,35 @@ const Sidebar: FC<SidebarProps> = ({
                 alt="좌석도 전체보기"
                 width={260}
                 height={150}
+                style={{ pointerEvents: 'none' }}
               />
             </div>
           </div>
 
-          <div className="absolute top-2 right-2 flex flex-row gap-1 bg-white bg-opacity-80 rounded shadow p-1">
-            <button className="text-sm px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" onClick={handleZoomIn}>+</button>
-            <button className="text-sm px-2 py-1 bg-gray-200 rounded hover:bg-gray-300" onClick={handleZoomOut}>−</button>
+          <div className="absolute top-2 right-2 flex flex-row gap-1 bg-white bg-opacity-90 rounded shadow p-1">
+            <button 
+              className="text-sm px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+              onClick={handleZoomIn}
+              disabled={zoom >= 2.5}
+              title="확대"
+            >
+              +
+            </button>
+            <button 
+              className="text-sm px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+              onClick={handleZoomOut}
+              disabled={zoom <= 1}
+              title="축소"
+            >
+              −
+            </button>
+            <button 
+              className="text-sm px-2 py-1 bg-blue-200 rounded hover:bg-blue-300 transition-colors" 
+              onClick={handleReset}
+              title="초기화"
+            >
+              ↺
+            </button>
           </div>
         </div>
 
@@ -187,7 +301,9 @@ const Sidebar: FC<SidebarProps> = ({
                 onClick={() => handleToggleDropdown(grade_name)}
               >
                 <div className="flex gap-2 items-center">
-                  <span className={`w-3 h-3 rounded-sm ${grade_name === 'VIP' ? 'bg-[#a18869]' : 'bg-[#b49cfd]'}`} />
+                  <span className={`w-3 h-3 rounded-sm border ${
+                    isVIP(grade_name) ? 'bg-fuchsia-200 border-fuchsia-300' : 'bg-blue-100 border-blue-200'
+                  }`} />
                   <span>{grade_name}</span>
                 </div>
                 <div className="flex items-center gap-1">

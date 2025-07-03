@@ -18,6 +18,7 @@ const OneTicketModal: React.FC<OneTicketModalProps> = ({ onClose }) => {
     <AnimatePresence>
       {/* 클릭 감지 가능한 배경 */}
       <motion.div
+        key="backdrop"
         className="fixed inset-0 z-40 bg-transparent"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -28,6 +29,7 @@ const OneTicketModal: React.FC<OneTicketModalProps> = ({ onClose }) => {
 
       {/* 모달 */}
       <motion.div
+        key="modal"
         className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}

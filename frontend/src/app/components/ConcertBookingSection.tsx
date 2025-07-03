@@ -23,6 +23,7 @@ interface ConcertBookingSectionProps {
   seatGrades: SeatGrade[];
   seatPrices: SeatPrice[];
   seatGradesLoading: boolean;
+  dateValidationError?: string;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   onSeatPriceChange: (seatGradeId: string, price: number) => void;
 }
@@ -32,6 +33,7 @@ export default function ConcertBookingSection({
   seatGrades,
   seatPrices,
   seatGradesLoading,
+  dateValidationError,
   onInputChange,
   onSeatPriceChange
 }: ConcertBookingSectionProps) {
@@ -92,8 +94,17 @@ export default function ConcertBookingSection({
               min={formData.valid_from || today}
               value={formData.valid_to}
               onChange={onInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                dateValidationError 
+                  ? 'border-red-300 focus:ring-red-500' 
+                  : 'border-gray-300 focus:ring-blue-500'
+              }`}
             />
+            {dateValidationError && (
+              <p className="mt-1 text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                ⚠️ {dateValidationError}
+              </p>
+            )}
           </div>
 
           <div>
