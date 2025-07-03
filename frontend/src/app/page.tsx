@@ -9,7 +9,7 @@ import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import { useRouter } from "next/navigation";
 import ChatbotModal from "./layout/ChatbotModal";
-import { createSimpleConcertUrl, createSeoConcertUrl } from "@/utils/urlUtils";
+import { createSeoConcertUrl } from "@/utils/urlUtils";
 import LazyImage from "@/components/LazyImage";
 import { isValidImageUrl } from "@/utils/imageOptimization";
 
@@ -17,22 +17,15 @@ interface Concert {
   id: string;
   title: string;
   main_performer: string;
-  start_date: string;     // ex: '2025-08-23'
-  // end_date: string;       // 공연 끝나는 날짜 (넣지말까)
+  start_date: string;
   poster_url: string;
   venue_name: string;
 }
 
 const formatStartDate = (dateStr: string): string => {
-  if (!dateStr || dateStr.trim() === '') {
-    return '날짜 미정';
-  }
-  
+  if (!dateStr || dateStr.trim() === '') return '날짜 미정';
   const date = new Date(dateStr);
-  if (isNaN(date.getTime())) {
-    return '날짜 오류';
-  }
-  
+  if (isNaN(date.getTime())) return '날짜 오류';
   return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
 };
 
@@ -40,10 +33,10 @@ function SampleNextArrow({ onClick }: { onClick?: () => void }) {
   return (
     <div
       onClick={onClick}
-      className="absolute right-[-4px] top-1/2 transform -translate-y-1/2 z-10 cursor-pointer"
+      className="absolute right-[-12px] top-1/2 transform -translate-y-1/2 z-10 cursor-pointer"
     >
-      <div className="bg-white/50 w-8 h-8 rounded-full shadow flex items-center justify-center hover:bg-white/70 transition">
-        <FaChevronRight size={16} />
+      <div className="bg-white/50 w-10 h-10 rounded-full shadow flex items-center justify-center hover:bg-white/70 transition">
+        <FaChevronRight size={20} />
       </div>
     </div>
   );
@@ -53,10 +46,10 @@ function SamplePrevArrow({ onClick }: { onClick?: () => void }) {
   return (
     <div
       onClick={onClick}
-      className="absolute left-[-4px] top-1/2 transform -translate-y-1/2 z-10 cursor-pointer"
+      className="absolute left-[-12px] top-1/2 transform -translate-y-1/2 z-10 cursor-pointer"
     >
-      <div className="bg-white/50 w-8 h-8 rounded-full shadow flex items-center justify-center hover:bg-white/70 transition">
-        <FaChevronLeft size={16} />
+      <div className="bg-white/50 w-10 h-10 rounded-full shadow flex items-center justify-center hover:bg-white/70 transition">
+        <FaChevronLeft size={20} />
       </div>
     </div>
   );
@@ -68,14 +61,12 @@ export default function HomePage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('전체');
-  const [upcomingConcerts, setUpcomingConcerts] = useState<Concert[]>([]); // 슬라이더용
-
-  const router = useRouter(); 
+  const [upcomingConcerts, setUpcomingConcerts] = useState<Concert[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     setAccessToken(token);
-
     if (token) {
       const getUser = async () => {
         try {
@@ -100,28 +91,24 @@ export default function HomePage() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/upcoming`);
         const data = await res.json();
         if (data.success && data.data?.concerts) {
-          setUpcomingConcerts(data.data.concerts); // 슬라이더용
+          setUpcomingConcerts(data.data.concerts);
         }
       } catch {
         setUpcomingConcerts([]);
       }
     };
-
     fetchUpcomingConcerts();
   }, []);
 
-
   useEffect(() => {
-  const fetchConcerts = async () => {
+    const fetchConcerts = async () => {
       try {
         const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/concerts`);
         if (selectedCategory !== '전체') {
           url.searchParams.set('category', selectedCategory);
         }
-
         const res = await fetch(url.toString());
         const data = await res.json();
-
         if (data.success && data.data?.concerts) {
           setConcerts(data.data.concerts);
         }
@@ -129,13 +116,8 @@ export default function HomePage() {
         setConcerts([]);
       }
     };
-
     fetchConcerts();
   }, [selectedCategory]);
-
-  const getUserDisplayName = (user: UserInfo): string => {
-    return user.name || user.email || '사용자';
-  };
 
   const sliderSettings = {
     dots: false,
@@ -157,106 +139,98 @@ export default function HomePage() {
   const categories = ['전체', '여자아이돌', '남자아이돌', '솔로 가수', '내한공연', '랩/힙합'];
 
   return (
-    <main className="px-6 pt-30 py-10 bg-white min-h-screen max-w-7xl mx-auto">
-    <div className="mb-10 relative -mx-4">
-      <Slider {...sliderSettings}>
-        {upcomingConcerts.map((concert) => (
-        <div
-          key={concert.id}
-          className="px-4 cursor-pointer"
-          onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
-        >
-          <div className="w-[220px] h-[330px] rounded shadow overflow-hidden bg-white relative">
-            {/* 포스터 이미지 전체 영역 차지 */}
-            <LazyImage
-              src={concert.poster_url?.trim() !== '' ? concert.poster_url : '/images/default-poster.png'}
-              alt={concert.title}
-              fill
-              sizes="220px"
-              className="object-cover"
-              quality={70}
-              priority={true} // 슬라이더는 우선 로드
-              imageSize="small"
-            />
-
-            {/* 아래쪽 불투명 텍스트 오버레이 */}
-            <div className="absolute bottom-0 w-full text-white px-3 py-2">
-              <div className="text-xl truncate text-shadow font-extrabold">{concert.title}</div>
-              <div className="text-xs text-gray-200 text-shadow font-extrabold">{concert.venue_name}</div>
-              <div className="text-xs text-gray-200 text-shadow font-extrabold">{formatStartDate(concert.start_date)}</div>
+    <main className="px-4 pt-20 pb-10 bg-white min-h-screen w-full max-w-[1700px] mx-auto">
+      <div className="mb-10 relative px-2">
+        <Slider {...sliderSettings} className="-mx-[6px]">
+          {upcomingConcerts.map((concert) => (
+            <div
+              key={concert.id}
+              className="w-[260px] px-[6px] cursor-pointer"
+              onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
+            >
+              <div className="h-[400px] rounded-xl shadow overflow-hidden bg-white relative">
+                <LazyImage
+                  src={concert.poster_url?.trim() !== '' ? concert.poster_url : '/images/default-poster.png'}
+                  alt={concert.title}
+                  fill
+                  sizes="260px"
+                  className="object-cover"
+                  quality={70}
+                  priority={true}
+                  imageSize="small"
+                />
+                <div className="absolute bottom-0 w-full text-white px-3 py-2">
+                  <div className="text-2xl truncate text-shadow font-extrabold">{concert.title}</div>
+                  <div className="text-sm text-gray-200 text-shadow font-bold">{concert.venue_name}</div>
+                  <div className="text-sm text-gray-200 text-shadow font-bold">
+                    {formatStartDate(concert.start_date)}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        ))}
-      </Slider>
-    </div>
-
-
-      <div className="flex flex-wrap gap-2 mb-6">
-        {categories.map((category) => (
-          <button
-            key={category}
-            onClick={() => setSelectedCategory(category)}
-            className={`px-4 py-1 rounded-full text-sm cursor-pointer shadow-md ${
-              selectedCategory === category ? 'bg-blue-500 text-white' : 'bg-white text-black'
-            }`}
-          >
-            {category}
-          </button>
-        ))}
+          ))}
+        </Slider>
       </div>
 
-
-    <div className="flex justify-between items-center mb-4">
-      <h2 className="text-xl font-bold text-gray-800 dark:text-white">콘서트 둘러보기</h2>
-      <button
-        onClick={() => router.push('/search')}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-      >
-        검색하기
-      </button>
-    </div>
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-8">
-        {concerts.map((concert) => (
-        <div
-          key={concert.id}
-          className="px-4 cursor-pointer"
-          onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
-        >
-          <div className="w-[220px]">
-            {/* 이미지에만 테두리 */}
-            <div className="w-full h-[320px] border border-gray-200 rounded-md overflow-hidden relative">
-              <LazyImage
-                src={
-                  concert.poster_url &&
-                  concert.poster_url.trim() !== '' &&
-                  isValidImageUrl(concert.poster_url)
-                    ? concert.poster_url
-                    : '/images/default-poster.png'
-                }
-                alt={concert.title}
-                fill
-                sizes="220px"
-                className="object-cover"
-                quality={70}
-                priority={false} // 그리드는 레이지 로딩
-                imageSize="small"
-              />
-            </div>
-
-            {/* 텍스트 */}
-            <div className="mt-2">
-              <div className="text-xl text-gray-900 dark:text-white font-extrabold leading-snug truncate">
-                {concert.title}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 font-extrabold">{concert.venue_name}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 font-extrabold">
-                {formatStartDate(concert.start_date)}
-              </div>
-            </div>
-          </div>
+      <div className="px-2">
+        <div className="flex flex-wrap gap-2 mb-6">
+          {categories.map((category) => (
+            <button
+              key={category}
+              onClick={() => setSelectedCategory(category)}
+              className={`px-6 py-2.5 rounded-full text-base font-semibold cursor-pointer shadow-lg transition-all border border-gray-300 ${
+                selectedCategory === category
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white text-black hover:bg-blue-500 hover:text-white'
+              }`}
+            >
+              {category}
+            </button>
+          ))}
         </div>
-        ))}
+
+
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">콘서트 둘러보기</h2>
+        </div>
+
+        <div className="w-[1700px] flex flex-wrap gap-x-[12px] gap-y-6 mx-auto">
+          {concerts.map((concert) => (
+            <div
+              key={concert.id}
+              className="w-[320px] cursor-pointer"
+              onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
+            >
+              <div className="h-[400px] rounded-xl shadow overflow-hidden bg-white relative">
+                <LazyImage
+                  src={
+                    concert.poster_url &&
+                    concert.poster_url.trim() !== '' &&
+                    isValidImageUrl(concert.poster_url)
+                      ? concert.poster_url
+                      : '/images/default-poster.png'
+                  }
+                  alt={concert.title}
+                  fill
+                  sizes="300px"
+                  className="object-cover"
+                  quality={70}
+                  priority={false}
+                  imageSize="small"
+                />
+              </div>
+              <div className="mt-2 px-1">
+                <div className="text-2xl text-gray-900 dark:text-white font-extrabold leading-snug truncate">
+                  {concert.title}
+                </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400 font-bold">{concert.venue_name}</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400 font-bold">
+                  {formatStartDate(concert.start_date)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <ChatbotModal />
