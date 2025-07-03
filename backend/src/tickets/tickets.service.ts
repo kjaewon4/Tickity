@@ -23,6 +23,7 @@ const CONTRACT   = process.env.TICKET_MANAGER_ADDRESS!;
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const admin    = new ethers.Wallet(ADMIN_KEY, provider);
 const contract = new ethers.Contract(CONTRACT, TicketJSON.abi, admin);
+const blockchain = new BlockchainService();
 
 // ───────────────────────────────────────────────────────────
 // 확장된 티켓 타입 (콘서트·좌석 정보 포함)
@@ -64,47 +65,6 @@ export const getAllTickets = async (): Promise<Ticket[]> => {
 // ───────────────────────────────────────────────────────────
 // 티켓 생성 (예매)
 // ───────────────────────────────────────────────────────────
-// export async function updateTicketMintInfo(
-//   ticketId: string,
-//   tokenId: number,
-//   txHash: string
-// ) {
-//   const { error } = await supabase
-//     .from('tickets')
-//     .update({ token_id: tokenId, tx_hash: txHash })
-//     .eq('id', ticketId);
-
-//   if (error) throw error;
-// }
-
-
-const blockchain = new BlockchainService();
-
-export const createAndMintTicket = async (
-  payload: Omit<Ticket, 'id' | 'created_at'>
-): Promise<Ticket & { token_id: number; tx_hash: string }> => {
-  // 1. 티켓 생성
-  const ticket = await createTicket(payload);
-
-  // 2. 메타데이터 URI 생성
-  const metadataURI = await generateMetadataForTicket(ticket.id); // 구현 필요
-
-  // 3. NFT 민팅
-  const { txHash, tokenId } = await blockchain.mintTicket(
-    ticket.user_id,
-    Number(ticket.concert_id), // uint256 변환
-    ticket.seat_number,
-    metadataURI,
-    (ticket.price / 1e18).toString() // Ether 단위 문자열
-  );
-
-  // 4. DB에 민팅 정보 업데이트
-  await updateTicketMintInfo(ticket.id, tokenId, txHash);
-
-  return { ...ticket, token_id: tokenId, tx_hash: txHash };
-};
-
-
 // 티켓 생성
 export async function createTicket(payload: {
   concert_id: string;
@@ -321,3 +281,27 @@ export const markTicketReopened = async (ticketId: string) => {
     throw error;
   }
 };
+
+// seats 테이블에서 seat_id 조회
+export async function findSeatIdByPosition(sectionId: string, row: number, col: number): Promise<string> {
+  const { data: seat, error } = await supabase
+    .from('seats')
+    .select('id')
+    .match({
+      section_id: sectionId,
+      row_idx: row,
+      col_idx: col,
+    })
+    .single();
+
+  if (error) {
+    throw new Error(`좌석 조회 오류: ${error.message}`);
+  }
+
+  if (!seat) {
+    throw new Error('해당 좌표에 좌석이 없습니다.');
+  }
+
+  return seat.id;
+}
+

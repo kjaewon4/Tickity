@@ -55,27 +55,8 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
 
     console.log('🎟️ 티켓 생성 요청:', JSON.stringify(req.body, null, 2));
 
-    // 1. seats 테이블에서 seat_id 조회
-    const { data: seat, error: seatError } = await supabase
-      .from('seats') 
-      .select('id') 
-      .match({
-        section_id: sectionId,
-        row_idx: row,
-        col_idx: col,
-      })
-      .single();
-
-
-    if (!seat) {
-      return res.status(404).json({ success: false, error: '해당 좌표에 좌석이 없습니다.' });
-    }
-    if (seatError) {
-      return res.status(500).json({ success: false, error: `좌석 조회 오류: ${(seatError as any).message}` });
-    }
-
-
-    const seatId = seat.id;
+    // seats 테이블에서 seat_id 조회
+    const seatId = await ticketsService.findSeatIdByPosition(sectionId, row, col);
 
     // 1. DB에 티켓 생성
     const ticket = await ticketsService.createTicket({
@@ -105,11 +86,6 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
       ethAmount // 지수 표기 제거된 string
     );
 
-
-    if (tokenId === -1) {
-      throw new Error('토큰 ID를 추출하지 못했습니다.');
-    }
-
     // 4. 민팅 결과 DB에 업데이트
     await ticketsService.updateTicketMintInfo(ticket.id, tokenId, txHash);
 
@@ -131,7 +107,6 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
     });
   }
 });
-
 
 /**
  * 사용자별 예매 티켓 목록 조회
@@ -201,5 +176,28 @@ router.post(
     }
   }
 );
+
+// seats 테이블에서 seat_id 조회
+export async function findSeatIdByPosition(sectionId: string, row: number, col: number): Promise<string> {
+  const { data: seat, error } = await supabase
+    .from('seats')
+    .select('id')
+    .match({
+      section_id: sectionId,
+      row_idx: row,
+      col_idx: col,
+    })
+    .single();
+
+  if (error) {
+    throw new Error(`좌석 조회 오류: ${error.message}`);
+  }
+
+  if (!seat) {
+    throw new Error('해당 좌표에 좌석이 없습니다.');
+  }
+
+  return seat.id;
+}
 
 export default router;
