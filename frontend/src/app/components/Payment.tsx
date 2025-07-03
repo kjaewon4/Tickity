@@ -17,6 +17,8 @@ export default function Payment() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+const [expiresAt, setExpiresAt] = useState<number | null>(null);
+const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const total = ticketPrice + bookingFee;
 
   useEffect(() => {
@@ -37,6 +39,12 @@ export default function Payment() {
     const storedFee = localStorage.getItem('bookingFee');
     setBookingFee(storedFee ? Number(storedFee) : 0);
 
+    const expiresAtString = localStorage.getItem('holdExpiresAt'); // 서버에서 받은 걸 저장해둔 경우
+    if (expiresAtString) {
+      const expires = new Date(expiresAtString).getTime();
+      setExpiresAt(expires);
+    }
+
     const fetchUser = async () => {
       const token = localStorage.getItem('accessToken');
       if (token) {
@@ -54,6 +62,25 @@ export default function Payment() {
 
     fetchUser();
   }, []);
+
+  useEffect(() => {
+    if (!expiresAt) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const remaining = Math.floor((expiresAt - now) / 1000);
+      setRemainingSeconds(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(interval);
+        alert('결제 시간이 만료되었습니다.');
+        // 페이지 이동 또는 상태 초기화
+        location.reload(); // 또는 navigate('/expire')
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [expiresAt]);
 
   const handlePayment = async () => {
     const concertId = localStorage.getItem('concertId');
@@ -212,6 +239,11 @@ export default function Payment() {
             >
               결제하기
             </button>
+            {expiresAt && (
+            <div className="text-center text-sm text-red-600 font-semibold mb-2">
+                ⏳ 남은 시간: {Math.floor(remainingSeconds / 60)}분 {remainingSeconds % 60}초
+              </div>
+            )}
           </div>
         </div>
       </div>

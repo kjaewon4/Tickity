@@ -42,6 +42,7 @@ const Sidebar: FC<SidebarProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [user, setUser] = useState<any>(null);
 
+
   useEffect(() => {
     if (!concertId) return;
 
@@ -78,6 +79,7 @@ const Sidebar: FC<SidebarProps> = ({
 
     fetchUser();
   }, [concertId]);
+
 
   useEffect(() => {
     console.log('Sidebar - selectedSeatInfo:', selectedSeatInfo);
@@ -260,8 +262,10 @@ const Sidebar: FC<SidebarProps> = ({
           return;
         }
 
+        localStorage.setItem('holdExpiresAt', res.hold_expires_at);
+
         console.log('좌석 HOLD 성공');
-            console.log('onConfirmSeat 실행됨 → setIsConfirmed(true)');
+        console.log('onConfirmSeat 실행됨 → setIsConfirmed(true)');
         onConfirmSeat(); // 다음 단계로 진행
       } catch (err) {
         console.error('좌석 HOLD 오류:', err);

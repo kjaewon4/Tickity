@@ -637,7 +637,8 @@ router.post('/:concertId/seats/hold', async (req, res) => {
   return res.json({
     success: true,
     message: '좌석이 HOLD 상태로 설정되었습니다.',
-    seatId
+    seatId,
+    hold_expires_at: holdUntil.toISOString()
   });
 });
 
