@@ -68,8 +68,8 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
     });
     console.log('✅ 티켓 생성 완료, ID:', ticket.id);
 
-    // 2. 메타데이터 생성 → Supabase Storage 업로드
-    const metadataURI = await generateMetadataForTicket(ticket.id);
+    // 2. 메타데이터 생성 → Supabase Storage 업로드 
+    const metadataURI = await generateMetadataForTicket(ticket.id); // NFT의 tokenURI 역할
 
     // 원화 → ETH 변환 (toFixed로 지수 표기 방지), 1 ETH = 4,000,000원 기준
     const ethPerWon = 1 / 4_000_000;
@@ -95,7 +95,8 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
       txHash,
       concertId,
       seatId,
-      userId
+      userId,
+      metadataURI 
     );
 
     // 5. 응답

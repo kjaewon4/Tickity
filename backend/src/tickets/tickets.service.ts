@@ -120,13 +120,23 @@ export async function updateTicketMintInfo(
     txHash: string,
     concertId: string,
     seatId: string,
-    userId: string
+    userId: string,
+    tokenUri: string 
   ): Promise<void> {
   // 1. 티켓 정보 업데이트
-  await supabase
+  const { error } = await supabase
     .from('tickets')
-    .update({ token_id: tokenId, tx_hash: txHash })
+    .update({
+        nft_token_id: tokenId,
+        tx_hash: txHash,
+        token_uri: tokenUri,
+      })
     .eq('id', ticketId);
+
+  if (error) {
+    console.error('❌ 티켓 민팅 정보 DB 업데이트 실패:', error.message);
+    throw new Error('DB에 민팅 정보 저장 실패');
+  }
 
   // 2. 좌석 상태 변경
   await updateConcertSeatStatus({
