@@ -10,6 +10,7 @@ import { ethers, Contract, Wallet } from 'ethers';
 import TicketJSON from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { generateMetadataForTicket } from './metadata.service';
+import { updateConcertSeatStatus } from '../seats/concertSeats.service';
 
 // 로컬 체인 배포 주소 등 불러올 .deployed
 dotenv.config({ path: path.resolve(__dirname, '../../../blockchain/.deployed') });
@@ -94,23 +95,46 @@ export async function createTicket(payload: {
 }
 
 // NFT 민팅 후 티켓 정보 업데이트
+// export async function updateTicketMintInfo(
+//   ticketId: string,
+//   tokenId: number,
+//   txHash: string
+// ) {
+//   const { error } = await supabase
+//     .from('tickets')
+//     .update({
+//       nft_token_id: tokenId.toString(),
+//       tx_hash: txHash,
+//       issued_at: new Date().toISOString(),
+//     })
+//     .eq('id', ticketId);
+
+//   if (error) {
+//     throw new Error(`민팅 정보 업데이트 실패: ${error.message}`);
+//   }
+// }
 export async function updateTicketMintInfo(
-  ticketId: string,
-  tokenId: number,
-  txHash: string
-) {
-  const { error } = await supabase
+    ticketId: string,
+    tokenId: number,
+    txHash: string,
+    concertId: string,
+    seatId: string,
+    userId: string
+  ): Promise<void> {
+  // 1. 티켓 정보 업데이트
+  await supabase
     .from('tickets')
-    .update({
-      nft_token_id: tokenId.toString(),
-      tx_hash: txHash,
-      issued_at: new Date().toISOString(),
-    })
+    .update({ token_id: tokenId, tx_hash: txHash })
     .eq('id', ticketId);
 
-  if (error) {
-    throw new Error(`민팅 정보 업데이트 실패: ${error.message}`);
-  }
+  // 2. 좌석 상태 변경
+  await updateConcertSeatStatus({
+    concertId,
+    seatId,
+    userId,
+    newStatus: 'SOLD',
+    holdExpiresAt: null
+  });
 }
 
 

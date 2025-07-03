@@ -81,13 +81,22 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
     const { tokenId, txHash } = await blockchain.mintTicket(
       userId,
       concertHash,
+      ticket.id,
       seatNumber,
       metadataURI,
       ethAmount // 지수 표기 제거된 string
     );
 
     // 4. 민팅 결과 DB에 업데이트
-    await ticketsService.updateTicketMintInfo(ticket.id, tokenId, txHash);
+    // await ticketsService.updateTicketMintInfo(ticket.id, tokenId, txHash);
+    await ticketsService.updateTicketMintInfo(
+      ticket.id,
+      tokenId,
+      txHash,
+      concertId,
+      seatId,
+      userId
+    );
 
     // 5. 응답
     res.status(201).json({

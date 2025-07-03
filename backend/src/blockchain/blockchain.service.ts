@@ -6,6 +6,8 @@ import { Wallet, Contract, JsonRpcProvider, parseEther, parseUnits, Log } from '
 import { supabase } from '../lib/supabaseClient';
 import { decrypt }   from '../utils/encryption';
 import TicketArtifact from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
+import type { SoulboundTicket } from '../../../blockchain/typechain/contracts/SoulboundTicket';
+import { SoulboundTicket__factory } from '../../../blockchain/typechain/factories/contracts/SoulboundTicket__factory';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.deployed') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -17,21 +19,20 @@ const PROVIDER = new JsonRpcProvider(RPC_URL);
 const ADMIN_KEY = process.env.ADMIN_PRIVATE_KEY!;
 if (!ADMIN_KEY) throw new Error('ADMIN_PRIVATE_KEY가 없습니다');
 const adminWallet = new Wallet(ADMIN_KEY, PROVIDER);
-const FUND_AMOUNT  = '2.0';                               // 새 지갑에 충전할 ETH (예: 0.1 ETH)
+const FUND_AMOUNT  = '10.0';                               // 새 지갑에 충전할 ETH (예: 0.1 ETH)
 
 // const price = parseEther(priceEth);  // 예: "0.0325" → 32500000000000000n
 const maxFeePerGas = parseUnits('2.5', 'gwei');         // 2500000000n
 const maxPriorityFeePerGas = parseUnits('1.5', 'gwei'); // 1500000000n
 
-
 export class BlockchainService {
-  private contract: Contract;
+  private contract: SoulboundTicket;
 
 
   constructor() {
     const addr = process.env.TICKET_MANAGER_ADDRESS!;
     if (!addr) throw new Error('TICKET_MANAGER_ADDRESS가 없습니다');
-    this.contract = new Contract(addr, TicketArtifact.abi, PROVIDER);
+    this.contract = SoulboundTicket__factory.connect(addr, PROVIDER);
   }
 
   /** on-demand 지갑 생성 + 관리자로부터 ETH 충전 */
@@ -53,13 +54,14 @@ export class BlockchainService {
     return { address, privateKey };
   }
 
+  
   /**
    * 서버에서 티켓 민팅
    */
-
   async mintTicket(
     userId: string,
     concertId: string,
+    ticketId: string, 
     seat: string,
     uri: string,
     priceEth: string
@@ -92,7 +94,18 @@ export class BlockchainService {
         }
       );
       const receipt = await tx.wait();
-      console.log('📦 receipt.events:', JSON.stringify(receipt?.events, null, 2));
+      if (!receipt) {
+        throw new Error('트랜잭션 영수증을 받지 못했습니다.');
+      }
+      console.dir(receipt, { depth: null });
+
+      console.log('🪵 Raw logs:', receipt.logs);
+
+      console.log('🪵 Raw logs:', receipt.logs.map((l:any) => ({
+        topics: l.topics,
+        data: l.data,
+        address: l.address,
+      })));
 
       let tokenId: number | undefined = undefined;
       for (const log of receipt.logs as Log[]) {
@@ -124,18 +137,23 @@ export class BlockchainService {
       console.error('🧨 민팅 실패! 메타데이터 및 DB 롤백 시도');
 
       // 🧹 메타데이터 및 DB 정리
-      const ticketId = uri.split('/').pop()?.replace('.json', ''); // URI에서 ID 추출
-      if (ticketId) {
-        // 메타데이터 삭제
-        await supabase.storage
+      try {
+        const { error: storageError } = await supabase.storage
           .from('metadata')
           .remove([`tickets/${ticketId}.json`]);
+        if (storageError) {
+          console.error('❌ 메타데이터 삭제 실패:', storageError.message);
+        }
 
-        // DB 레코드 삭제
-        await supabase
+        const { error: deleteError } = await supabase
           .from('tickets')
           .delete()
           .eq('id', ticketId);
+        if (deleteError) {
+          console.error('❌ 티켓 DB 삭제 실패:', deleteError.message);
+        }
+      } catch (cleanupErr) {
+        console.error('🔥 롤백 중 예외 발생:', cleanupErr);
       }
 
       throw err; // 에러 다시 던져서 controller에 알려줌

@@ -4,6 +4,7 @@ import "@typechain/hardhat";
 import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import 'hardhat-deploy';
+import '@typechain/hardhat';
 import * as dotenv from "dotenv";
 dotenv.config({ path: "../backend/.env" }); // 실제 .env 경로에 맞춰주세요
 
