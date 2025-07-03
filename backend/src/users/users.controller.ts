@@ -116,7 +116,7 @@ router.put('/profile/:userId', /* authenticateToken, */ async (req: Request, res
 // =================
 
 /**
- * 마이페이지 전체 정보 조회 (프로필 + 티켓) (JWT 미들웨어 제거 - 임시)
+ * 마이페이지 전체 정보 조회 (프로필 + 티켓 + 좋아요 목록) (JWT 미들웨어 제거 - 임시)
  * GET /users/dashboard/:userId
  */
 router.get('/dashboard/:userId', /* authenticateToken, */ async (req: Request, res: Response<ApiResponse>) => {
@@ -130,10 +130,41 @@ router.get('/dashboard/:userId', /* authenticateToken, */ async (req: Request, r
       });
     }
 
-    // 병렬로 프로필과 티켓 정보 조회 (성능 최적화)
-    const [userProfile, userTickets] = await Promise.all([
+    // 좋아요 목록 조회 함수
+    const getUserFavorites = async (userId: string) => {
+      const { data: favorites, error } = await supabase
+        .from('user_favorites')
+        .select(`
+          *,
+          concerts (
+            id,
+            title,
+            main_performer,
+            start_date,
+            start_time,
+            poster_url,
+            category,
+            venues (
+              name
+            )
+          )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('좋아요 목록 조회 오류:', error);
+        return [];
+      }
+
+      return favorites || [];
+    };
+
+    // 병렬로 프로필, 티켓, 좋아요 정보 조회 (성능 최적화)
+    const [userProfile, userTickets, userFavorites] = await Promise.all([
       getUserProfile(userId),
-      getUserTickets(userId)
+      getUserTickets(userId),
+      getUserFavorites(userId)
     ]);
 
     if (!userProfile) {
@@ -155,12 +186,21 @@ router.get('/dashboard/:userId', /* authenticateToken, */ async (req: Request, r
       canceled: userTickets.filter(ticket => ticket.canceled_at).length
     };
 
+    // 좋아요 통계 계산
+    const favoriteStats = {
+      total: userFavorites.length
+    };
+
     res.json({
       success: true,
       data: {
         profile: userProfile,
         tickets: userTickets,
-        stats: ticketStats
+        favorites: userFavorites,
+        stats: {
+          tickets: ticketStats,
+          favorites: favoriteStats
+        }
       },
       message: '대시보드 조회 성공'
     });
