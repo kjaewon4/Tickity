@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 import "./schedulers/reopen.scheduler";    // ← import 만 해도 스케줄러가 자동 등록됩니다
 import { startReopenScheduler } from "./schedulers/reopen.scheduler";
+import { scheduleReleaseExpiredSeats } from './schedulers/releaseExpiredSeats';
+
 import cors from 'cors';
 import usersRouter from './users/users.controller';
 import concertsRouter from './concerts/concerts.controller';
@@ -21,6 +23,7 @@ import uploadsRouter from './uploads/uploads.controller';
 if (process.env.NODE_ENV !== 'test') {
   startReopenScheduler()
 }
+scheduleReleaseExpiredSeats(); // 1분마다 자동으로 만료된 좌석을 AVAILABLE로 복구
 
 const app = express();
 
