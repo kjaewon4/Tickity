@@ -2,6 +2,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { supabase } from '../lib/supabaseClient';
 import { getConcerts } from '../concerts/concerts.service';
 import { getUserTickets } from '../tickets/tickets.service';
+import { CancellationPolicy } from '../cancellation_policies/cancellation_policies.model';
+import { getCancellationPoliciesText } from '../cancellation_policies/cancellation_policies.service';
 
 // Gemini AI 초기화
 let genAI: GoogleGenerativeAI | null = null;
@@ -35,6 +37,8 @@ Tickity는 NFT 기반의 안전한 콘서트 티켓팅 플랫폼입니다.
 - 환불 정책, 좌석 등급, 가격 안내 등 고객 중심 서비스
 - 고객센터 및 챗봇을 통한 24시간 문의 지원
 `;
+
+
 
 // 날짜 포맷 함수 추가 (invalid date 처리 포함)
 function formatShortDate(dateString: string): string {
@@ -236,9 +240,11 @@ export const analyzeUserIntent = async (message: string): Promise<{
   }
   
   // 예매 방법 안내 (더 구체적인 조건을 먼저 확인)
-  if (lowerMessage.includes('예매 방법') || lowerMessage.includes('예매 안내') ||
+  if (lowerMessage.includes('예매 방법') || lowerMessage.includes('예매방법') ||
+      lowerMessage.includes('예매 안내') || lowerMessage.includes('예매안내') ||
       lowerMessage.includes('어떻게 예매') || lowerMessage.includes('예매하는 방법') ||
-      lowerMessage.includes('예매 과정') || lowerMessage.includes('예매 절차')) {
+      lowerMessage.includes('예매 과정') || lowerMessage.includes('예매과정') ||
+      lowerMessage.includes('예매 절차') || lowerMessage.includes('예매절차')) {
     return {
       intent: 'booking_help',
       needsData: false
@@ -260,9 +266,11 @@ export const analyzeUserIntent = async (message: string): Promise<{
   // 콘서트 목록 관련 (예매 방법 문의는 제외)
   if ((lowerMessage.includes('콘서트') || lowerMessage.includes('공연') || 
        lowerMessage.includes('예매') || lowerMessage.includes('티켓')) &&
-      !lowerMessage.includes('예매 방법') && !lowerMessage.includes('예매 안내') &&
+      !lowerMessage.includes('예매 방법') && !lowerMessage.includes('예매방법') &&
+      !lowerMessage.includes('예매 안내') && !lowerMessage.includes('예매안내') &&
       !lowerMessage.includes('어떻게 예매') && !lowerMessage.includes('예매하는 방법') &&
-      !lowerMessage.includes('예매 과정') && !lowerMessage.includes('예매 절차') &&
+      !lowerMessage.includes('예매 과정') && !lowerMessage.includes('예매과정') &&
+      !lowerMessage.includes('예매 절차') && !lowerMessage.includes('예매절차') &&
       !lowerMessage.includes('예매목록') && !lowerMessage.includes('예매한') &&
       !lowerMessage.includes('내가 예매한')) {
     
@@ -394,7 +402,7 @@ const formatConcertsForAI = async (page: number = 1, artistName?: string, dateFi
     <tr>
       <td class="px-4 py-2 whitespace-nowrap">${startIndex + index + 1}</td>
       <td class="px-4 py-2 whitespace-nowrap">${concert.title}</td>
-      <td class="px-4 py-2 whitespace-nowrap">${formatShortDate(concert.start_date || concert.date)}</td>
+      <td class="px-4 py-2 whitespace-nowrap">${formatShortDate(concert.start_date)}</td>
       <td class="px-4 py-2 whitespace-nowrap">${concert.venue_name}</td>
       <td class="px-4 py-2 whitespace-nowrap">${concert.main_performer}</td>
     </tr>
@@ -542,7 +550,7 @@ const generateMockResponse = async (
   }
   
   if (intent === 'booking_help') {
-    message = `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n**💰 결제 후 취소 정책:**\n• 공연 7일 전: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`;
+    message = `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`;
     actionType = 'booking_help';
     
     const suggestions = generateSuggestions(intent);
@@ -558,13 +566,14 @@ const generateMockResponse = async (
   if (intent === 'cancellation' && userId) {
     const tickets = await getUserTickets(userId);
     const activeTickets = tickets.filter(ticket => !ticket.canceled_at && !ticket.is_used);
+    const realCancellationPolicies = await getCancellationPoliciesText();
     
     if (activeTickets.length > 0) {
       const ticketList = activeTickets.map((ticket, index) => 
         `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🪑 ${ticket.seat?.label || (ticket.seat?.row_idx && ticket.seat?.col_idx ? `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음')} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price.toLocaleString()}원\n   📅 ${new Date(ticket.created_at).toLocaleDateString('ko-KR')} 예매`
       ).join('\n\n');
       
-      message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
+      message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n${realCancellationPolicies}\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
     } else {
       message = `현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!`;
     }
@@ -581,7 +590,9 @@ const generateMockResponse = async (
   }
   
   if (intent === 'cancellation' && !userId) {
-    message = `티켓 취소를 위해서는 로그인이 필요합니다. 🔐\n\n로그인 후 다시 시도해 주세요.\n\n취소 정책:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가`;
+    const realCancellationPolicies = await getCancellationPoliciesText();
+    
+    message = `티켓 취소를 위해서는 로그인이 필요합니다. 🔐\n\n로그인 후 다시 시도해 주세요.\n\n취소 정책:\n${realCancellationPolicies}`;
     actionType = 'show_tickets';
     
     const suggestions = generateSuggestions(intent);
@@ -732,9 +743,14 @@ export const generateChatResponse = async (
 
     // userId가 반드시 필요한 intent인데 userId가 없는 경우 안내 메시지 반환
     if ((intent === 'my_tickets' || intent === 'cancellation') && !userId) {
-      const message = intent === 'cancellation' 
-        ? '티켓 취소를 위해서는 로그인이 필요합니다. 🔐\n\n로그인 후 다시 시도해 주세요.\n\n취소 정책:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가'
-        : '이 기능을 이용하려면 로그인이 필요합니다. 로그인 후 다시 시도해 주세요.';
+      let message = '';
+      
+      if (intent === 'cancellation') {
+        const realCancellationPolicies = await getCancellationPoliciesText();
+        message = `티켓 취소를 위해서는 로그인이 필요합니다. 🔐\n\n로그인 후 다시 시도해 주세요.\n\n취소 정책:\n${realCancellationPolicies}`;
+      } else {
+        message = '이 기능을 이용하려면 로그인이 필요합니다. 로그인 후 다시 시도해 주세요.';
+      }
       
       return {
         message,
@@ -798,7 +814,7 @@ export const generateChatResponse = async (
 
     // 예매 방법 안내도 AI를 거치지 않고 직접 응답
     if (intent === 'booking_help') {
-      message = `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n**💰 결제 후 취소 정책:**\n• 공연 7일 전: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`;
+      message = `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`;
       suggestions = generateSuggestions(intent);
       actionType = 'booking_help';
       return {
@@ -813,6 +829,7 @@ export const generateChatResponse = async (
     if (intent === 'cancellation' && userId) {
       const tickets = await getUserTickets(userId);
       const activeTickets = tickets.filter(ticket => !ticket.canceled_at && !ticket.is_used);
+      const realCancellationPolicies = await getCancellationPoliciesText();
       
       if (activeTickets.length === 0) {
         message = '현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!';
@@ -824,7 +841,7 @@ export const generateChatResponse = async (
           
           return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price.toLocaleString()}원\n   - 예매일: ${new Date(ticket.created_at).toLocaleDateString('ko-KR')}`;
         }).join('\n\n');
-        message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n• 공연 7일 전까지: 100% 환불\n• 공연 3-7일 전: 90% 환불\n• 공연 1-3일 전: 70% 환불\n• 공연 당일: 취소 불가\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
+        message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n${realCancellationPolicies}\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
       }
       suggestions = generateSuggestions(intent);
       actionType = 'show_tickets';

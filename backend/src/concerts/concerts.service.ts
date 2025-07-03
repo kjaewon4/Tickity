@@ -1,5 +1,6 @@
 import { Concert } from './concerts.model';
 import { supabase } from '../lib/supabaseClient';
+import { getCancellationPolicies } from '../cancellation_policies/cancellation_policies.service';
 
 /* ─────────────────────── 공통 헬퍼 ─────────────────────── */
 
@@ -335,12 +336,7 @@ export const getConcertDetail = async (concertId: string) => {
   const seat_prices = await fetchSeatPrices(concertId, true);
 
   /* 3) 취소 정책 */
-  const { data: policiesData, error: policyError } = await supabase
-    .from('cancellation_policies')
-    .select('period_desc, fee_desc')
-    .eq('concert_id', concertId);
-
-  if (policyError) throw policyError;
+  const policiesData = await getCancellationPolicies();
 
   return {
     concert: concertData,
