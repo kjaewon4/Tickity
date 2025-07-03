@@ -474,3 +474,68 @@ export const getConcertDetailByShortId = async (shortId: string) => {
 
   return getConcertDetail(concert.id);
 };
+
+/**
+ * 예매 기간과 취소정책 간의 조건 검증
+ * @param validFrom 예매 시작일
+ * @param validTo 예매 종료일
+ * @param concertDate 공연 날짜
+ * @returns 검증 결과 및 오류 메시지
+ */
+export const validateConcertSchedule = (
+  validFrom: string,
+  validTo: string,
+  concertDate: string
+): { isValid: boolean; errorMessage?: string } => {
+  const bookingStart = new Date(validFrom);
+  const bookingEnd = new Date(validTo);
+  const performanceDate = new Date(concertDate);
+
+  // 1. 기본 날짜 순서 검증
+  if (bookingStart >= bookingEnd) {
+    return {
+      isValid: false,
+      errorMessage: '예매 시작일이 종료일보다 뒤에 있습니다.'
+    };
+  }
+
+  if (bookingEnd >= performanceDate) {
+    return {
+      isValid: false,
+      errorMessage: '예매 종료일이 공연 날짜보다 뒤에 있습니다.'
+    };
+  }
+
+  // 2. 취소정책 조건 검증
+  // 현재 취소정책: 예매 후 7일 이내 무료, 예매 후 8일~관람일 10일전까지 유료
+  // "예매 후 8일~관람일 10일전까지" 구간이 존재하려면: 예매 종료일 + 8일 ≤ 공연일 - 10일
+  // 즉, 예매 종료일 ≤ 공연일 - 18일 (18일 이상 간격 필요)
+  
+  const eightDaysAfterBookingEnd = new Date(bookingEnd);
+  eightDaysAfterBookingEnd.setDate(eightDaysAfterBookingEnd.getDate() + 8);
+
+  const tenDaysBeforePerformance = new Date(performanceDate);
+  tenDaysBeforePerformance.setDate(tenDaysBeforePerformance.getDate() - 10);
+
+  // 예매 종료일로부터 8일 후가 공연일 10일 전보다 뒤에 있으면 문제
+  if (eightDaysAfterBookingEnd > tenDaysBeforePerformance) {
+    const actualGap = Math.ceil((performanceDate.getTime() - bookingEnd.getTime()) / (1000 * 60 * 60 * 24));
+    return {
+      isValid: false,
+      errorMessage: `취소정책 조건을 만족하지 않습니다. 예매 종료일과 공연 날짜 사이에 최소 18일의 간격이 필요합니다. (현재: ${actualGap}일) "예매 후 8일~관람일 10일전까지" 수수료 구간이 존재하지 않습니다.`
+    };
+  }
+
+  // 3. 최소 예매 기간 검증 (최소 1일은 예매 기간이 있어야 함)
+  const bookingPeriodMs = bookingEnd.getTime() - bookingStart.getTime();
+  const bookingPeriodDays = Math.ceil(bookingPeriodMs / (1000 * 60 * 60 * 24));
+  
+  if (bookingPeriodDays < 1) {
+    return {
+      isValid: false,
+      errorMessage: '예매 기간이 최소 1일 이상이어야 합니다.'
+    };
+  }
+
+  return { isValid: true };
+};
