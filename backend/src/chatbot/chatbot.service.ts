@@ -833,7 +833,7 @@ export const generateChatResponse = async (
                           (ticket.seat?.row_idx && ticket.seat?.col_idx ? 
                            `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음');
           
-          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price.toLocaleString()}원\n   - 예매일: ${new Date(ticket.created_at).toLocaleDateString('ko-KR')}`;
+          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price?.toLocaleString() || '가격 정보 없음'}원\n   - 예매일: ${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('ko-KR') : '날짜 정보 없음'}`;
         }).join('\n\n');
         message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n${realCancellationPolicies}\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
       }
