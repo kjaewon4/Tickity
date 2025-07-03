@@ -96,16 +96,9 @@ export const getConcertById = async (concertId: string): Promise<Concert | null>
  */
 export const createConcert = async (concert: Omit<Concert, 'id' | 'created_at'>): Promise<Concert | null> => {
   try {
-    // 입력 데이터 검증
-    const concertData = {
-      ...concert,
-      // date 필드는 더 이상 사용하지 않음
-      // start_date와 start_time만 사용
-    };
-
     const { data: newConcert, error } = await supabase
       .from('concerts')
-      .insert([concertData])
+      .insert([concert])
       .select()
       .single();
 
