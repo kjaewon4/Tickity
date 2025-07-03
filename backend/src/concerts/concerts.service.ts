@@ -180,7 +180,6 @@ export const getConcerts = async (category?: string, availableOnly: boolean = fa
     id: c.id,
     title: c.title,
     main_performer: c.main_performer,
-    date: c.start_date && c.start_time ? `${c.start_date}T${c.start_time}` : null,
     start_date: c.start_date,
     start_time: c.start_time,
     poster_url: c.poster_url,

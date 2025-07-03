@@ -33,7 +33,8 @@ export interface TicketWithDetails extends Ticket {
   concert?: {
     id: string;
     title: string;
-    date: string;
+    start_date: string;
+    start_time: string;
     venue_name: string;
     poster_url?: string;
   };
@@ -150,8 +151,9 @@ export const getUserTickets = async (
       *,
       concerts ( 
         id, 
-        title, 
-        date, 
+        title,
+        start_date,
+        start_time, 
         poster_url,
         venues ( name )
       ),
@@ -170,7 +172,8 @@ export const getUserTickets = async (
     concert: t.concerts && {
       id:         t.concerts.id,
       title:      t.concerts.title,
-      date:       t.concerts.date,
+      start_date: t.concerts.start_date,
+      start_time: t.concerts.start_time,
       venue_name: t.concerts.venues?.name || '장소 정보 없음',
       poster_url: t.concerts.poster_url,
     },
@@ -198,7 +201,8 @@ export const getTicketById = async (
       concerts ( 
         id, 
         title, 
-        date, 
+        start_date,
+        start_time,
         poster_url,
         venues ( name )
       ),
@@ -219,7 +223,8 @@ export const getTicketById = async (
     concert: data.concerts && {
       id:         data.concerts.id,
       title:      data.concerts.title,
-      date:       data.concerts.date,
+      start_date: data.concerts.start_date,
+      start_time: data.concerts.start_time,
       venue_name: data.concerts.venues?.name || '장소 정보 없음',
       poster_url: data.concerts.poster_url,
     },

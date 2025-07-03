@@ -181,7 +181,7 @@ router.get('/dashboard/:userId', /* authenticateToken, */ async (req: Request, r
       upcoming: userTickets.filter(ticket => 
         !ticket.is_used && 
         !ticket.canceled_at && 
-        new Date(ticket.concert?.date || '') > new Date()
+        new Date(ticket.concert?.start_date || '') > new Date()
       ).length,
       canceled: userTickets.filter(ticket => ticket.canceled_at).length
     };
@@ -263,7 +263,9 @@ router.get('/tickets/:userId', /* authenticateToken, */ async (req: Request, res
         price: ticket.purchase_price.toLocaleString() + '원',
         status: status,
         purchaseDate: new Date(ticket.created_at).toLocaleDateString('ko-KR'),
-        concertDate: ticket.concert?.date ? new Date(ticket.concert.date).toLocaleDateString('ko-KR') : '날짜 정보 없음',
+        concertDate: ticket.concert?.start_date 
+          ? new Date(ticket.concert.start_date).toLocaleDateString('ko-KR') 
+          : '날짜 정보 없음',
         venueName: ticket.concert?.venue_name || '장소 정보 없음',
         raw: ticket // 원본 데이터도 포함
       };
@@ -276,7 +278,7 @@ router.get('/tickets/:userId', /* authenticateToken, */ async (req: Request, res
       upcoming: userTickets.filter(ticket => 
         !ticket.is_used && 
         !ticket.canceled_at && 
-        new Date(ticket.concert?.date || '') > new Date()
+        new Date(ticket.concert?.start_date || '') > new Date()
       ).length,
       canceled: userTickets.filter(ticket => ticket.canceled_at).length
     };
