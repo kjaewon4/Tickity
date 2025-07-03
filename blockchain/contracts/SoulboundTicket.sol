@@ -40,6 +40,8 @@ contract SoulboundTicket is ERC721, Ownable {
         nextTokenId = 1;
     }
 
+    event TicketMinted(address indexed to, uint256 indexed tokenId, string uri);
+
     /// @notice 새 티켓 민팅 (예매)
     /// @param concertId   공연 식별자
     /// @param seatNumber  좌석번호 (예: "A-01")
@@ -78,6 +80,9 @@ contract SoulboundTicket is ERC721, Ownable {
         });
 
         hasMintedForConcert[msg.sender][concertId] = true;
+
+        emit TicketMinted(msg.sender, id, uri);
+
     }
 
     /// @notice tokenURI 조회

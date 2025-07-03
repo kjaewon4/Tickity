@@ -61,7 +61,7 @@ export class BlockchainService {
   async mintTicket(
     userId: string,
     concertId: string,
-    ticketId: string, 
+    ticketId: string,
     seat: string,
     uri: string,
     priceEth: string
@@ -94,33 +94,26 @@ export class BlockchainService {
         }
       );
       const receipt = await tx.wait();
-      if (!receipt) {
-        throw new Error('트랜잭션 영수증을 받지 못했습니다.');
-      }
-      console.dir(receipt, { depth: null });
+      if (!receipt) throw new Error('트랜잭션 영수증을 받지 못했습니다.');
 
       console.log('🪵 Raw logs:', receipt.logs);
 
-      console.log('🪵 Raw logs:', receipt.logs.map((l:any) => ({
-        topics: l.topics,
-        data: l.data,
-        address: l.address,
-      })));
 
-      let tokenId: number | undefined = undefined;
+      // TicketMinted 이벤트 파싱
+      let tokenId: number | undefined;
       for (const log of receipt.logs as Log[]) {
         try {
           const parsed = this.contract.interface.parseLog(log);
-          console.log('✅ Parsed log:', parsed);
-          if (parsed?.name === 'Transfer') {
-            const idRaw = parsed.args?.[2];
-            tokenId = Number(idRaw); // BigInt이든 number이든 변환됨
+          console.log('✅ Parsed:', parsed.name, parsed.args);
+          if (parsed.name === 'TicketMinted') {
+            tokenId = Number(parsed.args.tokenId);
+            console.log('✅ TicketMinted 이벤트 파싱 완료:', tokenId);
             break;
           }
-
         } catch (err) {
-          console.log('❌ Failed to parse log:', log);
-          continue;
+              console.error('❌ parseLog 실패:', err);
+    console.log('⛔ Raw log that failed:', log);
+          continue; // parse 실패 시 무시
         }
       }
 
@@ -136,7 +129,7 @@ export class BlockchainService {
     } catch (err) {
       console.error('🧨 민팅 실패! 메타데이터 및 DB 롤백 시도');
 
-      // 🧹 메타데이터 및 DB 정리
+      // 롤백
       try {
         const { error: storageError } = await supabase.storage
           .from('metadata')
@@ -156,7 +149,7 @@ export class BlockchainService {
         console.error('🔥 롤백 중 예외 발생:', cleanupErr);
       }
 
-      throw err; // 에러 다시 던져서 controller에 알려줌
+      throw err;
     }
   }
 
