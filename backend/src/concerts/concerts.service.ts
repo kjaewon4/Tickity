@@ -334,18 +334,18 @@ export const getConcertDetail = async (concertId: string) => {
   /* 2) 가격 + 총석수 */
   const seat_prices = await fetchSeatPrices(concertId, true);
 
-  /* 3) 취소 정책 */
-  const { data: policiesData, error: policyError } = await supabase
-    .from('cancellation_policies')
-    .select('period_desc, fee_desc')
-    .eq('concert_id', concertId);
+  // 3) 취소 정책 - 추후 바뀐 테이블에 맞게 바꾸기
+  // const { data: policiesData, error: policyError } = await supabase
+  //   .from('cancellation_policies')
+  //   .select('period_desc, fee_desc')
+  //   .eq('concert_id', concertId);
 
-  if (policyError) throw policyError;
+  // if (policyError) throw policyError;
 
   return {
     concert: concertData,
     seat_prices,
-    cancellation_policies: policiesData ?? [],
+    // cancellation_policies: policiesData ?? [],
   };
 };
 
