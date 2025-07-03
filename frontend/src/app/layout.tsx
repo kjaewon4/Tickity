@@ -7,6 +7,14 @@ import Footer from './layout/Footer';
 import './globals.css';
 import { apiClient } from '@/lib/apiClient';
 import { UserInfo } from '@/types/auth';
+import { Montserrat } from 'next/font/google';
+
+// ✅ Montserrat 폰트 불러오기
+const montserrat = Montserrat({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+});
 
 export default function RootLayout({
   children,
@@ -62,7 +70,8 @@ export default function RootLayout({
 
   return (
     <html lang="ko">
-      <body>
+      {/* ✅ Montserrat 폰트를 전체에 적용 */}
+      <body className={montserrat.className}>
         {!isSeatPage && (
           <Navbar user={user} loading={loading} handleLogout={handleLogout} />
         )}
