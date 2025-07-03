@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { MdCake, MdEmail, MdCalendarToday } from 'react-icons/md';
 import { FaTicketAlt } from 'react-icons/fa';
+import { useRouter } from 'next/navigation';
 
 interface User {
   name: string;
@@ -15,8 +16,8 @@ interface User {
 interface ReservationItem {
   id: number;
   title: string;
-  date: string;
-  time: string;
+  start_date: string;
+  start_time: string;
   location: string;
   price: string;
   bookedAt: string;
@@ -26,6 +27,7 @@ interface ReservationItem {
 }
 
 export default function MyPage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,6 +39,7 @@ useEffect(() => {
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
       console.warn('accessToken이 없습니다');
+      router.replace('/login');
       return;
     }
 
@@ -52,11 +55,20 @@ useEffect(() => {
       if (!res1.ok) {
         const text = await res1.text();
         console.error('응답 실패:', res1.status, text);
+        
+        // 토큰이 유효하지 않은 경우
+        if (res1.status === 401) {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          router.replace('/login?error=invalid_token');
+          return;
+        }
         return;
       }
 
       const userData = await res1.json();
       console.log('유저 정보:', userData);
+      console.log('유저 정보 (JSON):', JSON.stringify(userData, null, 2));
 
       const userId = userData.data?.user?.id;
       if (!userId) {
@@ -96,7 +108,7 @@ useEffect(() => {
   };
 
   fetchUserDashboard();
-}, []);
+}, [router]);
 
   const filtered = reservations.filter((item) => {
     if (filter === '전체') return true;
@@ -197,7 +209,7 @@ useEffect(() => {
                         <div>
                         <p className="font-semibold mb-1">{item.title}</p>
                         <p className="text-sm text-gray-500">
-                            {item.date} {item.time}
+                            {item.start_date} {item.start_time}
                         </p>
                         <p className="text-sm text-gray-500">{item.location}</p>
                         <div className="mt-2 flex items-center gap-2 text-sm">

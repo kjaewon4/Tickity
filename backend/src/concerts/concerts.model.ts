@@ -1,7 +1,6 @@
 export interface Concert {
   id: string;
   title: string;
-  date?: string; // 선택적 필드로 변경 - 하위 호환성을 위해 유지
   start_date: string; // 공연 시작 날짜 (YYYY-MM-DD 형태)
   start_time: string; // 공연 시작 시간 (HH:mm 형태)
   venue_id: string;
