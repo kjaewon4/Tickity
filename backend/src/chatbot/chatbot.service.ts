@@ -385,8 +385,7 @@ const formatConcertsForAI = async (page: number = 1, artistName?: string, dateFi
       };
     }
     
-    const tableHeader = `
-<table class="min-w-full divide-y divide-gray-200 border border-gray-300">
+    const tableHeader = `<table class="min-w-full divide-y divide-gray-200 border border-gray-300">
   <thead class="bg-gray-100">
     <tr>
       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">번호</th>
@@ -396,21 +395,16 @@ const formatConcertsForAI = async (page: number = 1, artistName?: string, dateFi
       <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">출연자</th>
     </tr>
   </thead>
-  <tbody class="bg-white divide-y divide-gray-200">
-`;
-    const tableRows = paginatedConcerts.map((concert: any, index: number) => `
-    <tr>
+  <tbody class="bg-white divide-y divide-gray-200">`;
+    const tableRows = paginatedConcerts.map((concert: any, index: number) => `    <tr>
       <td class="px-4 py-2 whitespace-nowrap">${startIndex + index + 1}</td>
       <td class="px-4 py-2 whitespace-nowrap">${concert.title}</td>
       <td class="px-4 py-2 whitespace-nowrap">${formatShortDate(concert.start_date)}</td>
       <td class="px-4 py-2 whitespace-nowrap">${concert.venue_name}</td>
       <td class="px-4 py-2 whitespace-nowrap">${concert.main_performer}</td>
-    </tr>
-`).join('');
-    const tableFooter = `
-  </tbody>
-</table>
-`;
+    </tr>`).join('');
+    const tableFooter = `  </tbody>
+</table>`;
     const concertTable = tableHeader + tableRows + tableFooter;
     const pageInfo = `<br/><br/>📄 ${page}페이지 / 총 ${totalPages}페이지 (전체 ${concerts.length}개 콘서트)`;
     
