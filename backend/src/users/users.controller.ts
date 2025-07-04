@@ -9,8 +9,10 @@ import { supabase } from '../lib/supabaseClient';
 const router = Router();
 
 // 기존 엔드포인트들 (레거시)
-router.get('/', (req: Request, res: Response) => {
-  res.json(getAllUsers());
+router.get('/', async (req: Request, res: Response) => {
+  const { data, error } = await supabase.from('users').select('*');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ data });
 });
 
 router.post('/', (req: Request, res: Response) => {
