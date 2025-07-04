@@ -75,8 +75,19 @@ export class BlockchainService {
     if (userErr) throw new Error(`DB 조회 실패: ${userErr.message}`);
     if (!userData?.private_key_encrypted) throw new Error('사용자 키 정보 없음');
 
+    console.log('🔍 사용자 지갑 정보:', {
+      userId,
+      walletAddress: userData.wallet_address,
+      hasPrivateKey: !!userData.private_key_encrypted
+    });
+
     const privateKey = decrypt(userData.private_key_encrypted);
     const signer = new Wallet(privateKey, PROVIDER);
+    
+    console.log('🔍 실제 사용자 지갑 주소:', signer.address);
+    
+    // 지갑 잔액 확인
+    const balance = await PROVIDER.getBalance(signer.address);
     const contractWithSigner = this.contract.connect(signer);
     const price = parseEther(priceEth);
 
@@ -95,24 +106,21 @@ export class BlockchainService {
       );
       const receipt = await tx.wait();
       if (!receipt) throw new Error('트랜잭션 영수증을 받지 못했습니다.');
-
-      console.log('🪵 Raw logs:', receipt.logs);
-
+      
+      if (receipt.status === 0) {
+        throw new Error('트랜잭션이 실패했습니다 (status: 0)');
+      }
 
       // TicketMinted 이벤트 파싱
       let tokenId: number | undefined;
       for (const log of receipt.logs as Log[]) {
         try {
           const parsed = this.contract.interface.parseLog(log);
-          console.log('✅ Parsed:', parsed.name, parsed.args);
           if (parsed.name === 'TicketMinted') {
             tokenId = Number(parsed.args.tokenId);
-            console.log('✅ TicketMinted 이벤트 파싱 완료:', tokenId);
             break;
           }
         } catch (err) {
-              console.error('❌ parseLog 실패:', err);
-    console.log('⛔ Raw log that failed:', log);
           continue; // parse 실패 시 무시
         }
       }

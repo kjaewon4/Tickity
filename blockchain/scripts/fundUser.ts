@@ -1,22 +1,26 @@
-import { ethers } from 'hardhat';
+import { ethers } from 'ethers';
 
 async function fundUser() {
-  const userAddress = "0x75022888C96AC249a749a0F24EcEAb5A9BB771fa"; // 👈 로그인한 유저의 실제 지갑 주소로 변경
+  const userAddress = "0xF7eEe3A78EAc4415D736a9E08688190C49C38AfC"; // 👈 실제 개인키로 복원된 주소
 
-  // Rich 계정 가져오기
-  const [richAccount] = await ethers.getSigners();
-
-  console.log(`💰 Rich Account: ${richAccount.address}`);
+  // 로컬 하드햇 노드에 연결
+  const provider = new ethers.JsonRpcProvider('http://localhost:8545');
+  
+  // 하드햇 노드의 첫 번째 계정 사용 (100000 ETH가 있는 계정)
+  const accounts = await provider.send('eth_accounts', []);
+  const richAccountAddress = accounts[0];
+  
+  console.log(`💰 Rich Account: ${richAccountAddress}`);
   console.log(`➡️ Sending ETH to ${userAddress}`);
 
-  const tx = await richAccount.sendTransaction({
+  // ETH 전송
+  const tx = await provider.send('eth_sendTransaction', [{
+    from: richAccountAddress,
     to: userAddress,
-    value: ethers.parseEther("10.0"), // 10 ETH
-  });
+    value: ethers.parseEther("2.0").toString(), // 2 ETH (가스비 고려)
+  }]);
 
-  await tx.wait();
-
-  console.log("✅ 전송 완료:", tx.hash);
+  console.log("✅ 전송 완료:", tx);
 }
 
 fundUser().catch(console.error);
