@@ -1,7 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { extractConcertShortId } from '@/utils/urlUtils';
-import { Concert, SeatPrice, CancellationPolicy, TicketInfo } from '../types';
+import {
+  Concert,
+  SeatPrice,
+  CancellationPolicy,
+  TicketInfo,
+} from '../types';
 
 interface UseConcertDataReturn {
   concert: Concert | null;
@@ -14,7 +19,9 @@ interface UseConcertDataReturn {
 }
 
 export const useConcertData = (): UseConcertDataReturn => {
-  const { slug } = useParams();
+  const params = useParams() as { slug?: string | string[] };
+  const slug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
+
   const [concert, setConcert] = useState<Concert | null>(null);
   const [seatPrices, setSeatPrices] = useState<SeatPrice[]>([]);
   const [policies, setPolicies] = useState<CancellationPolicy[]>([]);
@@ -22,25 +29,25 @@ export const useConcertData = (): UseConcertDataReturn => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const ticketInfo = useMemo(() => {
+  const ticketInfo = useMemo((): TicketInfo | null => {
     if (!concert || !seatPrices.length) return null;
 
-    const minPrice = Math.min(...seatPrices.map(s => s.price));
-    const maxPrice = Math.max(...seatPrices.map(s => s.price));
+    const minPrice = Math.min(...seatPrices.map((s) => s.price));
+    const maxPrice = Math.max(...seatPrices.map((s) => s.price));
 
     return {
-      image: concert.poster_url,
+      image: concert.poster_url || '/images/default-poster.png',
       title: concert.title,
       subtitle: `[ ${concert.main_performer} ] IN SEOUL`,
       location: concert.venues?.name || '',
       address: concert.venues?.address || '',
-      dateRange: `${concert.valid_from} ~ ${concert.valid_to}`,
+      dateRange: `${concert.start_date}`,
       runtime: concert.running_time,
       price: `${minPrice.toLocaleString()}원 ~ ${maxPrice.toLocaleString()}원`,
       promoter: concert.promoter,
       ageLimit: concert.age_rating,
       contact: concert.customer_service,
-      serviceFee: `${concert.booking_fee.toLocaleString()}원`
+      serviceFee: `${concert.booking_fee.toLocaleString()}원`,
     };
   }, [concert, seatPrices]);
 
@@ -54,7 +61,7 @@ export const useConcertData = (): UseConcertDataReturn => {
     const fetchConcert = async () => {
       try {
         setLoading(true);
-        
+
         // 슬러그에서 짧은 ID 추출
         const shortId = extractConcertShortId(slug as string);
         
@@ -67,7 +74,7 @@ export const useConcertData = (): UseConcertDataReturn => {
         // 짧은 ID로 공연 조회
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/${shortId}`);
         const json = await res.json();
-        
+
         if (json.success && json.data) {
           setConcert(json.data.concert);
           setSeatPrices(json.data.seat_prices);
@@ -93,6 +100,6 @@ export const useConcertData = (): UseConcertDataReturn => {
     ticketInfo,
     rounds,
     loading,
-    error
+    error,
   };
-}; 
+};

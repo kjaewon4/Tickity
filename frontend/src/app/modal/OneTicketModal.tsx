@@ -37,25 +37,24 @@ const OneTicketModal: React.FC<OneTicketModalProps> = ({ onClose }) => {
         transition={{ duration: 0.3, ease: 'easeOut' }}
       >
         <motion.div
-            className={`bg-white rounded-xl w-[90vw] max-w-sm p-6 relative shadow-xl border ${
-                highlight ? 'animate-modal-pulse' : 'border-gray-300'
-            }`}
-            onClick={(e) => e.stopPropagation()}
+          className={`bg-white rounded-2xl w-[92vw] max-w-lg p-8 relative shadow-2xl border ${
+            highlight ? 'animate-modal-pulse' : 'border-gray-300'
+          }`}
+          onClick={(e) => e.stopPropagation()}
         >
-        
           {/* X 버튼 */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl"
+            className="absolute top-5 right-5 text-gray-500 hover:text-gray-700 text-2xl"
           >
             <IoClose />
           </button>
 
           {/* 내용 */}
-          <h3 className="text-lg font-semibold mb-4 text-center">알림</h3>
-          <p className="text-sm text-gray-700 text-center">
+          <h3 className="text-2xl font-bold mb-6 text-center">알림</h3>
+          <p className="text-base text-gray-700 text-center leading-relaxed">
             해당 콘서트는{' '}
-            <span className="text-red-500 font-semibold">1인 1매</span>만 예매 가능합니다.
+            <span className="text-red-500 font-bold">1인 1매</span>만 예매 가능합니다.
           </p>
         </motion.div>
       </motion.div>

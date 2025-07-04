@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import apiClient from '@/lib/apiClient';
 
+export interface TicketMintResult {
+  token_id: string;
+  tx_hash: string;
+  metadata_uri: string;
+  seat_number: string;
+}
+
 export default function Payment() {
   const router = useRouter();
 
@@ -17,6 +24,8 @@ export default function Payment() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+const [expiresAt, setExpiresAt] = useState<number | null>(null);
+const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const total = ticketPrice + bookingFee;
 
   useEffect(() => {
@@ -37,6 +46,12 @@ export default function Payment() {
     const storedFee = localStorage.getItem('bookingFee');
     setBookingFee(storedFee ? Number(storedFee) : 0);
 
+    const expiresAtString = localStorage.getItem('holdExpiresAt'); // 서버에서 받은 걸 저장해둔 경우
+    if (expiresAtString) {
+      const expires = new Date(expiresAtString).getTime();
+      setExpiresAt(expires);
+    }
+
     const fetchUser = async () => {
       const token = localStorage.getItem('accessToken');
       if (token) {
@@ -54,6 +69,25 @@ export default function Payment() {
 
     fetchUser();
   }, []);
+
+  useEffect(() => {
+    if (!expiresAt) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const remaining = Math.floor((expiresAt - now) / 1000);
+      setRemainingSeconds(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(interval);
+        alert('결제 시간이 만료되었습니다.');
+        // 페이지 이동 또는 상태 초기화
+        location.reload(); // 또는 navigate('/expire')
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [expiresAt]);
 
   const handlePayment = async () => {
     const concertId = localStorage.getItem('concertId');
@@ -80,14 +114,26 @@ export default function Payment() {
     };
 
     try {
-      const res = await apiClient.post('/tickets', payload);
-      if (res.success) router.push('/complete');
-      else alert('결제 실패: ' + res.message);
-    } catch (err) {
-      console.error('결제 요청 중 오류:', err);
-      alert('결제 중 오류가 발생했습니다.');
-    }
-  };
+      const res = await apiClient.post<TicketMintResult>('/tickets', payload);
+      if (res.success && res.data) {
+        const { token_id, tx_hash, metadata_uri, seat_number } = res.data;
+
+        const query = new URLSearchParams({
+          token_id,
+          tx_hash,
+          metadata_uri,
+          seat_number,
+        }).toString();
+
+        router.push(`/complete?${query}`);
+      } else {
+        alert('결제 실패: ' + (res.message || res.error || '알 수 없는 오류'));
+      }
+        } catch (err) {
+          console.error('결제 요청 중 오류:', err);
+          alert('결제 중 오류가 발생했습니다.');
+        }
+      };
 
   return (
     <main className="min-h-screen bg-white text-sm text-gray-800">
@@ -212,6 +258,11 @@ export default function Payment() {
             >
               결제하기
             </button>
+            {expiresAt && (
+            <div className="text-center text-sm text-red-600 font-semibold mb-2">
+                ⏳ 남은 시간: {Math.floor(remainingSeconds / 60)}분 {remainingSeconds % 60}초
+              </div>
+            )}
           </div>
         </div>
       </div>

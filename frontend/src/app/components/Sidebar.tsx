@@ -2,6 +2,7 @@
 
 import React, { FC, useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
+import apiClient from '@/lib/apiClient';
 
 interface ZoneInfo {
   code: string;
@@ -39,6 +40,8 @@ const Sidebar: FC<SidebarProps> = ({
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const isMouseDown = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [user, setUser] = useState<any>(null);
+
 
   useEffect(() => {
     if (!concertId) return;
@@ -61,7 +64,22 @@ const Sidebar: FC<SidebarProps> = ({
     };
 
     fetchSeatSummary();
+        const fetchUser = async () => {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        try {
+          const res = await apiClient.getUserWithToken(token);
+          if (res.success && res.data?.user) setUser(res.data.user);
+          else localStorage.removeItem('accessToken');
+        } catch {
+          localStorage.removeItem('accessToken');
+        } 
+      } 
+    };
+
+    fetchUser();
   }, [concertId]);
+
 
   useEffect(() => {
     console.log('Sidebar - selectedSeatInfo:', selectedSeatInfo);
@@ -192,7 +210,7 @@ const Sidebar: FC<SidebarProps> = ({
     };
   }, []);
 
-  const handleConfirmSeat = () => {
+  const handleConfirmSeat = async () => {
     console.log('[Sidebar] 좌석 선택 완료 버튼 클릭됨');
     console.log('selectedSeatInfo:', selectedSeatInfo);
     console.log('selectedZone:', selectedZone);
@@ -215,8 +233,44 @@ const Sidebar: FC<SidebarProps> = ({
       console.log('가격 및 등급 저장 완료:', matchedGrade.grade_name, matchedGrade.price);
     }
 
-    console.log('onConfirmSeat 실행됨 → setIsConfirmed(true)');
-    onConfirmSeat();
+      const concertId = localStorage.getItem('concertId');
+      const row = Number(localStorage.getItem('selectedRow'));
+      const col = Number(localStorage.getItem('selectedCol'));
+      const sectionId = localStorage.getItem('selectedZoneId');
+      const userId = user?.id;
+
+      if (!concertId || row === undefined || col === undefined || !userId) {
+        alert('결제 정보가 부족합니다.');
+        return;
+      }
+
+      const payload = {
+        sectionId,
+        row,
+        col,
+        userId,
+      };
+
+      try {
+        const res = await apiClient.post(
+          `/concerts/${concertId}/seats/hold`,
+          payload
+        );
+
+        if (!res.success) {
+          alert('좌석을 HOLD하는 데 실패했습니다.');
+          return;
+        }
+
+        localStorage.setItem('holdExpiresAt', res.hold_expires_at);
+
+        console.log('좌석 HOLD 성공');
+        console.log('onConfirmSeat 실행됨 → setIsConfirmed(true)');
+        onConfirmSeat(); // 다음 단계로 진행
+      } catch (err) {
+        console.error('좌석 HOLD 오류:', err);
+        alert('좌석을 HOLD하는 중 오류가 발생했습니다.');
+      }
   };
 
   const isVIP = (name: string) =>

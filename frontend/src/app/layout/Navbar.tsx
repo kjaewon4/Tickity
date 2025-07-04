@@ -71,108 +71,105 @@ useEffect(() => {
     }
   }, [showSearch]);
 
-  return (
-    <nav className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white/80 backdrop-blur-md dark:bg-gray-900/80 dark:border-gray-700">
-      <Link href="/">
-        <div className="w-[120px] h-auto cursor-pointer">
-          <img src="/images/Tickity.svg" alt="Tickity Logo" className="object-contain" />
-        </div>
+return (
+  <nav className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white/80 backdrop-blur-md dark:bg-gray-900/80 dark:border-gray-700">
+    {/* 로고 */}
+    <Link href="/">
+      <div className="w-[150px] h-auto flex items-center cursor-pointer">
+        <img
+          src="/images/Tickity.svg"
+          alt="Tickity Logo"
+          className="object-contain h-14"
+        />
+      </div>
+    </Link>
+
+    <div className="flex items-center gap-6 relative">
+      {/* 검색창 */}
+      <form onSubmit={handleSearch} className="relative h-12 w-96 flex justify-end items-center">
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={searchKeyword}
+          onChange={(e) => setSearchKeyword(e.target.value)}
+          placeholder="콘서트명 또는 가수명을 입력하세요."
+          className="
+            h-12 w-full pl-4 pr-10 text-base bg-transparent
+            border border-gray-300 rounded-full
+            outline-none focus:outline-none
+          "
+        />
+        <button
+          type="submit"
+          className="
+            absolute right-4 top-1/2 -translate-y-1/2
+            text-gray-600 hover:text-blue-600
+            bg-transparent border-none shadow-none w-6 h-6
+            flex items-center justify-center cursor-pointer
+          "
+        >
+          <FiSearch size={20} />
+        </button>
+      </form>
+
+      {/* 네비게이션 메뉴 */}
+      <Link href="/" className="text-gray-700 hover:bg-gray-100 px-5 py-2.5 rounded text-base font-semibold">
+        Home
       </Link>
 
-      <div className="flex items-center gap-4 relative">
-        <form onSubmit={handleSearch} className="relative h-10 w-40 flex justify-end items-center">
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-            placeholder="콘서트명 또는 가수명을 입력하세요."
-            className={`
-              absolute right-0 h-10 pr-10 pl-4 text-sm bg-white rounded-full
-              transition-all duration-300 ease-in-out
-              focus:outline-none focus:ring-0
-              ${showSearch 
-                ? 'w-80 opacity-100 border border-gray-300 shadow-md' 
-                : 'w-0 opacity-0 border-none shadow-none'}
-            `}
-          />
-          
+      {/* 로그인 or 유저 메뉴 */}
+      {!loading && user ? (
+        <div className="relative flex items-center space-x-3">
+          <span className="text-base text-gray-700">환영합니다,</span>
           <button
-            type="submit"
-            onClick={() => setShowSearch(prev => !prev)}
-            className={`
-              absolute right-2.5 top-1/2 -translate-y-1/2 z-10
-              flex items-center justify-center
-              transition-all duration-300
-              ${showSearch 
-                ? 'w-6 h-6 bg-transparent border-none shadow-none text-gray-600' 
-                : 'w-10 h-10 bg-white border border-gray-300 shadow-md text-gray-500'}
-              rounded-full
-            `}
+            ref={buttonRef}
+            onClick={() => setModalOpen(prev => !prev)}
+            className="flex items-center gap-1 text-base font-semibold focus:outline-none border-none p-0 m-0"
           >
-            <FiSearch size={16} />
+            <span className="text-base text-gray-800 underline underline-offset-2 cursor-pointer">
+              {getUserDisplayName(user)}님
+            </span>
           </button>
-        </form>
 
-        <Link href="/" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">
-          Home
-        </Link>
-
-        {!loading && user ? (
-          <div className="relative flex items-center space-x-3">
-            <span className="text-sm text-gray-700">환영합니다,</span>
-            <button
-              ref={buttonRef}
-              onClick={() => setModalOpen(prev => !prev)}
-              className="flex items-center gap-1 text-sm focus:outline-none focus:ring-0 active:translate-y-0 border-none p-0 m-0"
+          {/* 드롭다운 메뉴 */}
+          {modalOpen && typeof window !== 'undefined' && createPortal(
+            <div
+              ref={modalRef}
+              className="fixed w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] p-4 space-y-4"
+              style={getPopupPosition()}
             >
-              <span className="font-semibold text-gray-600 underline underline-offset-2 cursor-pointer">
-                {getUserDisplayName(user)}님
-              </span>
-            </button>
-
-            {modalOpen && typeof window !== 'undefined' && createPortal(
-              <div
-                ref={modalRef} 
-                className="fixed w-60 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] p-4 space-y-3"
-                style={{
-                  top: getPopupPosition().top,
-                  left: getPopupPosition().left,
-                }}
+              <div className="font-bold text-gray-800 text-lg">
+                {getUserDisplayName(user)}{' '}
+                <span className="text-sm text-gray-500">WELCOME</span>
+              </div>
+              <button
+                onClick={() => router.push('/mypage')}
+                className="w-full flex items-center justify-center px-4 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-base font-medium text-gray-700"
               >
-                <div className="font-bold text-gray-800">
-                  {getUserDisplayName(user)}{' '}
-                  <span className="text-xs text-gray-500">WELCOME</span>
-                </div>
-                <button
-                  onClick={() => router.push('/mypage')}
-                  className="w-full flex items-center justify-center px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm font-medium text-gray-700 cursor-pointer"
-                >
-                  마이페이지
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center justify-center px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium cursor-pointer"
-                >
-                  로그아웃
-                </button>
-              </div>,
-              document.body
-            )}
-          </div>
-        ) : (
-          !loading && (
-            <Link
-              href="/login"
-              className="text-gray-700 hover:bg-gray-100 px-4 py-2 rounded text-sm"
-            >
-              로그인
-            </Link>
-          )
-        )}
-      </div>
-    </nav>
-  );
-};
-
+                마이페이지
+              </button>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center px-4 py-3 rounded-lg bg-red-500 hover:bg-red-600 text-white text-base font-medium"
+              >
+                로그아웃
+              </button>
+            </div>,
+            document.body
+          )}
+        </div>
+      ) : (
+        !loading && (
+          <Link
+            href="/login"
+             className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded text-base font-semibold transition-colors"
+          >
+            로그인
+          </Link>
+        )
+      )}
+    </div>
+  </nav>
+);
+}
 export default Navbar;

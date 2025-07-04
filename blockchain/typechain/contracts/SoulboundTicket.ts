@@ -62,6 +62,7 @@ export interface SoulboundTicketInterface extends Interface {
       | "ApprovalForAll"
       | "OwnershipTransferred"
       | "TicketCancelled"
+      | "TicketMinted"
       | "Transfer"
   ): EventFragment;
 
@@ -312,6 +313,24 @@ export namespace TicketCancelledEvent {
   export interface OutputObject {
     tokenId: bigint;
     reopenTime: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TicketMintedEvent {
+  export type InputTuple = [
+    to: AddressLike,
+    tokenId: BigNumberish,
+    uri: string
+  ];
+  export type OutputTuple = [to: string, tokenId: bigint, uri: string];
+  export interface OutputObject {
+    to: string;
+    tokenId: bigint;
+    uri: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -684,6 +703,13 @@ export interface SoulboundTicket extends BaseContract {
     TicketCancelledEvent.OutputObject
   >;
   getEvent(
+    key: "TicketMinted"
+  ): TypedContractEvent<
+    TicketMintedEvent.InputTuple,
+    TicketMintedEvent.OutputTuple,
+    TicketMintedEvent.OutputObject
+  >;
+  getEvent(
     key: "Transfer"
   ): TypedContractEvent<
     TransferEvent.InputTuple,
@@ -734,6 +760,17 @@ export interface SoulboundTicket extends BaseContract {
       TicketCancelledEvent.InputTuple,
       TicketCancelledEvent.OutputTuple,
       TicketCancelledEvent.OutputObject
+    >;
+
+    "TicketMinted(address,uint256,string)": TypedContractEvent<
+      TicketMintedEvent.InputTuple,
+      TicketMintedEvent.OutputTuple,
+      TicketMintedEvent.OutputObject
+    >;
+    TicketMinted: TypedContractEvent<
+      TicketMintedEvent.InputTuple,
+      TicketMintedEvent.OutputTuple,
+      TicketMintedEvent.OutputObject
     >;
 
     "Transfer(address,address,uint256)": TypedContractEvent<
