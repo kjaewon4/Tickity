@@ -194,11 +194,11 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">콘서트 둘러보기</h2>
         </div>
 
-        <div className="w-[1700px] flex flex-wrap gap-x-[12px] gap-y-6 mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
           {concerts.map((concert) => (
             <div
               key={concert.id}
-              className="w-[320px] cursor-pointer"
+              className="cursor-pointer"
               onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
             >
               <div className="h-[400px] rounded-xl shadow overflow-hidden bg-white relative">

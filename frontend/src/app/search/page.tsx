@@ -96,10 +96,10 @@ export default function SearchPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ backgroundColor: '#ffffff' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* 검색 헤더 */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">
             콘서트 검색
           </h1>
@@ -142,7 +142,7 @@ export default function SearchPage() {
         </div>
 
         {/* 검색 결과 */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div>
           {loading ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -182,7 +182,7 @@ export default function SearchPage() {
                     <div
                       key={concert.id}
                       onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
-                      className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
+                      className="cursor-pointer"
                     >
                       <div className="relative h-48">
                         <LazyImage
@@ -201,7 +201,7 @@ export default function SearchPage() {
                           imageSize="small"
                         />
                       </div>
-                      <div className="p-4">
+                      <div className="mt-2">
                         <h3 className="font-semibold text-gray-900 text-sm mb-1 line-clamp-2">
                           {concert.title}
                         </h3>
