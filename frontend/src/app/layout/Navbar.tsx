@@ -72,7 +72,7 @@ useEffect(() => {
   }, [showSearch]);
 
 return (
-  <nav className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white/80 backdrop-blur-md dark:bg-gray-900/80 dark:border-gray-700">
+  <nav className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white/80 backdrop-blur-md">
     {/* 로고 */}
     <Link href="/">
       <div className="w-[150px] h-auto flex items-center cursor-pointer">

@@ -191,7 +191,7 @@ export default function HomePage() {
 
 
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">콘서트 둘러보기</h2>
+          <h2 className="text-2xl font-bold text-gray-800">콘서트 둘러보기</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
@@ -220,11 +220,11 @@ export default function HomePage() {
                 />
               </div>
               <div className="mt-2 px-1">
-                <div className="text-2xl text-gray-900 dark:text-white font-extrabold leading-snug truncate">
+                <div className="text-2xl text-gray-900 font-extrabold leading-snug truncate">
                   {concert.title}
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400 font-bold">{concert.venue_name}</div>
-                <div className="text-sm text-gray-500 dark:text-gray-400 font-bold">
+                <div className="text-sm text-gray-500 font-bold">{concert.venue_name}</div>
+                <div className="text-sm text-gray-500 font-bold">
                   {formatStartDate(concert.start_date)}
                 </div>
               </div>

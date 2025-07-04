@@ -26,7 +26,7 @@ const formatMessage = (content: string): string => {
     // *텍스트* → <em>텍스트</em>
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     // `텍스트` → <code>텍스트</code>
-    .replace(/`(.*?)`/g, '<code class="bg-gray-200 dark:bg-gray-600 px-1 rounded text-sm">$1</code>')
+    .replace(/`(.*?)`/g, '<code class="bg-gray-200 px-1 rounded text-sm">$1</code>')
     // 줄바꿈 처리
     .replace(/\n/g, '<br>');
 };
@@ -174,21 +174,21 @@ export default function ChatbotPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           {/* 헤더 */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <h1 className="text-3xl font-bold text-gray-900">
               Tickity 챗봇
             </h1>
-            <p className="text-gray-600 dark:text-gray-300">
+            <p className="text-gray-600">
               티켓팅 관련 궁금한 점을 물어보세요!
             </p>
           </div>
 
           {/* 채팅 창 */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg h-[600px] flex flex-col">
+          <div className="bg-white rounded-lg shadow-lg h-[600px] flex flex-col">
             {/* 메시지 영역 */}
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
               {messages.map((message, index) => (
@@ -196,7 +196,7 @@ export default function ChatbotPage() {
                   <div className={`max-w-[80%] rounded-lg p-3 ${
                     message.role === 'user'
                       ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                      : 'bg-gray-100 text-gray-900'
                   }`}>
                     {/* HTML 메시지(표 등) 렌더링 */}
                     <div className="overflow-x-auto" dangerouslySetInnerHTML={{ __html: message.content }} />
@@ -209,7 +209,7 @@ export default function ChatbotPage() {
                           <button
                             key={suggestionIndex}
                             onClick={() => handleSuggestionClick(suggestion)}
-                            className="block w-full text-left p-2 text-sm bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded border border-gray-200 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-500 transition-colors"
+                            className="block w-full text-left p-2 text-sm bg-white text-gray-700 rounded border border-gray-200 hover:bg-gray-50 transition-colors"
                             disabled={isLoading}
                           >
                             {suggestion}
@@ -224,7 +224,7 @@ export default function ChatbotPage() {
               {/* 로딩 인디케이터 */}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3">
+                  <div className="bg-gray-100 rounded-lg p-3">
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -238,14 +238,14 @@ export default function ChatbotPage() {
             </div>
 
             {/* 입력 영역 */}
-            <div className="border-t border-gray-200 dark:border-gray-600 p-4">
+            <div className="border-t border-gray-200 p-4">
               <form onSubmit={handleSubmit} className="flex space-x-2">
                 <input
                   type="text"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   placeholder="메시지를 입력하세요..."
-                  className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled={isLoading}
                 />
                 <button
