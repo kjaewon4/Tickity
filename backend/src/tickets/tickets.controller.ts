@@ -55,6 +55,15 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
 
     console.log('🎟️ 티켓 생성 요청:', JSON.stringify(req.body, null, 2));
 
+    // 중복 민팅 검증
+    const mintingEligibility = await ticketsService.verifyMintingEligibility(userId, concertId);
+    if (!mintingEligibility.canMint) {
+      return res.status(400).json({
+        success: false,
+        error: mintingEligibility.error || '이미 해당 공연에 대한 티켓을 보유하고 있습니다.'
+      });
+    }
+
     // seats 테이블에서 seat_id 조회
     const seatId = await ticketsService.findSeatIdByPosition(sectionId, row, col);
 
@@ -183,6 +192,229 @@ router.post(
       res
         .status(500)
         .json({ success: false, error: '티켓 취소 처리 중 오류가 발생했습니다.' });
+    }
+  }
+);
+
+/**
+ * 사용자별 예매 티켓 목록 조회 (블록체인 검증 포함)
+ * GET /tickets/my-tickets-verified/:userId
+ */
+router.get(
+  '/my-tickets-verified/:userId',
+  async (
+    req: Request,
+    res: Response<ApiResponse & { data?: { tickets: any[]; total: number } }>
+  ) => {
+    try {
+      const { userId } = req.params;
+      if (!userId) {
+        return res
+          .status(400)
+          .json({ success: false, error: '사용자 ID가 필요합니다.' });
+      }
+
+      const userTickets = await ticketsService.getUserTicketsWithVerification(userId);
+      res.json({
+        success: true,
+        data: { tickets: userTickets, total: userTickets.length },
+      });
+    } catch (err) {
+      console.error('사용자 티켓 검증 조회 오류:', err);
+      res
+        .status(500)
+        .json({ success: false, error: '티켓 검증 조회 중 오류가 발생했습니다.' });
+    }
+  }
+);
+
+/**
+ * 입장 검증
+ * POST /tickets/verify-entry
+ */
+router.post(
+  '/verify-entry',
+  async (req: Request, res: Response<ApiResponse>) => {
+    try {
+      const { tokenId, userId } = req.body;
+      
+      if (!tokenId || !userId) {
+        return res.status(400).json({
+          success: false,
+          error: '토큰 ID와 사용자 ID가 필요합니다.'
+        });
+      }
+
+      const verificationResult = await ticketsService.verifyTicketForEntry(
+        Number(tokenId),
+        userId
+      );
+
+      res.json({
+        success: true,
+        data: verificationResult
+      });
+
+    } catch (err) {
+      console.error('입장 검증 오류:', err);
+      res.status(500).json({
+        success: false,
+        error: '입장 검증 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
+/**
+ * 민팅 자격 검증
+ * POST /tickets/verify-minting
+ */
+router.post(
+  '/verify-minting',
+  async (req: Request, res: Response<ApiResponse>) => {
+    try {
+      const { userId, concertId } = req.body;
+      
+      if (!userId || !concertId) {
+        return res.status(400).json({
+          success: false,
+          error: '사용자 ID와 콘서트 ID가 필요합니다.'
+        });
+      }
+
+      const verificationResult = await ticketsService.verifyMintingEligibility(
+        userId,
+        concertId
+      );
+
+      res.json({
+        success: true,
+        data: verificationResult
+      });
+
+    } catch (err) {
+      console.error('민팅 자격 검증 오류:', err);
+      res.status(500).json({
+        success: false,
+        error: '민팅 자격 검증 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
+/**
+ * 개별 검증 API들
+ */
+
+/**
+ * 티켓 소유권 검증
+ * POST /tickets/verify-ownership
+ */
+router.post(
+  '/verify-ownership',
+  async (req: Request, res: Response<ApiResponse>) => {
+    try {
+      const { tokenId, userId } = req.body;
+      
+      if (!tokenId || !userId) {
+        return res.status(400).json({
+          success: false,
+          error: '토큰 ID와 사용자 ID가 필요합니다.'
+        });
+      }
+
+      const { blockchainVerification } = await import('../blockchain/verification.service');
+      const verificationResult = await blockchainVerification.verifyTicketOwnership(
+        Number(tokenId),
+        userId
+      );
+
+      res.json({
+        success: true,
+        data: verificationResult
+      });
+
+    } catch (err) {
+      console.error('소유권 검증 오류:', err);
+      res.status(500).json({
+        success: false,
+        error: '소유권 검증 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
+/**
+ * 티켓 사용 상태 검증
+ * POST /tickets/verify-usage
+ */
+router.post(
+  '/verify-usage',
+  async (req: Request, res: Response<ApiResponse>) => {
+    try {
+      const { tokenId } = req.body;
+      
+      if (!tokenId) {
+        return res.status(400).json({
+          success: false,
+          error: '토큰 ID가 필요합니다.'
+        });
+      }
+
+      const { blockchainVerification } = await import('../blockchain/verification.service');
+      const verificationResult = await blockchainVerification.verifyTicketUsageStatus(
+        Number(tokenId)
+      );
+
+      res.json({
+        success: true,
+        data: verificationResult
+      });
+
+    } catch (err) {
+      console.error('사용 상태 검증 오류:', err);
+      res.status(500).json({
+        success: false,
+        error: '사용 상태 검증 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
+/**
+ * 얼굴 인증 상태 검증
+ * POST /tickets/verify-face
+ */
+router.post(
+  '/verify-face',
+  async (req: Request, res: Response<ApiResponse>) => {
+    try {
+      const { tokenId, userId } = req.body;
+      
+      if (!tokenId || !userId) {
+        return res.status(400).json({
+          success: false,
+          error: '토큰 ID와 사용자 ID가 필요합니다.'
+        });
+      }
+
+      const { blockchainVerification } = await import('../blockchain/verification.service');
+      const verificationResult = await blockchainVerification.verifyFaceVerificationStatus(
+        Number(tokenId),
+        userId
+      );
+
+      res.json({
+        success: true,
+        data: verificationResult
+      });
+
+    } catch (err) {
+      console.error('얼굴 인증 검증 오류:', err);
+      res.status(500).json({
+        success: false,
+        error: '얼굴 인증 검증 중 오류가 발생했습니다.'
+      });
     }
   }
 );

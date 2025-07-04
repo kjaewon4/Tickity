@@ -9,6 +9,7 @@ import { ethers, Contract, Wallet } from 'ethers';
 // tickets.service.ts 기준으로 ../../../blockchain/artifacts/... 경로
 import TicketJSON from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
 import { BlockchainService } from '../blockchain/blockchain.service';
+import { blockchainVerification } from '../blockchain/verification.service';
 import { generateMetadataForTicket } from './metadata.service';
 import { updateConcertSeatStatus } from '../seats/concertSeats.service';
 
@@ -150,7 +151,7 @@ export async function updateTicketMintInfo(
 
 
 // ───────────────────────────────────────────────────────────
-// 사용자별 예매 티켓 목록 조회
+// 사용자별 예매 티켓 목록 조회 (기존 - DB만 사용)
 // ───────────────────────────────────────────────────────────
 export const getUserTickets = async (
   userId: string
@@ -195,6 +196,199 @@ export const getUserTickets = async (
       grade_name: t.seats.seat_grades?.grade_name || ''
     }
   }));
+};
+
+// ───────────────────────────────────────────────────────────
+// 사용자별 예매 티켓 목록 조회 (블록체인 검증 포함)
+// ───────────────────────────────────────────────────────────
+export const getUserTicketsWithVerification = async (
+  userId: string
+): Promise<(TicketWithDetails & { 
+  verification: {
+    ownershipValid: boolean;
+    usageStatusValid: boolean;
+    faceVerificationValid: boolean;
+    cancellationStatusValid: boolean;
+    errors: string[];
+  }
+})[]> => {
+  // 1. 기본 티켓 정보 조회
+  const tickets = await getUserTickets(userId);
+
+  // 2. 각 티켓에 대해 블록체인 검증 수행
+  const ticketsWithVerification = await Promise.all(
+    tickets.map(async (ticket) => {
+      if (!ticket.nft_token_id) {
+        return {
+          ...ticket,
+          verification: {
+            ownershipValid: false,
+            usageStatusValid: false,
+            faceVerificationValid: false,
+            cancellationStatusValid: false,
+            errors: ['NFT 토큰 ID가 없습니다']
+          }
+        };
+      }
+
+      const tokenId = parseInt(ticket.nft_token_id);
+
+      try {
+        // 병렬로 모든 검증 수행
+        const [ownershipResult, usageResult, faceResult, cancellationResult] = await Promise.all([
+          blockchainVerification.verifyTicketOwnership(tokenId, userId),
+          blockchainVerification.verifyTicketUsageStatus(tokenId),
+          blockchainVerification.verifyFaceVerificationStatus(tokenId, userId),
+          blockchainVerification.verifyTicketCancellationStatus(tokenId)
+        ]);
+
+        const errors: string[] = [];
+        if (ownershipResult.error) errors.push(`소유권: ${ownershipResult.error}`);
+        if (usageResult.error) errors.push(`사용상태: ${usageResult.error}`);
+        if (faceResult.error) errors.push(`얼굴인증: ${faceResult.error}`);
+        if (cancellationResult.error) errors.push(`취소상태: ${cancellationResult.error}`);
+
+        return {
+          ...ticket,
+          verification: {
+            ownershipValid: ownershipResult.isValid,
+            usageStatusValid: usageResult.isValid,
+            faceVerificationValid: faceResult.isValid,
+            cancellationStatusValid: cancellationResult.isValid,
+            errors
+          }
+        };
+
+      } catch (error) {
+        console.error(`티켓 ${tokenId} 검증 오류:`, error);
+        return {
+          ...ticket,
+          verification: {
+            ownershipValid: false,
+            usageStatusValid: false,
+            faceVerificationValid: false,
+            cancellationStatusValid: false,
+            errors: [`검증 중 오류 발생: ${error instanceof Error ? error.message : '알 수 없는 오류'}`]
+          }
+        };
+      }
+    })
+  );
+
+  return ticketsWithVerification;
+};
+
+// ───────────────────────────────────────────────────────────
+// 입장 검증 (종합적인 티켓 상태 확인)
+// ───────────────────────────────────────────────────────────
+export const verifyTicketForEntry = async (
+  tokenId: number,
+  userId: string
+): Promise<{
+  canEnter: boolean;
+  exists: boolean;
+  isUsed: boolean | null;
+  isFaceVerified: boolean | null;
+  isCancelled: boolean | null;
+  ownershipValid: boolean;
+  errors: string[];
+  details: {
+    ownership: any;
+    usage: any;
+    face: any;
+    cancellation: any;
+  };
+}> => {
+  try {
+    const result = await blockchainVerification.verifyTicketForEntry(tokenId, userId);
+    
+    // 상세 검증 결과도 함께 반환
+    const [ownershipResult, usageResult, faceResult, cancellationResult] = await Promise.all([
+      blockchainVerification.verifyTicketOwnership(tokenId, userId),
+      blockchainVerification.verifyTicketUsageStatus(tokenId),
+      blockchainVerification.verifyFaceVerificationStatus(tokenId, userId),
+      blockchainVerification.verifyTicketCancellationStatus(tokenId)
+    ]);
+
+    return {
+      ...result,
+      details: {
+        ownership: ownershipResult,
+        usage: usageResult,
+        face: faceResult,
+        cancellation: cancellationResult
+      }
+    };
+
+  } catch (error) {
+    console.error('입장 검증 오류:', error);
+    return {
+      canEnter: false,
+      exists: false,
+      isUsed: null,
+      isFaceVerified: null,
+      isCancelled: null,
+      ownershipValid: false,
+      errors: [`검증 중 오류 발생: ${error instanceof Error ? error.message : '알 수 없는 오류'}`],
+      details: {
+        ownership: null,
+        usage: null,
+        face: null,
+        cancellation: null
+      }
+    };
+  }
+};
+
+// ───────────────────────────────────────────────────────────
+// 중복 민팅 방지 검증
+// ───────────────────────────────────────────────────────────
+export const verifyMintingEligibility = async (
+  userId: string,
+  concertId: string
+): Promise<{
+  canMint: boolean;
+  hasAlreadyMinted: boolean;
+  userWallet: string | null;
+  error?: string;
+}> => {
+  try {
+    // 사용자 지갑 주소 조회
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('wallet_address')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !userData?.wallet_address) {
+      return {
+        canMint: false,
+        hasAlreadyMinted: false,
+        userWallet: null,
+        error: '사용자 지갑 주소를 찾을 수 없습니다'
+      };
+    }
+
+    // 블록체인에서 중복 민팅 여부 확인
+    const result = await blockchainVerification.verifyMintingEligibility(
+      userData.wallet_address,
+      concertId
+    );
+
+    return {
+      ...result,
+      userWallet: userData.wallet_address
+    };
+
+  } catch (error) {
+    console.error('민팅 자격 검증 오류:', error);
+    return {
+      canMint: false,
+      hasAlreadyMinted: false,
+      userWallet: null,
+      error: `검증 중 오류 발생: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
+    };
+  }
 };
 
 // ───────────────────────────────────────────────────────────
