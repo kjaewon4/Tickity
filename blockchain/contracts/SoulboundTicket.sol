@@ -46,7 +46,7 @@ contract SoulboundTicket is ERC721, Ownable {
     /// @param concertId   공연 식별자
     /// @param seatNumber  좌석번호 (예: "A-01")
     /// @param uri         메타데이터 URI
-    /// @param price       백엔드에서 전달한 티켓 가격 (msg.value 와 동일해야 함)
+    /// @param price       백엔드에서 전달한 티켓 가격 (msg.value 와 동일해야 함), wei 값이 들어옴
     function mintTicket(
         bytes32 concertId,
         string calldata seatNumber,
@@ -73,7 +73,7 @@ contract SoulboundTicket is ERC721, Ownable {
             concertId:     concertId,
             seatNumber:    seatNumber,
             issuedAt:      block.timestamp,
-            price:         price - fee,
+            price:         price - fee,  // <-- 내부적으로 저장될 때도 wei 값
             isUsed:        false,
             isFaceVerified:false,
             faceHash:      bytes32(0)
