@@ -38,18 +38,26 @@ Tickity는 NFT 기반의 안전한 콘서트 티켓팅 플랫폼입니다.
 - 고객센터 및 챗봇을 통한 24시간 문의 지원
 `;
 
+// 날짜/시간 포맷팅 함수들
+function formatDateTime(date: Date): string {
+  return date.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+}
 
-
-// 날짜 포맷 함수 추가 (invalid date 처리 포함)
+// 날짜 포맷 함수 (invalid date 처리 포함)
 function formatShortDate(dateString: string): string {
-  // null, undefined, 빈 문자열 체크
   if (!dateString || dateString.trim() === '') {
     return '날짜 미정';
   }
   
   const date = new Date(dateString);
   
-  // Invalid Date 체크
   if (isNaN(date.getTime())) {
     console.warn('🚨 유효하지 않은 날짜:', dateString);
     return '날짜 오류';
@@ -129,6 +137,27 @@ export const analyzeUserIntent = async (message: string): Promise<{
 }> => {
   const lowerMessage = message.toLowerCase();
   
+  // 예매 기간 문의 감지
+  if (lowerMessage.includes('예매기간') || 
+      (lowerMessage.includes('예매') && lowerMessage.includes('기간')) ||
+      (lowerMessage.includes('언제') && lowerMessage.includes('예매'))) {
+    // 아티스트/콘서트명 추출 시도
+    const concerts = await getConcerts(undefined, false);
+    for (const concert of concerts) {
+      const concertTitle = concert.title.toLowerCase();
+      const performer = concert.main_performer.toLowerCase();
+      
+      if (lowerMessage.includes(performer) || lowerMessage.includes(concertTitle)) {
+        return {
+          intent: 'booking_period',
+          needsData: true,
+          dataType: 'concerts',
+          artistName: concert.main_performer
+        };
+      }
+    }
+  }
+
   // NFT 관련 질문은 general로 분류
   if (lowerMessage.includes('nft')) {
     return {
@@ -544,16 +573,11 @@ const generateMockResponse = async (
   }
   
   if (intent === 'booking_help') {
-    message = `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`;
-    actionType = 'booking_help';
-    
-    const suggestions = generateSuggestions(intent);
-    
     return {
-      message,
-      suggestions,
+      message: `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`,
+      suggestions: generateSuggestions(intent),
       needsUserInfo: false,
-      actionType
+      actionType: 'booking_help'
     };
   }
   
@@ -603,23 +627,23 @@ const generateMockResponse = async (
     const tickets = await getUserTickets(userId);
     if (tickets.length > 0) {
       const ticketList = tickets.slice(0, 3).map((ticket, index) => 
-        `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🪑 ${ticket.seat?.label || (ticket.seat?.row_idx && ticket.seat?.col_idx ? `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음')} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price.toLocaleString()}원`
+        `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🎫 ${ticket.seat?.label || (ticket.seat?.row_idx && ticket.seat?.col_idx ? `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음')} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price?.toLocaleString() || '가격 정보 없음'}원`
       ).join('\n\n');
       
-      message = `회원님의 예매 내역을 확인해드릴게요! 🎫\n\n${ticketList}\n\n총 ${tickets.length}개의 티켓이 있습니다.`;
+      return {
+        message: `회원님의 예매 내역입니다:\n\n${ticketList}`,
+        suggestions: generateSuggestions(intent),
+        needsUserInfo: false,
+        actionType: 'show_tickets'
+      };
     } else {
-      message = `아직 예매하신 티켓이 없네요. 🎭\n\n다양한 콘서트가 준비되어 있으니 구경해보세요!`;
+      return {
+        message: `아직 예매하신 티켓이 없네요. 🎭\n\n다양한 콘서트가 준비되어 있으니 구경해보세요!`,
+        suggestions: generateSuggestions(intent),
+        needsUserInfo: false,
+        actionType: 'show_tickets'
+      };
     }
-    actionType = 'show_tickets';
-    
-    const suggestions = generateSuggestions(intent);
-    
-    return {
-      message,
-      suggestions,
-      needsUserInfo: false,
-      actionType
-    };
   }
   
   // 일반 질문들에 대한 응답
@@ -726,14 +750,50 @@ export const generateChatResponse = async (
   userId?: string,
   chatHistory?: ChatMessage[]
 ): Promise<ChatbotResponse> => {
-
   try {
-    // 사용자 의도 분석
     const { intent, needsData, dataType, artistName, dateFilter } = await analyzeUserIntent(userMessage);
-    let contextData = '';
-    let actionType: ChatbotResponse['actionType'] = 'general';
-    let message = '';
-    let suggestions: string[] = [];
+    
+    // booking_period intent 처리
+if (intent === 'booking_period' && artistName) {
+  const concerts = await getConcerts(undefined, false);
+  const concert = concerts.find(c => 
+    c.main_performer.toLowerCase().includes(artistName.toLowerCase()) ||
+    artistName.toLowerCase().includes(c.main_performer.toLowerCase())
+  );
+
+  if (!concert) {
+    return {
+      message: `죄송합니다. "${artistName}" 콘서트를 찾을 수 없습니다.`,
+      suggestions: ['콘서트 목록 보기'],
+      needsUserInfo: false,
+      actionType: 'general'
+    };
+  }
+
+  const now = new Date();
+  const ticketOpenAt = concert.ticket_open_at ? new Date(concert.ticket_open_at) : null;
+  const validFrom = concert.valid_from ? new Date(concert.valid_from) : null;
+  const validTo = concert.valid_to ? new Date(concert.valid_to) : null;
+  const startDate = new Date(concert.start_date + 'T' + concert.start_time);
+
+  let bookingStatus = '';
+  if (validTo && now > validTo) {
+    bookingStatus = '예매가 종료되었습니다.';
+  } else if (ticketOpenAt && now < ticketOpenAt) {
+    bookingStatus = `티켓 오픈 예정: ${formatDateTime(ticketOpenAt)}`;
+  } else if (validFrom && validTo) {
+    bookingStatus = `예매 기간: ${formatDateTime(validFrom)} ~ ${formatDateTime(validTo)}`;
+  } else {
+    bookingStatus = '예매 기간 정보가 없습니다.';
+  }
+
+  return {
+    message: `🎫 "${concert.title}" 예매 안내\n\n${bookingStatus}\n\n공연 일시: ${formatDateTime(startDate)}\n공연 장소: ${concert.venue_name}`,
+    suggestions: ['예매하기', '다른 콘서트 보기'],
+    needsUserInfo: false,
+    actionType: 'show_concerts'
+  };
+}
 
     // userId가 반드시 필요한 intent인데 userId가 없는 경우 안내 메시지 반환
     if ((intent === 'my_tickets' || intent === 'cancellation') && !userId) {
@@ -758,14 +818,11 @@ export const generateChatResponse = async (
     if (intent === 'concert_inquiry') {
       const { showAllConcerts: showAll } = await analyzeUserIntent(userMessage);
       const concertData = await formatConcertsForAI(1, artistName, dateFilter, showAll);
-      message = concertData.message;
-      suggestions = generatePaginationSuggestions(concertData.currentPage, concertData.totalPages);
-      actionType = 'show_concerts';
       return {
-        message,
-        suggestions,
+        message: concertData.message,
+        suggestions: generatePaginationSuggestions(concertData.currentPage, concertData.totalPages),
         needsUserInfo: false,
-        actionType
+        actionType: 'show_concerts'
       };
     }
 
@@ -795,27 +852,21 @@ export const generateChatResponse = async (
       }
       
       const concertData = await formatConcertsForAI(page, prevArtistName, prevDateFilter, prevShowAllConcerts);
-      message = concertData.message;
-      suggestions = generatePaginationSuggestions(concertData.currentPage, concertData.totalPages);
-      actionType = 'show_concerts';
       return {
-        message,
-        suggestions,
+        message: concertData.message,
+        suggestions: generatePaginationSuggestions(concertData.currentPage, concertData.totalPages),
         needsUserInfo: false,
-        actionType
+        actionType: 'show_concerts'
       };
     }
 
     // 예매 방법 안내도 AI를 거치지 않고 직접 응답
     if (intent === 'booking_help') {
-      message = `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`;
-      suggestions = generateSuggestions(intent);
-      actionType = 'booking_help';
       return {
-        message,
-        suggestions,
+        message: `🎫 **Tickity 예매 방법 안내** 🎫\n\n**📋 예매 5단계:**\n1️⃣ **회원가입/로그인** - 얼굴 인식 등록 필수\n2️⃣ **콘서트 선택** - 원하는 공연 찾기\n3️⃣ **좌석 선택** - 등급별 가격 확인\n4️⃣ **결제하기** - 안전한 온라인 결제\n5️⃣ **NFT 티켓 발급** - 블록체인 기반 디지털 티켓\n\n**🔒 NFT 티켓 특징:**\n• **소울바운드**: 양도/판매 불가 (본인만 사용)\n• **얼굴 인식 입장**: 티켓과 얼굴 매칭으로 안전한 입장\n• **위변조 방지**: 블록체인 기술로 100% 진품 보장\n\n궁금한 점이 더 있으시면 언제든 말씀해 주세요! 😊`,
+        suggestions: generateSuggestions(intent),
         needsUserInfo: false,
-        actionType
+        actionType: 'booking_help'
       };
     }
 
@@ -826,7 +877,12 @@ export const generateChatResponse = async (
       const realCancellationPolicies = await getCancellationPoliciesText();
       
       if (activeTickets.length === 0) {
-        message = '현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!';
+        return {
+          message: '현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!',
+          suggestions: generateSuggestions(intent),
+          needsUserInfo: false,
+          actionType: 'show_tickets'
+        };
       } else {
         const ticketList = activeTickets.map((ticket, index) => {
           const seatInfo = ticket.seat?.label || 
@@ -835,62 +891,65 @@ export const generateChatResponse = async (
           
           return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price?.toLocaleString() || '가격 정보 없음'}원\n   - 예매일: ${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('ko-KR') : '날짜 정보 없음'}`;
         }).join('\n\n');
-        message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n${realCancellationPolicies}\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
+        return {
+          message: `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n${realCancellationPolicies}\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`,
+          suggestions: generateSuggestions(intent),
+          needsUserInfo: false,
+          actionType: 'show_tickets'
+        };
       }
-      suggestions = generateSuggestions(intent);
-      actionType = 'show_tickets';
-      return {
-        message,
-        suggestions,
-        needsUserInfo: false,
-        actionType
-      };
     }
 
     // 내 티켓 요청도 AI를 거치지 않고 직접 응답
     if (intent === 'my_tickets' && userId) {
       const tickets = await getUserTickets(userId);
-      if (tickets.length === 0) {
-        message = '현재 예매하신 티켓이 없습니다.';
+      if (tickets.length > 0) {
+        const ticketList = tickets.slice(0, 3).map((ticket, index) => 
+          `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🎫 ${ticket.seat?.label || (ticket.seat?.row_idx && ticket.seat?.col_idx ? `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음')} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price?.toLocaleString() || '가격 정보 없음'}원`
+        ).join('\n\n');
+        
+        return {
+          message: `회원님의 예매 내역입니다:\n\n${ticketList}`,
+          suggestions: generateSuggestions(intent),
+          needsUserInfo: false,
+          actionType: 'show_tickets'
+        };
       } else {
-        const ticketList = tickets.map((ticket, index) => {
-          const status = ticket.is_used ? '사용됨' : 
-                        ticket.canceled_at ? '취소됨' : '예매완료';
-          const seatInfo = ticket.seat?.label || 
-                          (ticket.seat?.row_idx && ticket.seat?.col_idx ? 
-                           `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음');
-          
-          return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price?.toLocaleString() || '가격 정보 없음'}원\n   - 상태: ${status}\n   - 예매일: ${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('ko-KR') : '날짜 정보 없음'}`;
-        }).join('\n\n');
-        message = `회원님의 예매 내역입니다:\n\n${ticketList}`;
+        return {
+          message: `아직 예매하신 티켓이 없네요. 🎭\n\n다양한 콘서트가 준비되어 있으니 구경해보세요!`,
+          suggestions: generateSuggestions(intent),
+          needsUserInfo: false,
+          actionType: 'show_tickets'
+        };
       }
-      suggestions = generateSuggestions(intent);
-      actionType = 'show_tickets';
-      return {
-        message,
-        suggestions,
-        needsUserInfo: false,
-        actionType
-      };
     }
 
     // 그 외의 경우에만 AI 사용
     // 필요한 데이터 조회
     if (needsData && dataType === 'concerts') {
       const concertData = await formatConcertsForAI(1, artistName, dateFilter);
-      contextData = concertData.message;
-      actionType = 'show_concerts';
+      return {
+        message: concertData.message,
+        suggestions: generatePaginationSuggestions(concertData.currentPage, concertData.totalPages),
+        needsUserInfo: false,
+        actionType: 'show_concerts'
+      };
     } else if (needsData && dataType === 'tickets' && userId) {
-      contextData = await formatUserTicketsForAI(userId);
-      actionType = 'show_tickets';
+      return {
+        message: await formatUserTicketsForAI(userId),
+        suggestions: generateSuggestions(intent),
+        needsUserInfo: false,
+        actionType: 'show_tickets'
+      };
     }
+
     // 채팅 히스토리 구성
     const historyText = chatHistory ? 
       chatHistory.slice(-4).map(msg => 
         `${msg.role === 'user' ? '사용자' : '챗봇'}: ${msg.content}`
       ).join('\n') : '';
     // Gemini AI 프롬프트 구성
-    const prompt = createSafePrompt(userMessage, contextData, historyText);
+    const prompt = createSafePrompt(userMessage, '', historyText);
     // Gemini AI 호출 (API 키가 없으면 Mock 응답 사용)
     if (!model) {
       return await generateMockResponse(userMessage, userId, chatHistory);
@@ -898,14 +957,14 @@ export const generateChatResponse = async (
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    message = response.text();
+    const message = response.text();
     // 추천 질문 생성
-    suggestions = generateSuggestions(intent);
+    const suggestions = generateSuggestions(intent);
     return {
       message: message.trim(),
       suggestions,
       needsUserInfo: intent === 'my_tickets' && !userId,
-      actionType
+      actionType: 'show_concerts'
     };
   } catch (error) {
     console.error('Gemini AI 응답 생성 오류:', error);
@@ -1126,4 +1185,4 @@ export const saveChatHistory = async (
   } catch (error) {
     console.error('채팅 히스토리 저장 오류:', error);
   }
-}; 
+};
