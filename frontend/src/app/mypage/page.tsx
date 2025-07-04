@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { MdCake, MdEmail, MdCalendarToday } from 'react-icons/md';
 import { FaTicketAlt } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
+import { apiClient } from '@/lib/apiClient';
 
 interface User {
   name: string;
@@ -23,7 +24,11 @@ interface ReservationItem {
   bookedAt: string;
   status: '예약완료' | '취소완료';
   ticketType: string;
+  gradeName: string;
   quantity: number;
+  poster_url: string;
+  seatId: string;
+  tokenId: number;
 }
 
 export default function MyPage() {
@@ -33,8 +38,9 @@ export default function MyPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [filter, setFilter] = useState<'전체' | '예약완료' | '취소'>('전체');
   const itemsPerPage = 3;
+  const [residentNumber, setResidentNumber] = useState<string | null>(null);
+  const [gender, setGender] = useState<'male' | 'female' | null>(null);
 
-useEffect(() => {
   const fetchUserDashboard = async () => {
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
@@ -44,19 +50,14 @@ useEffect(() => {
     }
 
     try {
+      // 사용자 정보 가져오기
       const res1 = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/user`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
 
-      console.log('/auth/user 응답 상태:', res1.status);
-
       if (!res1.ok) {
-        const text = await res1.text();
-        console.error('응답 실패:', res1.status, text);
-        
-        // 토큰이 유효하지 않은 경우
         if (res1.status === 401) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
@@ -67,14 +68,8 @@ useEffect(() => {
       }
 
       const userData = await res1.json();
-      console.log('유저 정보:', userData);
-      console.log('유저 정보 (JSON):', JSON.stringify(userData, null, 2));
-
       const userId = userData.data?.user?.id;
-      if (!userId) {
-        console.warn('userId를 가져올 수 없습니다');
-        return;
-      }
+      if (!userId) return;
 
       const res2 = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/dashboard/${userId}`, {
         headers: {
@@ -82,23 +77,57 @@ useEffect(() => {
         },
       });
 
-      console.log('/users/dashboard 응답 상태:', res2.status);
-
-      if (!res2.ok) {
-        const text = await res2.text();
-        console.error('대시보드 실패:', res2.status, text);
-        return;
-      }
-
       const dashboardData = await res2.json();
-      console.log('대시보드:', dashboardData);
+
+      console.log('🎟 대시보드 전체 응답:', dashboardData);
 
       if (dashboardData.success && dashboardData.data) {
-        setUser(dashboardData.data.profile);
-        setReservations(dashboardData.data.reservations || []);
+        const ticketCount = dashboardData.data.tickets?.length || 0;
+
+        setUser({
+          ...dashboardData.data.profile,
+          ticketCount,
+        });
+
+        const ticketList = dashboardData.data.tickets.map((ticket: any) => ({
+          id: ticket.id,
+          title: ticket.concert.title,
+          start_date: ticket.concert.start_date,
+          start_time: ticket.concert.start_time,
+          location: ticket.concert.venue_name || '장소 미정',
+          price: `${ticket.purchase_price.toLocaleString()}`,
+          bookedAt: ticket.created_at,
+          status: ticket.is_cancelled ? '취소완료' : '예약완료',
+          ticketType: ticket.seat_number || '좌석 미정',
+          gradeName: ticket.seat?.grade_name || '등급 미정',
+          poster_url: ticket.concert.poster_url,
+          seatId: ticket.seat_id,
+          tokenId: ticket.nft_token_id, 
+        }));
+
+        setReservations(ticketList);
       } else {
         setUser(null);
         setReservations([]);
+      }
+
+      // 주민등록번호 복호화
+      const res4 = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/resident-number/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const decrypted = await res4.json();
+      const rrn = decrypted.data?.residentNumber;
+      if (rrn && rrn.length >= 7) {
+        const yearPrefix = rrn[6] === '1' || rrn[6] === '2' ? '19' : '20';
+        const year = `${yearPrefix}${rrn.slice(0, 2)}`;
+        const month = rrn.slice(2, 4);
+        const day = rrn.slice(4, 6);
+        setResidentNumber(`${year}년 ${parseInt(month)}월 ${parseInt(day)}일`);
+        setGender(rrn[6] === '1' || rrn[6] === '3' ? 'male' : 'female');
       }
     } catch (err) {
       console.error('전체 요청 실패:', err);
@@ -107,8 +136,26 @@ useEffect(() => {
     }
   };
 
-  fetchUserDashboard();
-}, [router]);
+
+  const handleCancel = async (seatId: string, ticketId: string, tokenId: number) => {
+    console.log('⛳️ 취소 요청 파라미터:', { seatId, ticketId, tokenId });
+    try {
+      const res = await apiClient.cancelTicket(seatId, ticketId, tokenId);
+      if (res.success && res.data) {
+        alert('취소 완료!');
+        await fetchUserDashboard();
+      } else {
+        alert(res.error || '티켓 취소 실패');
+      }
+    } catch (e: any) {
+      alert(e.message || '오류 발생');
+    }
+  };
+
+  useEffect(() => {
+    fetchUserDashboard();
+  }, [router]);
+
 
   const filtered = reservations.filter((item) => {
     if (filter === '전체') return true;
@@ -123,162 +170,176 @@ useEffect(() => {
   );
 
   return (
-    <div className="p-20 pt-20">
-      <h1 className="text-2xl font-bold mb-1">마이페이지</h1>
-      <p className="text-gray-500 mb-6">회원정보와 예매내역을 확인하세요</p>
+    <div className="p-20 pt-20 pl-[150px]">
+      <h1 className="text-4xl font-bold mb-2">마이페이지</h1>
+      <p className="text-lg text-gray-500 mb-8">회원정보와 예매내역을 확인하세요</p>
 
       {user && (
-        <div className="w-full flex justify-center px-4">
-            <div className="max-w-[1024px] w-full flex justify-between gap-8">
-            {/* 왼쪽 회원 정보 카드 */}
-            <div className="w-[320px] px-4 py-5 bg-white rounded-xl shadow flex flex-col items-center">
-                <div className="w-20 h-20 rounded-full border bg-gray-100 flex items-center justify-center text-xs text-gray-500 mb-2">
-                profile
-                </div>
-                <h2 className="text-lg font-semibold">{user.name}</h2>
-                <div className="w-full text-sm text-gray-800 space-y-4 mt-6">
-                <div className="pt-2 flex items-start gap-2">
-                    <MdEmail className="w-5 h-5 text-indigo-500 mt-1" />
-                    <div>
+        <div className="w-full flex flex-col gap-8">
+          <div className="flex justify-start gap-16 w-full">
+            <div className="w-[360px] px-6 py-6 bg-white rounded-xl shadow flex flex-col items-center">
+              <div className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center text-sm text-gray-500 mb-3">
+                {gender ? (
+                  <img
+                    src={gender === 'male' ? '/images/boy_profile.png' : '/images/girl_profile.png'}
+                    alt="프로필 이미지"
+                    className="object-cover w-full h-full"
+                  />
+                ) : (
+                  'profile'
+                )}
+              </div>
+              <h2 className="text-xl font-semibold">{user.name}</h2>
+              <div className="w-full text-base text-gray-800 space-y-6 mt-6">
+                <div className="pt-3 flex items-start gap-3">
+                  <MdEmail className="w-6 h-6 text-indigo-500 mt-1" />
+                  <div>
                     <p className="text-gray-500">이메일</p>
                     <p>{user.email}</p>
-                    </div>
+                  </div>
                 </div>
                 <hr />
-                <div className="pt-2 flex items-start gap-2">
-                    <MdCake className="w-5 h-5 text-indigo-500 mt-1" /> 
-                    <div>
-                        <p className="text-gray-500">생년월일</p>
-                        <p>{user.birth}</p>
-                    </div>
+                <div className="pt-3 flex items-start gap-3">
+                  <MdCake className="w-6 h-6 text-indigo-500 mt-1" />
+                  <div>
+                    <p className="text-gray-500">생년월일</p>
+                    <p>{residentNumber}</p>
+                  </div>
                 </div>
                 <hr />
-                <div className="pt-2 flex items-start gap-2">
-                    <MdCalendarToday className="w-5 h-5 text-indigo-500 mt-1" />
-                    <div>
+                <div className="pt-3 flex items-start gap-3">
+                  <MdCalendarToday className="w-6 h-6 text-indigo-500 mt-1" />
+                  <div>
                     <p className="text-gray-500">가입일</p>
                     <p>{user.createdAt.split('T')[0]}</p>
-                    </div>
+                  </div>
                 </div>
                 <hr />
-                <div className="pt-2 flex items-start gap-2">
-                    <FaTicketAlt className="w-5 h-5 text-indigo-500 mt-1" />
-                    <div>
+                <div className="pt-3 flex items-start gap-3">
+                  <FaTicketAlt className="w-6 h-6 text-indigo-500 mt-1" />
+                  <div>
                     <p className="text-gray-500">총 예매횟수</p>
                     <p>{user.ticketCount}회</p>
-                    </div>
+                  </div>
                 </div>
-                </div>
-                <button className="w-full mt-2 p-2 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200">
-                회원정보 수정
-                </button>
+              </div>
             </div>
 
             {/* 오른쪽 예매 내역 */}
-            <div className="flex-1 min-w-0">
-                <div className="p-6 bg-white rounded-xl shadow max-w-[700px]">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold">최근 예매/취소 내역</h3>
-                    <div className="flex gap-2">
+            <div className="max-w-[900px] w-full">
+              <div className="p-8 bg-white rounded-xl shadow w-full">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-2xl font-semibold">최근 예매/취소 내역</h3>
+                  <div className="flex gap-3">
                     {(['전체', '예약완료', '취소'] as const).map((f) => (
-                        <button
+                      <button
                         key={f}
                         onClick={() => {
-                            setFilter(f);
-                            setCurrentPage(1);
+                          setFilter(f);
+                          setCurrentPage(1);
                         }}
-                        className={`px-3 py-1 rounded-full border text-sm ${
-                            filter === f
+                        className={`px-4 py-2 rounded-full border text-base ${
+                          filter === f
                             ? 'bg-blue-500 text-white'
                             : 'bg-white text-gray-600 border-gray-300'
                         }`}
-                        >
+                      >
                         {f}
-                        </button>
+                      </button>
                     ))}
-                    </div>
+                  </div>
                 </div>
 
                 {currentItems.map((item) => (
-                    <div
-                    key={item.id}
-                    className="flex justify-between items-start border rounded-lg p-4 mb-4"
-                    >
-                    <div className="flex gap-4">
-                        <div className="w-16 h-20 bg-gray-200 rounded" />
-                        <div>
-                        <p className="font-semibold mb-1">{item.title}</p>
-                        <p className="text-sm text-gray-500">
-                            {item.start_date} {item.start_time}
-                        </p>
-                        <p className="text-sm text-gray-500">{item.location}</p>
-                        <div className="mt-2 flex items-center gap-2 text-sm">
-                            <span
-                            className={`px-2 py-0.5 rounded-full text-white text-xs ${
-                                item.status === '예약완료'
-                                ? 'bg-green-500'
-                                : 'bg-gray-400'
-                            }`}
-                            >
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between border border-gray-300 shadow-sm rounded-lg p-6 mb-6 text-base font-medium"
+                >
+                  {/* 좌측: 이미지 + 정보 */}
+                  <div className="flex gap-6 w-full">
+                    {/* 이미지 */}
+                    <div className="w-[120px] aspect-[3/4] rounded overflow-hidden shrink-0 bg-gray-200">
+                      <img
+                        src={item.poster_url}
+                        alt={`${item.title} 포스터`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
+                    {/* 텍스트 + 버튼 같이 묶기 */}
+                    <div className="flex flex-col justify-between w-full">
+                      {/* 텍스트 묶음 */}
+                      <div>
+                        <p className="text-lg font-bold mb-1">{item.title}</p>
+                        <p className="text-gray-600">{item.start_date} {item.start_time}</p>
+                        <p className="text-gray-600">{item.location}</p>
+                        <div className="mt-3 flex items-center gap-3 flex-wrap">
+                          <span className={`px-3 py-1 rounded-full text-white text-sm ${
+                            item.status === '예약완료' ? 'bg-green-500' : 'bg-gray-400'
+                          }`}>
                             {item.status}
-                            </span>
-                            <span className="text-gray-700">
-                            {item.ticketType} {item.quantity}매
-                            </span>
+                          </span>
+                          <span className="text-gray-700 text-sm">
+                            {item.ticketType} / {item.gradeName}
+                          </span>
                         </div>
-                        <div className="mt-2 space-x-1">
-                            <button className="px-3 py-1 bg-gray-200 text-sm rounded">
-                            상세보기
-                            </button>
-                            <button
-                            className={`px-3 py-1 text-sm rounded ${
-                                item.status === '예약완료'
-                                ? 'bg-red-500 text-white'
-                                : 'bg-gray-300 text-gray-600'
-                            }`}
-                            >
-                            {item.status === '예약완료' ? '취소하기' : '환불완료'}
-                            </button>
-                        </div>
-                        </div>
+                      </div>
+
+                      {/* 버튼 묶음 */}
+                      <div className="mt-4 flex gap-2">
+                        <button className="px-4 py-2 bg-gray-200 text-sm rounded">상세보기</button>
+                        <button
+                          onClick={() => handleCancel(item.seatId, item.id.toString(), item.tokenId)}
+                          className={`px-4 py-2 text-sm rounded ${
+                            item.status === '예약완료'
+                              ? 'bg-red-500 text-white'
+                              : 'bg-gray-300 text-gray-600'
+                          }`}
+                        >
+                          {item.status === '예약완료' ? '취소하기' : '환불완료'}
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-right text-sm">
-                        <p className="font-semibold mb-1">{item.price}</p>
-                        <p className="text-xs text-gray-500">
-                        예매일: {item.bookedAt}
-                        </p>
-                    </div>
-                    </div>
+                  </div>
+
+                  {/* 우측: 가격/예매일 */}
+                  <div className="text-right text-sm whitespace-nowrap pl-4 shrink-0">
+                    <p className="font-semibold mb-1">{item.price}원</p>
+                    <p className="text-gray-500">예매일: {item.bookedAt.split('T')[0]}</p>
+                  </div>
+                </div>
+
                 ))}
 
+
                 {pageCount > 1 && (
-                    <div className="mt-4 flex justify-center gap-2">
+                  <div className="mt-4 flex justify-center gap-2">
                     {Array.from({ length: pageCount }, (_, i) => (
-                        <button
+                      <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
                         className={`w-8 h-8 text-sm rounded border ${
-                            currentPage === i + 1
+                          currentPage === i + 1
                             ? 'bg-blue-500 text-white'
                             : 'bg-white text-gray-700'
                         }`}
-                        >
+                      >
                         {i + 1}
-                        </button>
+                      </button>
                     ))}
-                    </div>
+                  </div>
                 )}
 
                 {filtered.length === 0 && (
-                    <p className="text-gray-500 mt-8 text-center">
+                  <p className="text-gray-500 mt-8 text-center">
                     예매한 내역이 없습니다.
-                    </p>
+                  </p>
                 )}
-                </div>
+              </div>
             </div>
-            </div>
+          </div>
         </div>
-        )}
+      )}
     </div>
   );
 }

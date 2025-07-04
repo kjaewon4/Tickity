@@ -149,7 +149,15 @@ class ApiClient {
       body: JSON.stringify({ email })
     });
   }
+    // 티켓 취소
+  async cancelTicket(seatId: string, ticketId: string, tokenId: number): Promise<ApiResponse<{ reopenTime: number }>> {
+    return this.request<{ reopenTime: number }>('/tickets/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ seatId, ticketId, tokenId }),
+    });
+  }
 }
+
 
 const apiClient = new ApiClient(API_BASE_URL);
 export default apiClient;
