@@ -49,7 +49,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       accounts: [
         // hardhat 네트워크에선 객체 형태로 잔액까지 지정 가능
-        { privateKey: ADMIN_KEY, balance: "100000000000000000000000" }
+        { privateKey: ADMIN_KEY, balance: "1000000000000000000000000000" }  // 1,000,000 ETH, 백만 ETH
       ]
     }
   },
