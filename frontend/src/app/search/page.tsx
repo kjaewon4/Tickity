@@ -21,14 +21,12 @@ export default function SearchPage() {
   const router = useRouter();
   const [concerts, setConcerts] = useState<Concert[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('전체');
 
   const query = searchParams.get('q') || '';
   const categoryParam = searchParams.get('category') || '전체';
 
   useEffect(() => {
-    setSearchKeyword(query);
     setSelectedCategory(categoryParam);
     // 검색어가 없어도 API 호출하여 전체 콘서트 표시
     fetchSearchResults(query, categoryParam);
@@ -61,17 +59,7 @@ export default function SearchPage() {
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchKeyword.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchKeyword.trim())}`);
-    } else {
-      // 검색어가 비어있으면 검색 파라미터 제거하고 전체 콘서트 표시
-      const url = new URL(window.location.href);
-      url.searchParams.delete('q');
-      router.push(url.toString());
-    }
-  };
+
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
@@ -104,25 +92,6 @@ export default function SearchPage() {
             콘서트 검색
           </h1>
           
-          {/* 검색 폼 */}
-          <form onSubmit={handleSearch} className="mb-6">
-            <div className="flex gap-4">
-              <input
-                type="text"
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                placeholder="콘서트명 또는 가수명을 입력하세요"
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                type="submit"
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                검색
-              </button>
-            </div>
-          </form>
-
           {/* 카테고리 필터 */}
           <div className="flex flex-wrap gap-2">
             {categories.map((category) => (
