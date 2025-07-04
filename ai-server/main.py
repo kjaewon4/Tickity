@@ -8,11 +8,16 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=[
+        FRONTEND_URL,
+        "http://localhost:8000",
+        "http://127.0.0.1:8000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # 정적 파일 서빙 설정
 app.mount("/static", StaticFiles(directory="static"), name="static")

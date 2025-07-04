@@ -5,6 +5,7 @@ from utils.io_utils import extract_embedding_from_video, extract_embedding_from_
 from utils.similarity import cosine_similarity
 from config import supabase, THRESHOLD
 from postgrest.exceptions import APIError
+import numpy as np
 
 def validate_uuid_or_test_id(user_id: str) -> str:
     """UUID 검증 또는 테스트용 ID 허용"""
@@ -109,3 +110,21 @@ async def register_user_face(file: UploadFile):
         "embedding_shape": f"{len(embedding)} 차원",
         "embedding": embedding.tolist()
     }
+
+def fetch_registered_embeddings():
+    """
+    Supabase에서 모든 user_id와 embedding을 조회하여 dict로 반환
+    """
+    print("🔄 Supabase에서 임베딩 로딩 중...")
+
+    response = supabase.table("face_embeddings").select("user_id, embedding").execute()
+    data = response.data
+
+    db = {}
+    for item in data:
+        user_id = item["user_id"]
+        embedding = np.array(item["embedding"])
+        db[user_id] = embedding
+
+    print(f"✅ {len(db)}명의 embedding 로딩 완료")
+    return db
