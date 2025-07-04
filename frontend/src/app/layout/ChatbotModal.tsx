@@ -26,7 +26,7 @@ const formatMessage = (content: string): string => {
   let formatted = content
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code class="bg-gray-200 dark:bg-gray-600 px-1 rounded text-sm">$1</code>');
+    .replace(/`(.*?)`/g, '<code class="bg-gray-200 px-1 rounded text-sm">$1</code>');
   
   // HTML 테이블이 없는 경우에만 줄바꿈을 <br>로 변환
   if (!hasHTMLTable) {
@@ -210,7 +210,7 @@ export default function ChatbotModal() {
       {isOpen && (
         <div
           ref={modalRef}
-          className="fixed bottom-24 right-6 z-50 w-[420px] h-[600px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden"
+          className="fixed bottom-24 right-6 z-50 w-[420px] h-[600px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
         >
           {/* 헤더 */}
           <div className="bg-blue-500 text-white p-4 rounded-t-2xl flex items-center justify-between">
@@ -232,13 +232,13 @@ export default function ChatbotModal() {
           </div>
 
           {/* 메시지 영역 */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white dark:bg-gray-800">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white">
             {messages.map((message, index) => (
               <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] rounded-2xl p-3 ${
                   message.role === 'user'
                     ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                    : 'bg-gray-100 text-gray-90'
                 }`}>
                   <div 
                     className="text-sm leading-relaxed overflow-x-auto" 
@@ -253,7 +253,7 @@ export default function ChatbotModal() {
                         <button
                           key={suggestionIndex}
                           onClick={() => handleSuggestionClick(suggestion)}
-                          className="block w-full text-left p-2 text-xs bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg border border-gray-200 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-500 transition-colors"
+                          className="block w-full text-left p-2 text-xs bg-white text-gray-700 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                           disabled={isLoading}
                         >
                           {suggestion}
@@ -268,7 +268,7 @@ export default function ChatbotModal() {
             {/* 로딩 인디케이터 */}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl p-3">
+                <div className="bg-gray-100 rounded-2xl p-3">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -282,14 +282,14 @@ export default function ChatbotModal() {
           </div>
 
           {/* 입력 영역 - 맨 밑 고정 */}
-          <div className="border-t border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-4">
+          <div className="border-t border-gray-200 bg-white p-4">
             <form onSubmit={handleSubmit} className="flex items-center space-x-2">
               <input
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 placeholder="메시지를 입력하세요..."
-                className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 disabled={isLoading}
               />
               <button
