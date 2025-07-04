@@ -19,7 +19,7 @@ const PROVIDER = new JsonRpcProvider(RPC_URL);
 const ADMIN_KEY = process.env.ADMIN_PRIVATE_KEY!;
 if (!ADMIN_KEY) throw new Error('ADMIN_PRIVATE_KEY가 없습니다');
 const adminWallet = new Wallet(ADMIN_KEY, PROVIDER);
-const FUND_AMOUNT  = '10.0';                               // 새 지갑에 충전할 ETH (예: 0.1 ETH)
+const FUND_AMOUNT  = '100.0';                               // 새 지갑에 충전할 ETH (예: 0.1 ETH)
 
 // const price = parseEther(priceEth);  // 예: "0.0325" → 32500000000000000n
 const maxFeePerGas = parseUnits('2.5', 'gwei');         // 2500000000n
