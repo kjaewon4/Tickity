@@ -5,6 +5,9 @@ import SeatSelection from '../components/SeatSelection';
 import SeatGrid from '../components/SeatGrid';
 import Sidebar from '../components/Sidebar';
 import Payment from '../components/Payment';
+import PaymentComplete from '../components/PaymentComplete';
+import CaptchaModal from '../modal/CaptchaModal'; 
+import { TicketMintResult } from '@/types/ticket';
 
 export default function SeatPage() {
   const [sectionId, setSectionId] = useState<string | null>(null);
@@ -19,6 +22,10 @@ export default function SeatPage() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [concertTitle, setConcertTitle] = useState<string | null>(null);
   const [bookingFee, setBookingFee] = useState<number>(0);
+  const [isPaid, setIsPaid] = useState(false); 
+  const [isVerified, setIsVerified] = useState(false);
+  const [showCaptcha, setShowCaptcha] = useState(true);
+  const [mintResult, setMintResult] = useState<TicketMintResult | null>(null);
 
   useEffect(() => {
     setConcertId(localStorage.getItem('concertId'));
@@ -31,7 +38,6 @@ export default function SeatPage() {
     setBookingFee(fee ? Number(fee) : 0);
   }, []);
 
-  // 로컬스토리지 저장
   useEffect(() => {
     if (selectedSeatInfo) {
       localStorage.setItem('selectedSeatInfo', selectedSeatInfo);
@@ -45,7 +51,6 @@ export default function SeatPage() {
     }
   }, [selectedSeatInfo, sectionId, selectedRow, selectedCol]);
 
-  // 상태 변경 로그
   useEffect(() => {
     console.log('isConfirmed 상태 변경됨:', isConfirmed);
   }, [isConfirmed]);
@@ -69,9 +74,30 @@ export default function SeatPage() {
   };
 
   return (
-    <main className="px-6 py-4 bg-gray-50 min-h-screen overflow-x-hidden">
+    <main className="relative px-6 py-4 bg-gray-50 min-h-screen overflow-x-hidden">
+      {showCaptcha && !isVerified && (
+        <>
+          <div className="fixed inset-0 z-40 bg-transparent pointer-events-auto" />
+          <CaptchaModal
+            onSuccess={() => {
+              setIsVerified(true);
+              setShowCaptcha(false);
+            }}
+            onClose={() => setShowCaptcha(false)}
+          />
+        </>
+      )}
+
+      {!showCaptcha && !isVerified && (
+        <button
+          onClick={() => setShowCaptcha(true)}
+          className="absolute right-[330px] bottom-[140px] bg-white text-blue-500 border border-blue-500 shadow-lg px-4 py-2 rounded-full text-sm font-semibold z-50 cursor-pointer animate-bounce"
+        >
+          안심예매 인증
+        </button>
+      )}
+
       <div className="flex items-start justify-between flex-wrap gap-6 max-w-full">
-        {/* 좌측: 본문 */}
         <div className="flex-1 min-w-0">
           {!isConfirmed && (
             <div className="flex items-center justify-between mb-4 flex-wrap">
@@ -86,12 +112,20 @@ export default function SeatPage() {
 
           <div className="w-full overflow-hidden">
             {isConfirmed ? (
-              <Payment
-                seatInfo={selectedSeatInfo}
-                concertId={concertId}
-                selectedDate={selectedDate}
-                selectedTime={selectedTime}
-              />
+              isPaid && mintResult ? (
+                <PaymentComplete result={mintResult} />
+              ) : (
+                <Payment
+                  seatInfo={selectedSeatInfo}
+                  concertId={concertId}
+                  selectedDate={selectedDate}
+                  selectedTime={selectedTime}
+                  onPaymentComplete={(result) => {
+                    setMintResult(result);
+                    setIsPaid(true);
+                  }}
+                />
+              )
             ) : sectionId ? (
               <SeatGrid
                 concertId={concertId!}
@@ -107,7 +141,6 @@ export default function SeatPage() {
           </div>
         </div>
 
-        {/* 우측: 사이드바 */}
         {!isConfirmed && (
           <div className="w-[280px] shrink-0">
             <Sidebar
@@ -116,14 +149,15 @@ export default function SeatPage() {
               selectedTime={selectedTime}
               selectedSeatInfo={selectedSeatInfo ?? undefined}
               selectedZone={sectionId}
+              isVerified={isVerified} 
+              onRequireVerification={() => setShowCaptcha(true)} 
               onViewAll={() => {
                 console.log('전체보기 클릭됨');
                 setSectionId(null);
               }}
               onSectionSelect={handleSectionSelect}
               onConfirmSeat={() => {
-                console.log('좌석 선택 완료 버튼 클릭됨');
-                setIsConfirmed(true);
+                setIsConfirmed(true); 
               }}
             />
           </div>
