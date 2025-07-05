@@ -50,7 +50,31 @@ export default function QRScannerPage() {
   };
 
   const getStatusText = (isValid: boolean) => {
-    return isValid ? '인증 성공' : '인증 실패';
+    return isValid ? '인증 성공 - 입장 처리 완료' : '인증 실패 - 사용 불가';
+  };
+
+  const getStatusDescription = (result: VerificationResult) => {
+    if (result.isValid) {
+      return '티켓이 성공적으로 인증되었고 입장 처리가 완료되었습니다.';
+    }
+
+    // 사용 불가 이유 분석
+    const reasons = [];
+    
+    if (!result.verification.ownershipValid) {
+      reasons.push('소유권 확인 실패');
+    }
+    if (!result.verification.usageStatusValid) {
+      reasons.push('이미 사용된 티켓');
+    }
+    if (!result.verification.faceVerificationValid) {
+      reasons.push('얼굴 인증 미완료 (테스트 중 우회됨)');
+    }
+    if (!result.verification.cancellationStatusValid) {
+      reasons.push('취소된 티켓');
+    }
+
+    return `사용 불가: ${reasons.join(', ')}`;
   };
 
   return (
@@ -84,6 +108,12 @@ export default function QRScannerPage() {
               
               <div className={`text-xl font-bold mb-4 ${getStatusColor(verificationResult.isValid)}`}>
                 {getStatusText(verificationResult.isValid)}
+              </div>
+
+              <div className="mb-4 p-4 bg-white rounded border">
+                <p className="text-gray-700">
+                  {getStatusDescription(verificationResult)}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
