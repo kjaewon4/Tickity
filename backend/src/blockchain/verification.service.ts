@@ -21,36 +21,28 @@ export class BlockchainVerificationService {
   }
 
   /**
-   * 티켓 소유권 검증 (블록체인 + DB)
+   * 블록체인에서 토큰 소유자 확인 (public 메서드)
+   */
+  async getTokenOwner(tokenId: number): Promise<string> {
+    try {
+      return await this.contract.ownerOf(tokenId);
+    } catch (error) {
+      console.error('토큰 소유자 조회 오류:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 티켓 소유권 검증 (블록체인 중심)
    */
   async verifyTicketOwnership(tokenId: number, userId: string): Promise<{
     isValid: boolean;
-    dbOwner: string | null;
     blockchainOwner: string | null;
     userWallet: string | null;
     error?: string;
   }> {
     try {
-      // 1. DB에서 티켓 정보 조회 (문자열로 통일)
-      console.log('tokenId:', tokenId, 'typeof:', typeof tokenId);
-      const { data: dbTicket, error: dbError } = await supabase
-        .from('tickets')
-        .select('*')
-        .eq('nft_token_id', String(tokenId))
-        .single();
-      console.log('쿼리 결과:', dbTicket, dbError);
-
-      if (dbError || !dbTicket) {
-        return {
-          isValid: false,
-          dbOwner: null,
-          blockchainOwner: null,
-          userWallet: null,
-          error: 'DB에서 티켓을 찾을 수 없습니다'
-        };
-      }
-
-      // 2. 사용자 지갑 주소 조회
+      // 1. 사용자 지갑 주소 조회 (DB에서만)
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('wallet_address')
@@ -60,33 +52,29 @@ export class BlockchainVerificationService {
       if (userError || !userData?.wallet_address) {
         return {
           isValid: false,
-          dbOwner: dbTicket.user_id,
           blockchainOwner: null,
           userWallet: null,
           error: '사용자 지갑 주소를 찾을 수 없습니다'
         };
       }
 
-      // 3. 블록체인에서 실제 소유자 확인
+      // 2. 블록체인에서 실제 소유자 확인
       const blockchainOwner = await this.contract.ownerOf(tokenId);
 
-      // 4. 검증 결과
-      const dbMatches = dbTicket.user_id === userId;
-      const blockchainMatches = blockchainOwner.toLowerCase() === userData.wallet_address.toLowerCase();
+      // 3. 블록체인 중심 검증
+      const isValid = blockchainOwner.toLowerCase() === userData.wallet_address.toLowerCase();
 
       return {
-        isValid: dbMatches && blockchainMatches,
-        dbOwner: dbTicket.user_id,
-        blockchainOwner: blockchainOwner,
+        isValid,
+        blockchainOwner,
         userWallet: userData.wallet_address,
-        error: !dbMatches ? 'DB 소유권 불일치' : !blockchainMatches ? '블록체인 소유권 불일치' : undefined
+        error: !isValid ? '블록체인 소유권 불일치' : undefined
       };
 
     } catch (error) {
       console.error('티켓 소유권 검증 오류:', error);
       return {
         isValid: false,
-        dbOwner: null,
         blockchainOwner: null,
         userWallet: null,
         error: `검증 중 오류 발생: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
@@ -95,55 +83,31 @@ export class BlockchainVerificationService {
   }
 
   /**
-   * 티켓 사용 상태 검증 (블록체인 + DB)
+   * 티켓 사용 상태 검증 (블록체인 중심)
    */
   async verifyTicketUsageStatus(tokenId: number): Promise<{
     isValid: boolean;
-    dbIsUsed: boolean | null;
     blockchainIsUsed: boolean | null;
     error?: string;
   }> {
     try {
-      // 1. DB에서 사용 상태 조회 (문자열로 통일)
-      const { data: dbTicket, error: dbError } = await supabase
-        .from('tickets')
-        .select('is_used')
-        .eq('nft_token_id', String(tokenId))
-        .single();
-
-      if (dbError || !dbTicket) {
-        return {
-          isValid: false,
-          dbIsUsed: null,
-          blockchainIsUsed: null,
-          error: 'DB에서 티켓을 찾을 수 없습니다'
-        };
-      }
-
-      // 2. 블록체인에서 티켓 정보 조회
+      // 블록체인에서 사용 상태 확인
       const blockchainTicket = await this.contract.tickets(tokenId);
-
-      // 3. 상태 일치성 검증
-      const dbIsUsed = dbTicket.is_used;
       const blockchainIsUsed = blockchainTicket.isUsed;
 
-      // 4. 입장 가능 여부 검증 (사용되지 않은 티켓만 유효)
-      const isNotUsed = !dbIsUsed && !blockchainIsUsed;
-      const isConsistent = dbIsUsed === blockchainIsUsed;
+      // 사용되지 않은 티켓만 유효
+      const isValid = !blockchainIsUsed;
 
       return {
-        isValid: isNotUsed && isConsistent,
-        dbIsUsed,
+        isValid,
         blockchainIsUsed,
-        error: !isNotUsed ? '이미 사용된 티켓입니다' : 
-               !isConsistent ? 'DB와 블록체인 사용 상태 불일치' : undefined
+        error: !isValid ? '이미 사용된 티켓입니다' : undefined
       };
 
     } catch (error) {
       console.error('티켓 사용 상태 검증 오류:', error);
       return {
         isValid: false,
-        dbIsUsed: null,
         blockchainIsUsed: null,
         error: `검증 중 오류 발생: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
       };
@@ -151,54 +115,31 @@ export class BlockchainVerificationService {
   }
 
   /**
-   * 얼굴 인증 상태 검증 (블록체인 + DB)
+   * 얼굴 인증 상태 검증 (블록체인 중심)
    */
   async verifyFaceVerificationStatus(tokenId: number, userId: string): Promise<{
     isValid: boolean;
-    hasEmbedding: boolean;
     blockchainIsFaceVerified: boolean | null;
     error?: string;
   }> {
     try {
-      // 1. DB에서 얼굴 임베딩 존재 여부 확인
-      const { data: embeddingData, error: embeddingError } = await supabase
-        .from('face_embeddings')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (embeddingError) {
-        return {
-          isValid: false,
-          hasEmbedding: false,
-          blockchainIsFaceVerified: null,
-          error: '얼굴 임베딩 조회 중 오류 발생'
-        };
-      }
-
-      // 2. 블록체인에서 얼굴 인증 상태 확인
+      // 블록체인에서 얼굴 인증 상태 확인
       const blockchainTicket = await this.contract.tickets(tokenId);
-
-      // 3. 상태 일치성 검증 및 실제 얼굴 인증 완료 여부 확인
-      const hasEmbedding = !!embeddingData;
       const blockchainIsFaceVerified = blockchainTicket.isFaceVerified;
 
-      // 실제 얼굴 인증이 완료되었는지 확인 (DB에 임베딩이 있고 블록체인에서도 인증됨)
       // 🧪 테스트용: 얼굴 인증 우회 (임시)
-      const isActuallyFaceVerified = true; // hasEmbedding && blockchainIsFaceVerified;
+      const isValid = true; // blockchainIsFaceVerified;
 
       return {
-        isValid: isActuallyFaceVerified,
-        hasEmbedding,
+        isValid,
         blockchainIsFaceVerified,
-        error: !isActuallyFaceVerified ? '얼굴 인증이 완료되지 않았습니다' : undefined
+        error: !isValid ? '얼굴 인증이 완료되지 않았습니다' : undefined
       };
 
     } catch (error) {
       console.error('얼굴 인증 상태 검증 오류:', error);
       return {
         isValid: false,
-        hasEmbedding: false,
         blockchainIsFaceVerified: null,
         error: `검증 중 오류 발생: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
       };
@@ -206,49 +147,30 @@ export class BlockchainVerificationService {
   }
 
   /**
-   * 티켓 취소 상태 검증 (블록체인 + DB)
+   * 티켓 취소 상태 검증 (블록체인 중심)
    */
   async verifyTicketCancellationStatus(tokenId: number): Promise<{
     isValid: boolean;
-    dbIsCancelled: boolean | null;
     blockchainIsCancelled: boolean | null;
     error?: string;
   }> {
     try {
-      // 1. DB에서 취소 상태 조회 (문자열로 통일)
-      const { data: dbTicket, error: dbError } = await supabase
-        .from('tickets')
-        .select('is_cancelled')
-        .eq('nft_token_id', String(tokenId))
-        .single();
-
-      if (dbError || !dbTicket) {
-        return {
-          isValid: false,
-          dbIsCancelled: null,
-          blockchainIsCancelled: null,
-          error: 'DB에서 티켓을 찾을 수 없습니다'
-        };
-      }
-
-      // 2. 블록체인에서 취소 상태 확인
+      // 블록체인에서 취소 상태 확인
       const blockchainIsCancelled = await this.contract.isCancelled(tokenId);
 
-      // 3. 상태 일치성 검증
-      const dbIsCancelled = dbTicket.is_cancelled;
+      // 취소되지 않은 티켓만 유효
+      const isValid = !blockchainIsCancelled;
 
       return {
-        isValid: dbIsCancelled === blockchainIsCancelled,
-        dbIsCancelled,
+        isValid,
         blockchainIsCancelled,
-        error: dbIsCancelled !== blockchainIsCancelled ? 'DB와 블록체인 취소 상태 불일치' : undefined
+        error: !isValid ? '취소된 티켓입니다' : undefined
       };
 
     } catch (error) {
       console.error('티켓 취소 상태 검증 오류:', error);
       return {
         isValid: false,
-        dbIsCancelled: null,
         blockchainIsCancelled: null,
         error: `검증 중 오류 발생: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
       };

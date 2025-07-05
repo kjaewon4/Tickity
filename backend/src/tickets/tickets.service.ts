@@ -593,15 +593,20 @@ export const generateQRData = async (ticketId: string): Promise<{
   tokenId: string;
   contractAddress: string;
   ticketId: string;
+  walletAddress: string;
   qrString: string;
 }> => {
   try {
     console.log('🔍 QR 데이터 생성 요청 - 티켓 ID:', ticketId);
     
-    // 1. 티켓 정보 조회
+    // 1. 티켓 정보 조회 (지갑 주소 포함)
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
-      .select('nft_token_id, user_id')
+      .select(`
+        nft_token_id, 
+        user_id,
+        users!inner (wallet_address)
+      `)
       .eq('id', ticketId)
       .single();
 
@@ -616,17 +621,22 @@ export const generateQRData = async (ticketId: string): Promise<{
       throw new Error('NFT가 민팅되지 않은 티켓입니다');
     }
 
+    if (!ticket.users?.wallet_address) {
+      throw new Error('사용자 지갑 주소를 찾을 수 없습니다');
+    }
+
     // 2. 컨트랙트 주소 가져오기
     const contractAddress = process.env.TICKET_MANAGER_ADDRESS;
     if (!contractAddress) {
       throw new Error('컨트랙트 주소가 설정되지 않았습니다');
     }
 
-    // 3. QR 데이터 생성
+    // 3. QR 데이터 생성 (지갑 주소 포함)
     const qrData = {
       tokenId: ticket.nft_token_id.toString(),
       contractAddress: contractAddress,
-      ticketId: ticketId.toString()
+      ticketId: ticketId.toString(),
+      walletAddress: ticket.users.wallet_address
     };
 
     const qrString = JSON.stringify(qrData);
@@ -637,6 +647,7 @@ export const generateQRData = async (ticketId: string): Promise<{
       tokenId: ticket.nft_token_id.toString(),
       contractAddress,
       ticketId: ticketId.toString(),
+      walletAddress: ticket.users.wallet_address,
       qrString
     };
 
@@ -675,17 +686,18 @@ export const verifyQRCode = async (qrDataString: string): Promise<{
       qrData = {
         tokenId: '0',
         contractAddress: '0x0000000000000000000000000000000000000000',
-        ticketId: 'dummy-ticket-id'
+        ticketId: 'dummy-ticket-id',
+        walletAddress: '0x0000000000000000000000000000000000000000'
       };
     }
     
-    const { tokenId, contractAddress, ticketId } = qrData;
+    const { tokenId, contractAddress, ticketId, walletAddress } = qrData;
 
-    if (!tokenId || !contractAddress || !ticketId) {
-      throw new Error('QR 코드 데이터가 유효하지 않습니다');
+    if (!tokenId || !contractAddress || !ticketId || !walletAddress) {
+      throw new Error('QR 코드 데이터가 유효하지 않습니다 (필수 필드 누락)');
     }
 
-    // 2. 티켓 정보 조회
+    // 2. 티켓 정보 조회 (UI 표시용)
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
       .select(`
@@ -700,18 +712,40 @@ export const verifyQRCode = async (qrDataString: string): Promise<{
       throw new Error('티켓을 찾을 수 없습니다');
     }
 
-    // 3. 실제 블록체인 검증 수행
-    const { blockchainVerification } = await import('../blockchain/verification.service');
+    // 3. 블록체인 중심 검증 수행
+    const { BlockchainVerificationService } = await import('../blockchain/verification.service');
+    const blockchainVerification = new BlockchainVerificationService();
     
-    // 개별 검증 결과 조회
+    // 🎯 블록체인 중심 검증 (QR에서 추출한 지갑 주소 사용)
     const [ownershipResult, usageResult, faceResult, cancellationResult] = await Promise.all([
-      blockchainVerification.verifyTicketOwnership(Number(tokenId), ticket.user_id),
+      // 소유권 검증: 블록체인 소유자 vs QR 지갑 주소
+      (async () => {
+        try {
+          // 블록체인에서 소유자 확인
+          const blockchainOwner = await blockchainVerification.getTokenOwner(Number(tokenId));
+          const isValid = blockchainOwner.toLowerCase() === walletAddress.toLowerCase();
+          
+          return {
+            isValid,
+            blockchainOwner,
+            userWallet: walletAddress,
+            error: !isValid ? '블록체인 소유권 불일치' : undefined
+          };
+        } catch (error) {
+          return {
+            isValid: false,
+            blockchainOwner: null,
+            userWallet: walletAddress,
+            error: `소유권 검증 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
+          };
+        }
+      })(),
       blockchainVerification.verifyTicketUsageStatus(Number(tokenId)),
       blockchainVerification.verifyFaceVerificationStatus(Number(tokenId), ticket.user_id),
       blockchainVerification.verifyTicketCancellationStatus(Number(tokenId))
     ]);
 
-    // 입장 가능 여부 직접 계산 (verifyTicketForEntry 대신)
+    // 입장 가능 여부 계산
     const canEnter = 
       ownershipResult.isValid &&
       usageResult.isValid &&
@@ -727,19 +761,15 @@ export const verifyQRCode = async (qrDataString: string): Promise<{
     if (cancellationResult.error) errors.push(cancellationResult.error);
 
     // 4. 로그 출력
-    console.log('🔍 QR 인증 - 티켓 정보:', {
+    console.log('🔍 QR 인증 - 블록체인 중심 검증:', {
       tokenId,
       ticketId,
-      userId: ticket.user_id,
-      isUsed: ticket.is_used,
-      isCancelled: ticket.is_cancelled
-    });
-
-    console.log('🔍 QR 인증 - 검증 결과:', {
-      ownership: ownershipResult,
-      usage: usageResult,
-      face: faceResult,
-      cancellation: cancellationResult
+      qrWalletAddress: walletAddress,
+      blockchainOwner: ownershipResult.blockchainOwner,
+      ownershipValid: ownershipResult.isValid,
+      usageValid: usageResult.isValid,
+      faceValid: faceResult.isValid,
+      cancellationValid: cancellationResult.isValid
     });
 
     // 5. 결과 반환
@@ -754,7 +784,7 @@ export const verifyQRCode = async (qrDataString: string): Promise<{
         venue: ticket.concerts?.venues?.name || '테스트 공연장',
         seatInfo: ticket.seat_number || 'A-1',
         price: ticket.purchase_price || 50000,
-        holder: ticket.users?.wallet_address || '0x0000000000000000000000000000000000000000'
+        holder: walletAddress // QR에서 추출한 지갑 주소 사용
       },
       verification: {
         ownershipValid: ownershipResult.isValid,
