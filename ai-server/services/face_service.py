@@ -112,3 +112,35 @@ def fetch_registered_embeddings():
 
     print(f"✅ {len(db)}명의 embedding 로딩 완료")
     return db
+
+async def extract_embedding(video: UploadFile):
+    import cv2
+    import numpy as np
+    import os
+
+    tmp_path = f"/tmp/{uuid4()}.webm"
+    with open(tmp_path, "wb") as f:
+        f.write(await video.read())
+
+    cap = cv2.VideoCapture(tmp_path)
+    embeddings = []
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # ✅ 프레임에서 embedding 추출 로직
+        emb = extract_embedding_from_image(frame)
+        if emb is not None:
+            embeddings.append(emb)
+
+    cap.release()
+    os.remove(tmp_path)
+
+    if embeddings:
+        # ✅ 평균 embedding 계산
+        return np.mean(embeddings, axis=0)
+    else:
+        return None
+
