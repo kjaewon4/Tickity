@@ -156,6 +156,51 @@ class ApiClient {
       body: JSON.stringify({ seatId, ticketId, tokenId }),
     });
   }
+
+  // QR 코드 데이터 조회
+  async getQRData(ticketId: string): Promise<ApiResponse<{
+    tokenId: string;
+    contractAddress: string;
+    ticketId: string;
+    qrString: string;
+  }>> {
+    return this.request<{
+      tokenId: string;
+      contractAddress: string;
+      ticketId: string;
+      qrString: string;
+    }>(`/tickets/qr-data/${ticketId}`, {
+      method: 'GET',
+    });
+  }
+
+  // QR 코드 인증
+  async verifyQRCode(qrData: string): Promise<ApiResponse<{
+    isValid: boolean;
+    ticketInfo: any;
+    verification: {
+      ownershipValid: boolean;
+      usageStatusValid: boolean;
+      faceVerificationValid: boolean;
+      cancellationStatusValid: boolean;
+      errors: string[];
+    };
+  }>> {
+    return this.request<{
+      isValid: boolean;
+      ticketInfo: any;
+      verification: {
+        ownershipValid: boolean;
+        usageStatusValid: boolean;
+        faceVerificationValid: boolean;
+        cancellationStatusValid: boolean;
+        errors: string[];
+      };
+    }>('/tickets/verify-qr', {
+      method: 'POST',
+      body: JSON.stringify({ qrData }),
+    });
+  }
 }
 
 

@@ -538,3 +538,180 @@ export async function findSeatIdByPosition(sectionId: string, row: number, col: 
   return seat.id;
 }
 
+// ───────────────────────────────────────────────────────────
+// QR 코드 인증 관련 함수들
+// ───────────────────────────────────────────────────────────
+
+/**
+ * QR 코드 데이터 생성
+ */
+export const generateQRData = async (ticketId: string): Promise<{
+  tokenId: string;
+  contractAddress: string;
+  ticketId: string;
+  qrString: string;
+}> => {
+  try {
+    console.log('🔍 QR 데이터 생성 요청 - 티켓 ID:', ticketId);
+    
+    // 1. 티켓 정보 조회
+    const { data: ticket, error: ticketError } = await supabase
+      .from('tickets')
+      .select('nft_token_id, user_id')
+      .eq('id', ticketId)
+      .single();
+
+    if (ticketError || !ticket) {
+      console.error('❌ 티켓 조회 실패:', ticketError);
+      throw new Error('티켓을 찾을 수 없습니다');
+    }
+
+    console.log('✅ 티켓 조회 성공:', ticket);
+
+    if (!ticket.nft_token_id) {
+      throw new Error('NFT가 민팅되지 않은 티켓입니다');
+    }
+
+    // 2. 컨트랙트 주소 가져오기
+    const contractAddress = process.env.TICKET_MANAGER_ADDRESS;
+    if (!contractAddress) {
+      throw new Error('컨트랙트 주소가 설정되지 않았습니다');
+    }
+
+    // 3. QR 데이터 생성
+    const qrData = {
+      tokenId: ticket.nft_token_id.toString(),
+      contractAddress: contractAddress,
+      ticketId: ticketId.toString()
+    };
+
+    const qrString = JSON.stringify(qrData);
+    
+    console.log('📝 생성된 QR 데이터:', qrData);
+
+    return {
+      tokenId: ticket.nft_token_id.toString(),
+      contractAddress,
+      ticketId: ticketId.toString(),
+      qrString
+    };
+
+  } catch (error) {
+    console.error('QR 데이터 생성 오류:', error);
+    throw error;
+  }
+};
+
+/**
+ * QR 코드 인증
+ */
+export const verifyQRCode = async (qrDataString: string): Promise<{
+  isValid: boolean;
+  ticketInfo: any;
+  verification: {
+    ownershipValid: boolean;
+    usageStatusValid: boolean;
+    faceVerificationValid: boolean;
+    cancellationStatusValid: boolean;
+    errors: string[];
+  };
+}> => {
+  try {
+    console.log('🔍 QR 데이터 수신:', qrDataString);
+    
+    // 1. QR 데이터 파싱 (안전한 파싱)
+    let qrData;
+    try {
+      qrData = JSON.parse(qrDataString);
+    } catch (parseError) {
+      console.error('JSON 파싱 실패:', parseError);
+      console.error('원본 데이터:', qrDataString);
+      
+      // 더미 데이터로 테스트
+      qrData = {
+        tokenId: '0',
+        contractAddress: '0x0000000000000000000000000000000000000000',
+        ticketId: 'dummy-ticket-id'
+      };
+    }
+    
+    const { tokenId, contractAddress, ticketId } = qrData;
+
+    if (!tokenId || !contractAddress || !ticketId) {
+      throw new Error('QR 코드 데이터가 유효하지 않습니다');
+    }
+
+    // 2. 티켓 정보 조회
+    const { data: ticket, error: ticketError } = await supabase
+      .from('tickets')
+      .select(`
+        *,
+        users ( id, wallet_address ),
+        concerts ( title, start_date, start_time, venues ( name ) )
+      `)
+      .eq('id', ticketId)
+      .single();
+
+    if (ticketError || !ticket) {
+      throw new Error('티켓을 찾을 수 없습니다');
+    }
+
+    // 3. 실제 블록체인 검증 수행
+    const { blockchainVerification } = await import('../blockchain/verification.service');
+    const verificationResult = await blockchainVerification.verifyTicketForEntry(
+      Number(tokenId),
+      ticket.user_id
+    );
+
+    // 4. 개별 검증 결과 조회
+    console.log('🔍 QR 인증 - 티켓 정보:', {
+      tokenId,
+      ticketId,
+      userId: ticket.user_id,
+      isUsed: ticket.is_used,
+      isCancelled: ticket.is_cancelled
+    });
+
+    const [ownershipResult, usageResult, faceResult, cancellationResult] = await Promise.all([
+      blockchainVerification.verifyTicketOwnership(Number(tokenId), ticket.user_id),
+      blockchainVerification.verifyTicketUsageStatus(Number(tokenId)),
+      blockchainVerification.verifyFaceVerificationStatus(Number(tokenId), ticket.user_id),
+      blockchainVerification.verifyTicketCancellationStatus(Number(tokenId))
+    ]);
+
+    console.log('🔍 QR 인증 - 검증 결과:', {
+      ownership: ownershipResult,
+      usage: usageResult,
+      face: faceResult,
+      cancellation: cancellationResult
+    });
+
+    // 5. 결과 반환
+    return {
+      isValid: verificationResult.canEnter,
+      ticketInfo: {
+        tokenId,
+        ticketId,
+        concertTitle: ticket.concerts?.title || '테스트 콘서트',
+        date: ticket.concerts?.start_date || '2024-12-31',
+        time: ticket.concerts?.start_time || '19:00',
+        venue: ticket.concerts?.venues?.name || '테스트 공연장',
+        seatInfo: ticket.seat_number || 'A-1',
+        price: ticket.purchase_price || 50000,
+        holder: ticket.users?.wallet_address || '0x0000000000000000000000000000000000000000'
+      },
+      verification: {
+        ownershipValid: ownershipResult.isValid,
+        usageStatusValid: usageResult.isValid,
+        faceVerificationValid: faceResult.isValid,
+        cancellationStatusValid: cancellationResult.isValid,
+        errors: verificationResult.errors
+      }
+    };
+
+  } catch (error) {
+    console.error('QR 코드 인증 오류:', error);
+    throw error;
+  }
+};
+

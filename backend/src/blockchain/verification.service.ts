@@ -174,15 +174,18 @@ export class BlockchainVerificationService {
       // 2. 블록체인에서 얼굴 인증 상태 확인
       const blockchainTicket = await this.contract.tickets(tokenId);
 
-      // 3. 상태 일치성 검증
+      // 3. 상태 일치성 검증 및 실제 얼굴 인증 완료 여부 확인
       const hasEmbedding = !!embeddingData;
       const blockchainIsFaceVerified = blockchainTicket.isFaceVerified;
 
+      // 실제 얼굴 인증이 완료되었는지 확인 (DB에 임베딩이 있고 블록체인에서도 인증됨)
+      const isActuallyFaceVerified = hasEmbedding && blockchainIsFaceVerified;
+
       return {
-        isValid: hasEmbedding === blockchainIsFaceVerified,
+        isValid: isActuallyFaceVerified,
         hasEmbedding,
         blockchainIsFaceVerified,
-        error: hasEmbedding !== blockchainIsFaceVerified ? 'DB와 블록체인 얼굴 인증 상태 불일치' : undefined
+        error: !isActuallyFaceVerified ? '얼굴 인증이 완료되지 않았습니다' : undefined
       };
 
     } catch (error) {

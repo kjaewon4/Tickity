@@ -479,6 +479,74 @@ router.get(
   }
 );
 
+/**
+ * QR 코드 데이터 생성
+ * GET /tickets/qr-data/:ticketId
+ */
+router.get(
+  '/qr-data/:ticketId',
+  async (req: Request, res: Response<ApiResponse>) => {
+    try {
+      const { ticketId } = req.params;
+      
+      if (!ticketId) {
+        return res.status(400).json({
+          success: false,
+          error: '티켓 ID가 필요합니다.'
+        });
+      }
+
+      const qrData = await ticketsService.generateQRData(ticketId);
+      
+      res.json({
+        success: true,
+        data: qrData
+      });
+
+    } catch (err: any) {
+      console.error('QR 데이터 생성 오류:', err);
+      res.status(500).json({
+        success: false,
+        error: err.message || 'QR 데이터 생성 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
+/**
+ * QR 코드 인증
+ * POST /tickets/verify-qr
+ */
+router.post(
+  '/verify-qr',
+  async (req: Request, res: Response<ApiResponse>) => {
+    try {
+      const { qrData } = req.body;
+      
+      if (!qrData) {
+        return res.status(400).json({
+          success: false,
+          error: 'QR 데이터가 필요합니다.'
+        });
+      }
+
+      const verificationResult = await ticketsService.verifyQRCode(qrData);
+      
+      res.json({
+        success: true,
+        data: verificationResult
+      });
+
+    } catch (err: any) {
+      console.error('QR 코드 인증 오류:', err);
+      res.status(500).json({
+        success: false,
+        error: err.message || 'QR 코드 인증 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
 // seats 테이블에서 seat_id 조회
 export async function findSeatIdByPosition(sectionId: string, row: number, col: number): Promise<string> {
   const { data: seat, error } = await supabase
