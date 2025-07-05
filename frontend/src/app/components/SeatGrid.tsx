@@ -30,7 +30,38 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
   const [maxCols, setMaxCols] = useState(0);
   const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [sectionGrade, setSectionGrade] = useState<string>('');
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // 섹션의 등급 정보를 가져오는 함수
+  const fetchSectionGrade = async () => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/${concertId}/seat-summary`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        // 현재 섹션의 등급 찾기
+        const gradeInfo = json.data.find((grade: any) => 
+          grade.zones.some((zone: any) => zone.section_id === sectionId)
+        );
+        if (gradeInfo) {
+          console.log('섹션 등급 정보:', {
+            sectionId,
+            gradeName: gradeInfo.grade_name,
+            price: gradeInfo.price
+          });
+          setSectionGrade(gradeInfo.grade_name.toUpperCase());
+        }
+      }
+    } catch (err) {
+      console.error('섹션 등급 정보 불러오기 실패:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (concertId && sectionId) {
+      fetchSectionGrade();
+    }
+  }, [concertId, sectionId]);
 
   useEffect(() => {
     const fetchSeats = async () => {
@@ -47,7 +78,17 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
           );
 
           data.seatMap.forEach((seat: Seat) => {
-            grid[seat.row][seat.col] = seat;
+            grid[seat.row][seat.col] = {
+              ...seat,
+              grade: sectionGrade // 섹션의 등급 정보 사용
+            };
+          });
+
+          console.log('좌석 데이터 설정:', {
+            sectionId,
+            grade: sectionGrade,
+            totalSeats: data.seatMap.length,
+            sampleSeat: grid[0]?.[0]
           });
 
           setSeatMap(grid);
@@ -60,8 +101,10 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
       }
     };
 
-    fetchSeats();
-  }, [concertId, sectionId]);
+    if (sectionId && sectionGrade) {
+      fetchSeats();
+    }
+  }, [concertId, sectionId, sectionGrade]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -209,6 +252,7 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
           </div>
           <p className="text-sm text-gray-600 mt-1">
             현재 보고 계신 구역은 {floor} {zoneCode}구역입니다.
+            {sectionGrade && <span className="ml-2 font-semibold">({sectionGrade})</span>}
           </p>
         </div>
         
@@ -236,13 +280,16 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
                               ? 'bg-gray-200 cursor-not-allowed opacity-50'
                               : seat.status === 'hold'
                               ? 'bg-orange-200 cursor-not-allowed opacity-75'
+                              : sectionGrade === 'VIP석'
+                              ? selectedSeat === `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`
+                                ? 'bg-pink-300 text-pink-900 shadow-lg ring-2 ring-pink-300'
+                                : 'bg-pink-200 hover:bg-pink-300 border border-pink-300 text-pink-800'
                               : selectedSeat === `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`
                               ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-300'
-                              : seat.grade === 'VIP' 
-                              ? 'bg-pink-200 hover:bg-pink-300 border border-pink-300'
                               : 'bg-blue-100 hover:bg-blue-200 border border-blue-200'
                           }`}
                         >
+                          
                         </div>
                       ))}
                     </div>
