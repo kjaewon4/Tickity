@@ -215,6 +215,10 @@
   <script>
     let stream = null, mediaRecorder = null, recordedChunks = [], isRecording = false, recordingTimer = null, recordingSeconds = 0;
     const urlParams = new URLSearchParams(window.location.search);
+    const accessToken = urlParams.get("accessToken");
+    const refreshToken = urlParams.get("refreshToken");
+    console.log("✅ accessToken", accessToken);
+    console.log("✅ refreshToken", refreshToken);
     const video = document.getElementById("video"),
       startCameraBtn = document.getElementById("startCamera"),
       stopCameraBtn = document.getElementById("stopCamera"),
@@ -244,6 +248,10 @@
         video.srcObject = stream;
         startCameraBtn.disabled = true; stopCameraBtn.disabled = false; recordBtn.disabled = false;
         status.textContent = "카메라가 준비되었습니다. 녹화를 시작하세요."; status.className = "status ready";
+        const formData = new FormData();
+        //formData.append("user_id", user_id); // ✅ URL 파라미터에서 받은 user_id 추가
+        //console.log("✅ 등록 성공, 리다이렉트 실행:", accessToken, refreshToken);
+        //window.location.href = `http://localhost:3000/#access_token=${accessToken}&refresh_token=${refreshToken}`;
       } catch (error) {
         console.error("카메라 접근 오류:", error);
         status.textContent = "카메라에 접근할 수 없습니다. 권한을 확인해주세요."; status.className = "status error";
@@ -311,7 +319,10 @@
           console.log('✅ DB 저장 결과:', resultData);
 
           setTimeout(() => {
-            window.location.href = "http://localhost:3000/";
+            // 등록 페이지 JS
+            console.log("✅ 등록 성공, 리다이렉트 실행:", accessToken, refreshToken);
+            window.location.href = `http://localhost:3000/#access_token=${accessToken}&refresh_token=${refreshToken}`;
+
           }, 3000);
         } else {
           result.className = "result error";

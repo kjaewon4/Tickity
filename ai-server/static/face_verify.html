@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>실시간 얼굴 인증</title>
   <style>
-    html, body {
+    html,
+    body {
       margin: 0;
       padding: 0;
       height: 100%;
@@ -44,6 +46,7 @@
     }
   </style>
 </head>
+
 <body>
 
   <div id="cameraContainer">
@@ -58,7 +61,7 @@
     const video = document.getElementById('liveVideo');
     const footer = document.getElementById('footer');
     let checking = false;
-    
+
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -100,7 +103,6 @@
 
           if (response.ok) {
             if (result.score >= 0.7) {
-              checking = false;
               footer.innerHTML = `✅ 인증 성공<br>사용자: ${result.user_id}<br>유사도: ${result.score.toFixed(2)}`;
             } else {
               footer.innerHTML = `❌ 인증 실패 (유사도: ${result.score.toFixed(2)})`;
@@ -112,9 +114,10 @@
           footer.innerHTML = '❌ API 요청 실패: ' + err.message;
         }
 
-        await sleep(1000); // 2초 간격
+        await sleep(1000); // 1초 간격
       }
     }
+
 
     function captureFrame() {
       return new Promise(resolve => {
@@ -139,4 +142,5 @@
   </script>
 
 </body>
+
 </html>
