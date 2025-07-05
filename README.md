@@ -155,6 +155,10 @@ GEMINI_API_KEY=your_gemini_api_key
 # Ethereum RPC URL
 RPC_URL=http://127.0.0.1:8545
 
+# Blockchain Configuration
+BLOCKCHAIN_HOST=127.0.0.1
+BLOCKCHAIN_PORT=8545
+
 # Admin Configuration
 TEST_ADMIN_USER_ID=your_admin_user_id
 ENCRYPTION_KEY=your_encryption_key
