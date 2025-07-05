@@ -3,7 +3,11 @@
 
 const axios = require('axios');
 
-const BASE_URL = 'http://localhost:4000';
+// 환경변수에서 URL 가져오기
+const BASE_URL = process.env.BACKEND_URL;
+if (!BASE_URL) {
+  throw new Error('BACKEND_URL 환경변수가 설정되지 않았습니다.');
+}
 
 // 테스트용 데이터 (실제 데이터로 교체 필요)
 const TEST_DATA = {
