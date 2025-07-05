@@ -23,6 +23,8 @@ interface SidebarProps {
   selectedSeatInfo?: string;
   onConfirmSeat?: () => void;
   selectedZone?: string;
+  isVerified: boolean;
+  onRequireVerification?: () => void; 
 }
 
 const Sidebar: FC<SidebarProps> = ({
@@ -32,6 +34,8 @@ const Sidebar: FC<SidebarProps> = ({
   selectedSeatInfo,
   onConfirmSeat,
   selectedZone, 
+  isVerified,
+  onRequireVerification
 }) => {
   const [summary, setSummary] = useState<GradeSummary[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
@@ -221,6 +225,14 @@ const Sidebar: FC<SidebarProps> = ({
       return;
     }
 
+    if (!isVerified) {
+      console.warn('인증되지 않음: 모달 열기');
+      if (onRequireVerification) {
+        onRequireVerification(); 
+      }
+      return; 
+    }
+
     localStorage.setItem('selectedSeatInfo', selectedSeatInfo);
 
     const matchedGrade = summary.find((grade) =>
@@ -406,7 +418,7 @@ const Sidebar: FC<SidebarProps> = ({
         <button
           onClick={handleConfirmSeat}
           disabled={!selectedSeatInfo}
-          className="w-full bg-gray-700 text-white py-2 rounded hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          className="w-full bg-gray-700 text-white py-2 rounded hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition "
         >
           좌석 선택 완료
         </button>

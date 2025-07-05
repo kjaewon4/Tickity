@@ -6,6 +6,7 @@ interface MapArea {
   id: string; // 🔹 section_id
   code: string; // 🔹 구역 코드 (예: '43', 'F1')
   coords: [number, number][];
+  grade: string;
 }
 
 interface SeatSelectionProps {
@@ -69,6 +70,15 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => 
           {mapAreas
             .filter((area) => Array.isArray(area.coords) && area.coords.length > 0)
             .map((area) => {
+              const isVIP = area.grade === 'VIP'; 
+
+              const backgroundColor = isVIP
+                ? 'rgba(236, 72, 153, 0.3)'
+                : 'rgba(147, 197, 253, 0.3)'
+
+              const hoverColor = isVIP
+                ? 'rgba(236, 72, 153, 0.5)'
+                : 'rgba(147, 197, 253, 0.5)';
               const polygonCoords = area.coords
                 .map(([x, y]) => `${(x / originalWidth) * 100}% ${(y / originalHeight) * 100}%`)
                 .join(', ');
@@ -86,7 +96,7 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => 
                     className="absolute transition duration-200"
                     style={{
                       clipPath: `polygon(${polygonCoords})`,
-                      backgroundColor: 'rgba(59,130,246,0.2)',
+                      backgroundColor: backgroundColor,
                       width: '100%',
                       height: '100%',
                       cursor: 'pointer',
@@ -94,10 +104,10 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => 
                     }}
                     onClick={() => handleAreaClick(area.id)}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.4)';
+                      e.currentTarget.style.backgroundColor = hoverColor;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.2)';
+                      e.currentTarget.style.backgroundColor = backgroundColor;
                     }}
                   />
 
