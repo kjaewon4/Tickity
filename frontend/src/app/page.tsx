@@ -63,6 +63,23 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState('전체');
   const [upcomingConcerts, setUpcomingConcerts] = useState<Concert[]>([]);
   const router = useRouter();
+ useEffect(() => {
+  if (typeof window !== 'undefined') {
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+
+    if (accessToken && refreshToken) {
+      console.log("✅ Hash Fragment에서 토큰 저장:", { accessToken, refreshToken });
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+
+      // hash 제거 후 router.replace로 홈 이동
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      router.replace('/'); // ✅ Next.js 라우터로 이동
+    }
+  }
+}, [router]);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -178,11 +195,10 @@ export default function HomePage() {
             <button
               key={category}
               onClick={() => setSelectedCategory(category)}
-              className={`px-6 py-2.5 rounded-full text-base font-semibold cursor-pointer shadow-lg transition-all border border-gray-300 ${
-                selectedCategory === category
+              className={`px-6 py-2.5 rounded-full text-base font-semibold cursor-pointer shadow-lg transition-all border border-gray-300 ${selectedCategory === category
                   ? 'bg-blue-500 text-white'
                   : 'bg-white text-black hover:bg-blue-500 hover:text-white'
-              }`}
+                }`}
             >
               {category}
             </button>
@@ -205,8 +221,8 @@ export default function HomePage() {
                 <LazyImage
                   src={
                     concert.poster_url &&
-                    concert.poster_url.trim() !== '' &&
-                    isValidImageUrl(concert.poster_url)
+                      concert.poster_url.trim() !== '' &&
+                      isValidImageUrl(concert.poster_url)
                       ? concert.poster_url
                       : '/images/default-poster.png'
                   }

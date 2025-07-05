@@ -6,9 +6,10 @@ import { apiClient } from '@/lib/apiClient';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-
+  
   useEffect(() => {
     const handleAuthCallback = async () => {
+      console.log("✅ handleAuthCallback 실행됨", window.location.hash);
       try {
         // URL hash에서 토큰 정보 파싱
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -31,11 +32,15 @@ export default function AuthCallbackPage() {
         // 토큰을 로컬 스토리지에 저장
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', refreshToken);
+        console.log("✅ 토큰 저장 완료, router.replace 전", localStorage.getItem('accessToken'));
+
+        // URL의 hash 제거 후 router.replace로 홈 이동
+        router.replace('/');
 
         // 사용자 정보 가져오기
         try {
           const userResponse = await apiClient.getUserWithToken(accessToken);
-          
+
           if (!userResponse.data?.user) {
             router.replace('/login?error=user_not_found');
             return;
@@ -45,12 +50,15 @@ export default function AuthCallbackPage() {
 
           // 사용자 정보 완전성 검사
           const hasName = user.name && user.name.trim() !== '';
-          const hasResidentNumber = user.residentNumber && 
-                                  user.residentNumber !== '1900-01-01' && 
-                                  user.residentNumber !== '' &&
-                                  user.residentNumber !== 'not_provided';
+          const hasResidentNumber = user.residentNumber &&
+            user.residentNumber !== '1900-01-01' &&
+            user.residentNumber !== '' &&
+            user.residentNumber !== 'not_provided';
 
-          if (hasName && hasResidentNumber) {
+          if (user.hasEmbedding === false) {
+            // ✅ 임베딩 없으면 등록 페이지로 이동
+            window.location.href = `http://localhost:8000/static/face_registerG.html?user_id=${user.id}&accessToken=${accessToken}&refreshToken=${refreshToken}`;
+          } else if (hasName && hasResidentNumber) {
             // 기존 사용자이고 정보가 완전한 경우 메인 페이지로
             router.replace('/');
           } else {

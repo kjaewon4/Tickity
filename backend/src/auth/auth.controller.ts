@@ -289,7 +289,7 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
     // ✅ 로그인 성공 후 embedding 존재 여부 확인
     const { data: embeddingData, error: embeddingError } = await supabase
       .from('face_embeddings')
-      .select('embedding')
+      .select('embedding_enc')
       .eq('user_id', userData.id)
       .maybeSingle();
 
@@ -400,7 +400,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
       if (userError.code === 'PGRST116') {
         console.log('Google OAuth 신규 사용자 발견:', user.id);
 
-        // 신규 사용자 정보만 반환 (데이터베이스에 저장하지 않음)
+        // ✅ 신규 사용자도 hasEmbedding false로 반환
         const newUserInfo: UserInfo = {
           id: user.id,
           email: user.email!,
@@ -410,10 +410,14 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
           createdAt: new Date().toISOString()
         };
 
+        // embedding 조회 (없으므로 false)
         return res.json({
           success: true,
           data: {
-            user: newUserInfo
+            user: {
+              ...newUserInfo,
+              hasEmbedding: false // ✅ 추가
+            }
           }
         });
       }
@@ -434,10 +438,30 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
       createdAt: userData.created_at
     };
 
+    // ✅ 추가: 임베딩 존재 여부 확인
+    const { data: embeddingData, error: embeddingError } = await supabase
+      .from('face_embeddings')
+      .select('embedding_enc')
+      .eq('user_id', userData.id)
+      .maybeSingle();
+
+    if (embeddingError) {
+      console.error('임베딩 조회 오류:', embeddingError);
+      return res.status(500).json({
+        success: false,
+        error: '임베딩 조회 중 오류가 발생했습니다.'
+      });
+    }
+
+    const hasEmbedding = !!embeddingData;
+
     res.json({
       success: true,
       data: {
-        user: userInfo
+        user: {
+          ...userInfo,
+          hasEmbedding // ✅ 응답에 포함
+        }
       }
     });
 
@@ -449,6 +473,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
     });
   }
 });
+
 
 // 이메일 중복 체크
 router.get('/check-email/:email', async (req: Request, res: Response<ApiResponse>) => {
