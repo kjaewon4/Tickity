@@ -180,11 +180,11 @@ router.post(
       // 1) DB: 좌석 예약 해제
       await ticketsService.setSeatReserved(seatId, false);
       // 2) on-chain: cancelTicket 호출 → reopenTime 반환
-      const reopenTime = await ticketsService.cancelOnChain(
+      const {reopenTime, transactionHash}  = await ticketsService.cancelOnChain(
         Number(tokenId)
       );
       // 3) DB: 티켓 취소 정보 저장
-      await ticketsService.markTicketCancelled(ticketId, reopenTime);
+      await ticketsService.markTicketCancelled(ticketId, reopenTime, transactionHash);
 
       res.json({ success: true, data: { reopenTime } });
     } catch (err) {

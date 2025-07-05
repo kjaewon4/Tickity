@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { supabase } from '../lib/supabaseClient';
 import { Ticket } from './tickets.model';
-import { ethers, Contract, Wallet } from 'ethers';
+import { ethers, Contract, Wallet, Log } from 'ethers';
 // artifacts 폴더 내 생성된 JSON ABI 파일을 가져옵니다.
 // tickets.service.ts 기준으로 ../../../blockchain/artifacts/... 경로
 import TicketJSON from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
@@ -451,8 +451,8 @@ export const setSeatReserved = async (
 ) => {
   const { error } = await supabase
     .from('concert_seats')
-    .update({ current_status: reserved ? 'reserved' : 'available' })
-    .eq('id', seatId);
+    .update({ current_status: reserved ? 'reserved' : 'AVAILABLE' })
+    .eq('seat_id', seatId);
 
   if (error) {
     console.error('setSeatReserved 오류:', error);
@@ -463,11 +463,54 @@ export const setSeatReserved = async (
 // ───────────────────────────────────────────────────────────
 // 온체인: 티켓 취소 → 재오픈 시간 반환
 // ───────────────────────────────────────────────────────────
-export const cancelOnChain = async (tokenId: number): Promise<number> => {
-  const tx      = await contract.cancelTicket(tokenId);
-  const receipt = await tx.wait();
-  const evt     = receipt.events?.find((e: any) => e.event === 'TicketCancelled');
-  return evt!.args!.reopenTime.toNumber();
+export const cancelOnChain = async (tokenId: number): Promise<{ reopenTime: number; transactionHash: string }> => {
+  console.log(`[cancelOnChain] Attempting to cancel ticket with tokenId: ${tokenId}`);
+  try {
+    const tx = await contract.cancelTicket(tokenId);
+    console.log(`[cancelOnChain] Transaction sent, hash: ${tx.hash}`);
+
+    const receipt = await tx.wait();
+    if (!receipt) {
+      throw new Error('트랜잭션 영수증을 받지 못했습니다.');
+    }
+    console.log(`[cancelOnChain] Transaction receipt received.`);
+    console.log(`[cancelOnChain] All logs in receipt:`, receipt.logs); 
+
+    if (receipt.status === 0) {
+      throw new Error('트랜잭션이 실패했습니다 (status: 0)');
+    }
+
+    let reopenTime: number | undefined;
+    
+    // !!! 여기가 핵심 변경 지점입니다 !!!
+    // this.contract.interface 대신 contract.interface를 직접 사용합니다.
+    for (const log of receipt.logs as Log[]) {
+      try {
+        const parsed = contract.interface.parseLog(log); // <--- 'this.' 제거!
+        if (parsed.name === 'TicketCancelled') {
+          // BigInt를 Number로 변환 (ethers v6에서 BigInt가 기본 반환 타입일 수 있음)
+          reopenTime = Number(parsed.args.reopenTime); 
+          console.log(`[cancelOnChain] 'TicketCancelled' event found. Parsed args:`, parsed.args);
+          break; 
+        }
+      } catch (parseError) {
+        // 해당 로그가 우리 컨트랙트의 이벤트가 아닐 경우 발생하는 에러는 무시
+        // console.warn(`[cancelOnChain] Could not parse log (expected if not our event):`, log.topics[0], parseError);
+      }
+    }
+
+    if (reopenTime === undefined) {
+      console.error(`[cancelOnChain] Error: 'TicketCancelled' event not found in transaction receipt logs.`);
+      throw new Error("TicketCancelled event not found in logs.");
+    }
+
+    console.log(`[cancelOnChain] Ticket cancelled successfully. Reopen time: ${reopenTime}`);
+    return { reopenTime, transactionHash: receipt.hash }; 
+
+  } catch (error) {
+    console.error(`[cancelOnChain] An error occurred during ticket cancellation:`, error);
+    throw error;
+  }
 };
 
 // ───────────────────────────────────────────────────────────
@@ -475,14 +518,15 @@ export const cancelOnChain = async (tokenId: number): Promise<number> => {
 // ───────────────────────────────────────────────────────────
 export const markTicketCancelled = async (
   ticketId: string,
-  reopenTime: number
+  reopenTime: number,
+  refundTxHash: string | null
 ) => {
   const { error } = await supabase
     .from('tickets')
     .update({
       canceled_at:      new Date(),
       cancellation_fee: 0,
-      refund_tx_hash:   null,
+      refund_tx_hash:   refundTxHash,
       is_cancelled:     true,
       reopen_time:      reopenTime
     })

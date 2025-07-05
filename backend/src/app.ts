@@ -18,12 +18,8 @@ import authRouter from './auth/auth.controller';
 import chatbotRouter from './chatbot/chatbot.controller';
 import uploadsRouter from './uploads/uploads.controller';
 
-
-// NODE_ENV가 test 가 아닐 때만 스케줄러 구동
-if (process.env.NODE_ENV !== 'test') {
-  startReopenScheduler()
-}
 scheduleReleaseExpiredSeats(); // 1분마다 자동으로 만료된 좌석을 AVAILABLE로 복구
+startReopenScheduler()
 
 const app = express();
 
