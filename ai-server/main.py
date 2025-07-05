@@ -1,16 +1,23 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import os
 from config import FRONTEND_URL
 from routers import face
 
 app = FastAPI()
+
+# 환경변수에서 서버 IP 가져오기
+SERVER_IP = os.getenv('SERVER_IP')
+if not SERVER_IP:
+    raise ValueError('SERVER_IP 환경변수가 설정되지 않았습니다.')
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         FRONTEND_URL,
         "http://localhost:8000",
+        f"http://{SERVER_IP}:8000",
         "http://127.0.0.1:8000"
     ],
     allow_credentials=True,

@@ -2,11 +2,27 @@
 export const getEnvironmentConfig = () => {
   const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
   
+  // 환경변수 검증
+  if (!process.env.BLOCKCHAIN_HOST) {
+    throw new Error('BLOCKCHAIN_HOST 환경변수가 설정되지 않았습니다.');
+  }
+  if (!process.env.BLOCKCHAIN_PORT) {
+    throw new Error('BLOCKCHAIN_PORT 환경변수가 설정되지 않았습니다.');
+  }
+  if (!process.env.FRONTEND_URL) {
+    throw new Error('FRONTEND_URL 환경변수가 설정되지 않았습니다.');
+  }
+  if (!process.env.BACKEND_URL) {
+    throw new Error('BACKEND_URL 환경변수가 설정되지 않았습니다.');
+  }
+
   // 기본값 설정
   return {
-    FRONTEND_URL: process.env.FRONTEND_URL || 'https://myserver.ngrok.pro',
-    BACKEND_URL: process.env.BACKEND_URL || 'https://myserver2.ngrok.pro',
-    NODE_ENV: process.env.NODE_ENV || 'production'
+    FRONTEND_URL: process.env.FRONTEND_URL,
+    BACKEND_URL: process.env.BACKEND_URL,
+    NODE_ENV: process.env.NODE_ENV || 'production',
+    BLOCKCHAIN_HOST: process.env.BLOCKCHAIN_HOST,
+    BLOCKCHAIN_PORT: process.env.BLOCKCHAIN_PORT
   };
 };
 
@@ -23,13 +39,15 @@ export const getDynamicConfig = (req?: any) => {
   // localhost 감지
   const isLocalhost = origin?.includes('localhost') || 
                      origin?.includes('127.0.0.1') || 
+                     origin?.includes(process.env.BLOCKCHAIN_HOST) || 
                      host?.includes('localhost') || 
+                     host?.includes(process.env.BLOCKCHAIN_HOST) || 
                      host?.includes('127.0.0.1');
 
   if (isLocalhost) {
     return {
-      FRONTEND_URL: 'http://localhost:3000',
-      BACKEND_URL: 'http://localhost:4000',
+      FRONTEND_URL: process.env.FRONTEND_URL_LOCAL || 'http://localhost:3000',
+      BACKEND_URL: process.env.BACKEND_URL_LOCAL || 'http://localhost:4000',
       NODE_ENV: 'development'
     };
   }
@@ -38,8 +56,8 @@ export const getDynamicConfig = (req?: any) => {
   const isNgrok = origin?.includes('ngrok') || host?.includes('ngrok');
   if (isNgrok) {
     return {
-      FRONTEND_URL: 'https://myserver.ngrok.pro',
-      BACKEND_URL: 'https://myserver2.ngrok.pro',
+      FRONTEND_URL: process.env.FRONTEND_URL,
+      BACKEND_URL: process.env.BACKEND_URL,
       NODE_ENV: 'production'
     };
   }
