@@ -8,6 +8,9 @@ import { decrypt }   from '../utils/encryption';
 import TicketArtifact from '../../../blockchain/artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
 import type { SoulboundTicket } from '../../../blockchain/typechain/contracts/SoulboundTicket';
 import { SoulboundTicket__factory } from '../../../blockchain/typechain/factories/contracts/SoulboundTicket__factory';
+import { ethers } from 'ethers';
+import { config } from '../config/environment';
+import SoulboundTicketABI from '../../artifacts/contracts/SoulboundTicket.sol/SoulboundTicket.json';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.deployed') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -27,12 +30,13 @@ const maxPriorityFeePerGas = parseUnits('1.5', 'gwei'); // 1500000000n
 
 export class BlockchainService {
   private contract: SoulboundTicket;
-
+  private provider: ethers.Provider;
 
   constructor() {
     const addr = process.env.TICKET_MANAGER_ADDRESS!;
     if (!addr) throw new Error('TICKET_MANAGER_ADDRESS가 없습니다');
     this.contract = SoulboundTicket__factory.connect(addr, PROVIDER);
+    this.provider = new ethers.JsonRpcProvider(config.RPC_URL);
   }
 
   /** on-demand 지갑 생성 + 관리자로부터 ETH 충전 */
@@ -161,4 +165,19 @@ export class BlockchainService {
     }
   }
 
+  async getTokenURI(tokenId: number): Promise<string> {
+    try {
+      return await this.contract.tokenURI(tokenId);
+    } catch (error: any) {
+      throw new Error(error.error?.message || error.reason || error.message);
+    }
+  }
+
+  async getTokenOwner(tokenId: number): Promise<string> {
+    try {
+      return await this.contract.ownerOf(tokenId);
+    } catch (error: any) {
+      throw new Error(error.error?.message || error.reason || error.message);
+    }
+  }
 }
