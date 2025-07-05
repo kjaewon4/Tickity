@@ -127,11 +127,16 @@ export class BlockchainVerificationService {
       const dbIsUsed = dbTicket.is_used;
       const blockchainIsUsed = blockchainTicket.isUsed;
 
+      // 4. 입장 가능 여부 검증 (사용되지 않은 티켓만 유효)
+      const isNotUsed = !dbIsUsed && !blockchainIsUsed;
+      const isConsistent = dbIsUsed === blockchainIsUsed;
+
       return {
-        isValid: dbIsUsed === blockchainIsUsed,
+        isValid: isNotUsed && isConsistent,
         dbIsUsed,
         blockchainIsUsed,
-        error: dbIsUsed !== blockchainIsUsed ? 'DB와 블록체인 사용 상태 불일치' : undefined
+        error: !isNotUsed ? '이미 사용된 티켓입니다' : 
+               !isConsistent ? 'DB와 블록체인 사용 상태 불일치' : undefined
       };
 
     } catch (error) {
