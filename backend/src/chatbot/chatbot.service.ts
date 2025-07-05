@@ -586,14 +586,19 @@ const generateMockResponse = async (
     const activeTickets = tickets.filter(ticket => !ticket.canceled_at && !ticket.is_used);
     const realCancellationPolicies = await getCancellationPoliciesText();
     
-    if (activeTickets.length > 0) {
+    if (activeTickets.length === 0) {
+      return {
+        message: '현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!',
+        suggestions: generateSuggestions(intent),
+        needsUserInfo: false,
+        actionType: 'show_tickets'
+      };
+    } else {
       const ticketList = activeTickets.map((ticket, index) => 
         `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   🪑 ${ticket.seat?.label || (ticket.seat?.row_idx && ticket.seat?.col_idx ? `${ticket.seat.row_idx}열 ${ticket.seat.col_idx}번` : '좌석 정보 없음')} (${ticket.seat?.grade_name || '등급 정보 없음'})\n   💰 ${ticket.purchase_price.toLocaleString()}원\n   📅 ${new Date(ticket.created_at).toLocaleDateString('ko-KR')} 예매`
       ).join('\n\n');
       
-      message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n${realCancellationPolicies}\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`;
-    } else {
-      message = `현재 취소 가능한 티켓이 없습니다. 😔\n\n취소 가능한 조건:\n• 아직 사용하지 않은 티켓\n• 이미 취소되지 않은 티켓\n\n다른 도움이 필요하시면 언제든 말씀해 주세요!`;
+      message = `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n${realCancellationPolicies}\n\n티켓 취소를 원하시면 <a href="/mypage" class="text-blue-500 hover:text-blue-700">마이페이지</a>에서 진행하실 수 있습니다.`;
     }
     actionType = 'show_tickets';
     
@@ -608,7 +613,11 @@ const generateMockResponse = async (
   }
   
   if (intent === 'cancellation' && !userId) {
-    const realCancellationPolicies = await getCancellationPoliciesText();
+    const realCancellationPolicies = `• 관람일 10일 전까지: 수수료 없음
+• 관람일 9일~7일 전: 티켓금액의 10%
+• 관람일 6일~3일 전: 티켓금액의 20%
+• 관람일 2일~1일 전: 티켓금액의 30%
+• 관람 당일: 취소 불가`;
     
     message = `티켓 취소를 위해서는 로그인이 필요합니다. 🔐\n\n로그인 후 다시 시도해 주세요.\n\n취소 정책:\n${realCancellationPolicies}`;
     actionType = 'show_tickets';
@@ -800,7 +809,11 @@ if (intent === 'booking_period' && artistName) {
       let message = '';
       
       if (intent === 'cancellation') {
-        const realCancellationPolicies = await getCancellationPoliciesText();
+        const realCancellationPolicies = `• 관람일 10일 전까지: 수수료 없음
+• 관람일 9일~7일 전: 티켓금액의 10%
+• 관람일 6일~3일 전: 티켓금액의 20%
+• 관람일 2일~1일 전: 티켓금액의 30%
+• 관람 당일: 취소 불가`;
         message = `티켓 취소를 위해서는 로그인이 필요합니다. 🔐\n\n로그인 후 다시 시도해 주세요.\n\n취소 정책:\n${realCancellationPolicies}`;
       } else {
         message = '이 기능을 이용하려면 로그인이 필요합니다. 로그인 후 다시 시도해 주세요.';
@@ -892,7 +905,7 @@ if (intent === 'booking_period' && artistName) {
           return `${index + 1}. ${ticket.concert?.title || '콘서트 정보 없음'}\n   - 좌석: ${seatInfo} (${ticket.seat?.grade_name})\n   - 가격: ${ticket.purchase_price?.toLocaleString() || '가격 정보 없음'}원\n   - 예매일: ${ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('ko-KR') : '날짜 정보 없음'}`;
         }).join('\n\n');
         return {
-          message: `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n${realCancellationPolicies}\n\n취소를 원하시면 고객센터(1588-1234)로 연락해 주세요.`,
+          message: `취소 가능한 티켓 목록입니다: 🎫\n\n${ticketList}\n\n⚠️ 티켓 취소 안내:\n${realCancellationPolicies}\n\n티켓 취소를 원하시면 <a href="/mypage" class="text-blue-500 hover:text-blue-700">마이페이지</a>에서 진행하실 수 있습니다.`,
           suggestions: generateSuggestions(intent),
           needsUserInfo: false,
           actionType: 'show_tickets'
