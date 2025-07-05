@@ -8,6 +8,7 @@ interface Seat {
   col: number;
   status: 'available' | 'sold' | 'hold';
   holdExpiresAt: string | null;
+  grade: string;
 }
 
 interface SeatGridProps {
@@ -237,7 +238,9 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
                               ? 'bg-orange-200 cursor-not-allowed opacity-75'
                               : selectedSeat === `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`
                               ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-300'
-                              : 'bg-blue-100 hover:bg-blue-200 hover:shadow-md border border-blue-200'
+                              : seat.grade === 'VIP' 
+                              ? 'bg-pink-200 hover:bg-pink-300 border border-pink-300'
+                              : 'bg-blue-100 hover:bg-blue-200 border border-blue-200'
                           }`}
                         >
                         </div>

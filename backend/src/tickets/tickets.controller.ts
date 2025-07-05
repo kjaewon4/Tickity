@@ -530,18 +530,87 @@ router.post(
         });
       }
 
-      const verificationResult = await ticketsService.verifyQRCode(qrData);
-      
+      const { verifyQRCode } = await import('./tickets.service');
+      const verificationResult = await verifyQRCode(qrData);
+
+      // 인증 성공 시 자동으로 입장 처리
+      if (verificationResult.isValid) {
+        try {
+          // QR 데이터에서 토큰 ID와 티켓 ID 추출
+          const qrDataObj = JSON.parse(qrData);
+          const tokenId = parseInt(qrDataObj.tokenId);
+          const ticketId = qrDataObj.ticketId;
+
+                    if (tokenId && ticketId) {
+            // 티켓 ID로 사용자 ID 조회
+            const { data: ticketData, error: ticketError } = await supabase
+              .from('tickets')
+              .select('user_id')
+              .eq('id', ticketId)
+              .single();
+
+            if (ticketError || !ticketData) {
+              console.error('티켓 조회 실패:', ticketError);
+              verificationResult.verification.errors.push('티켓 정보 조회 실패');
+            } else {
+              const userId = ticketData.user_id;
+              console.log(`🎫 QR 인증 성공, 입장 처리 시작: 토큰 ${tokenId}, 사용자 ${userId}`);
+
+              // 1. 블록체인 입장 처리
+              const { BlockchainService } = await import('../blockchain/blockchain.service');
+              const blockchainService = new BlockchainService();
+              
+              let blockchainSuccess = false;
+              try {
+                await blockchainService.markAsUsed(tokenId);
+                console.log(`블록체인 입장 처리 완료: 토큰 ${tokenId}`);
+                blockchainSuccess = true;
+              } catch (blockchainError) {
+                console.error(`블록체인 입장 처리 실패:`, blockchainError);
+                // 블록체인 실패 시 DB 업데이트하지 않음
+                verificationResult.verification.errors.push('블록체인 입장 처리 실패');
+              }
+
+              // 2. DB 입장 처리 (블록체인 성공 시에만)
+              if (blockchainSuccess) {
+                try {
+                  const { error: dbError } = await supabase
+                    .from('tickets')
+                    .update({ 
+                      is_used: true
+                    })
+                    .eq('nft_token_id', tokenId)
+                    .eq('user_id', userId);
+
+                  if (dbError) {
+                    console.error(`DB 입장 처리 실패:`, dbError);
+                    verificationResult.verification.errors.push('DB 입장 처리 실패');
+                  } else {
+                    console.log(`DB 입장 처리 완료: 토큰 ${tokenId}`);
+                  }
+                } catch (dbError) {
+                  console.error(`DB 입장 처리 중 예외 발생:`, dbError);
+                  verificationResult.verification.errors.push('DB 입장 처리 중 오류');
+                }
+              }
+            }
+          }
+        } catch (enterError) {
+          console.error('입장 처리 중 오류:', enterError);
+          verificationResult.verification.errors.push('입장 처리 중 오류 발생');
+        }
+      }
+
       res.json({
         success: true,
         data: verificationResult
       });
 
-    } catch (err: any) {
+    } catch (err) {
       console.error('QR 코드 인증 오류:', err);
       res.status(500).json({
         success: false,
-        error: err.message || 'QR 코드 인증 중 오류가 발생했습니다.'
+        error: 'QR 코드 인증 중 오류가 발생했습니다.'
       });
     }
   }
