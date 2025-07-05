@@ -170,7 +170,7 @@ async function main() {
 
         const { error: updErr } = await supabase
           .from('tickets')
-          .update({ tx_hash: receipt.transactionHash, issued_at: new Date().toISOString() })
+          .update({ tx_hash: receipt.transactionHash })
           .eq('id', ticketId)
         if (updErr) console.error(`   ❌ ${ticketId} DB 업데이트 실패:`, updErr.message)
       } catch (e: any) {
