@@ -16,6 +16,7 @@ interface TicketMetadata {
 }
 
 interface UserTicket {
+  id: string;
   nft_token_id: string | null;
   purchase_price: number;
   user_id: string;
@@ -23,6 +24,7 @@ interface UserTicket {
 
 interface TicketInfo {
   tokenId: string;
+  ticketId: string;
   metadata: TicketMetadata;
   price: number;
 }
@@ -78,6 +80,7 @@ export default function MyTicketsPage() {
 
             return {
               tokenId: ticket.nft_token_id!,
+              ticketId: ticket.id,
               metadata,
               price: ticket.purchase_price
             };
@@ -159,7 +162,7 @@ export default function MyTicketsPage() {
                 <h3 className="text-lg font-semibold mb-4">NFT 티켓 렌더링 결과:</h3>
                 <NFTTicket
                   ticket={{
-                    id: getAttributeValue(ticket.metadata.attributes, 'Holder'),
+                    id: ticket.ticketId,
                     concertTitle: getAttributeValue(ticket.metadata.attributes, 'Concert'),
                     date: getAttributeValue(ticket.metadata.attributes, 'Date'),
                     time: getAttributeValue(ticket.metadata.attributes, 'Time'),

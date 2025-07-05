@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaTimes, FaPrint, FaEye } from 'react-icons/fa';
 import { BsQrCode } from 'react-icons/bs';
+import QRCode from 'react-qr-code';
+import { apiClient } from '@/lib/apiClient';
 
 interface NFTTicketProps {
   ticket: {
@@ -13,7 +15,7 @@ interface NFTTicketProps {
     seatInfo: string;
     price: number;
     tokenId: string;
-    Holder: string;
+    Holder?: string;
   };
   onClose?: () => void;
   onViewDetails?: () => void;
@@ -26,6 +28,74 @@ const NFTTicket: React.FC<NFTTicketProps> = ({
   onViewDetails,
   showCloseButton = true 
 }) => {
+  const [qrData, setQrData] = useState<string>('');
+  const [qrLoading, setQrLoading] = useState<boolean>(true);
+  const [qrError, setQrError] = useState<string>('');
+
+  // QR 코드 데이터 생성
+  useEffect(() => {
+    const generateQRData = async () => {
+      try {
+        setQrLoading(true);
+        setQrError('');
+        
+        console.log('🔍 티켓 정보 확인:', {
+          id: ticket.id,
+          tokenId: ticket.tokenId,
+          concertTitle: ticket.concertTitle
+        });
+        
+        // 티켓 ID가 있는 경우에만 QR 데이터 생성
+        if (ticket.id && ticket.id !== 'undefined') {
+          try {
+            console.log('📡 QR 데이터 요청:', ticket.id);
+            const response = await apiClient.getQRData(ticket.id);
+            if (response.success && response.data) {
+              console.log('✅ QR 데이터 수신:', response.data);
+              setQrData(response.data.qrString);
+            } else {
+              throw new Error('QR 데이터를 가져올 수 없습니다');
+            }
+          } catch (apiError) {
+            console.error('API 호출 실패, 더미 데이터 사용:', apiError);
+            // API 실패 시 더미 데이터 사용
+            const dummyQRData = {
+              tokenId: ticket.tokenId || '0',
+              contractAddress: '0x0000000000000000000000000000000000000000',
+              ticketId: ticket.id || 'dummy-ticket-id'
+            };
+            console.log('📝 더미 QR 데이터 생성:', dummyQRData);
+            setQrData(JSON.stringify(dummyQRData));
+          }
+        } else {
+          console.log('⚠️ 티켓 ID 없음, 더미 데이터 사용');
+          // 티켓 ID가 없는 경우 더미 데이터 사용
+          const dummyQRData = {
+            tokenId: ticket.tokenId || '0',
+            contractAddress: '0x0000000000000000000000000000000000000000',
+            ticketId: 'dummy-ticket-id'
+          };
+          setQrData(JSON.stringify(dummyQRData));
+        }
+      } catch (error) {
+        console.error('QR 데이터 생성 오류:', error);
+        setQrError('QR 코드 생성 실패');
+        
+        // 에러 시에도 더미 데이터 사용
+        const dummyQRData = {
+          tokenId: ticket.tokenId || '0',
+          contractAddress: '0x0000000000000000000000000000000000000000',
+          ticketId: 'error-ticket-id'
+        };
+        setQrData(JSON.stringify(dummyQRData));
+      } finally {
+        setQrLoading(false);
+      }
+    };
+
+    generateQRData();
+  }, [ticket.id, ticket.tokenId]);
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('ko-KR', {
@@ -109,7 +179,22 @@ const NFTTicket: React.FC<NFTTicketProps> = ({
         {/* QR 코드 및 가격 */}
         <div className="flex items-center justify-between mb-8">
           <div className="bg-gray-800 p-4 rounded-xl w-28 h-28 flex items-center justify-center border border-gray-700">
-            <BsQrCode size={64} className="text-gray-400" />
+            {qrLoading ? (
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+            ) : qrError ? (
+              <BsQrCode size={64} className="text-gray-400" />
+            ) : qrData ? (
+              <QRCode 
+                value={qrData} 
+                size={112} 
+                bgColor="#1A1B1E"
+                fgColor="#FFFFFF"
+                level="M"
+                title="NFT Ticket QR Code"
+              />
+            ) : (
+              <BsQrCode size={64} className="text-gray-400" />
+            )}
           </div>
           <div className="text-right space-y-4">
             <div className="space-y-2">
