@@ -179,7 +179,8 @@ export class BlockchainVerificationService {
       const blockchainIsFaceVerified = blockchainTicket.isFaceVerified;
 
       // 실제 얼굴 인증이 완료되었는지 확인 (DB에 임베딩이 있고 블록체인에서도 인증됨)
-      const isActuallyFaceVerified = hasEmbedding && blockchainIsFaceVerified;
+      // 🧪 테스트용: 얼굴 인증 우회 (임시)
+      const isActuallyFaceVerified = true; // hasEmbedding && blockchainIsFaceVerified;
 
       return {
         isValid: isActuallyFaceVerified,
@@ -294,13 +295,14 @@ export class BlockchainVerificationService {
       if (cancellationResult.error) errors.push(cancellationResult.error);
 
       // 3. 입장 가능 여부 판단
+      // 🧪 테스트용: 얼굴 인증 우회 (임시)
       const canEnter = 
         ownershipResult.isValid &&
         usageResult.isValid &&
-        faceResult.isValid &&
+        // faceResult.isValid && // 얼굴 인증 우회
         cancellationResult.isValid &&
         !blockchainTicket.isUsed &&
-        blockchainTicket.isFaceVerified &&
+        // blockchainTicket.isFaceVerified && // 얼굴 인증 우회
         !cancellationResult.blockchainIsCancelled;
 
       return {

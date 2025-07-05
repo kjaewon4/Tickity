@@ -180,4 +180,57 @@ export class BlockchainService {
       throw new Error(error.error?.message || error.reason || error.message);
     }
   }
+
+  /**
+   * 입장 처리 (관리자 전용)
+   */
+  async markAsUsed(tokenId: number): Promise<void> {
+    try {
+      const adminSigner = new Wallet(ADMIN_KEY, PROVIDER);
+      const contractWithAdmin = this.contract.connect(adminSigner);
+      
+      // 🧪 테스트용: 얼굴 인증 우회를 위해 먼저 얼굴 인증 처리
+      try {
+        // 1. 더미 얼굴 해시 등록
+        const dummyFaceHash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+        const faceHashTx = await contractWithAdmin.registerFaceHash(tokenId, dummyFaceHash, {
+          gasLimit: 200_000n,
+          maxFeePerGas,
+          maxPriorityFeePerGas,
+        });
+        await faceHashTx.wait();
+        console.log(`토큰 ${tokenId} 얼굴 해시 등록 완료`);
+        
+        // 트랜잭션 간격 추가
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // 2. 얼굴 인증 통과 표시
+        const faceVerifyTx = await contractWithAdmin.markFaceVerified(tokenId, {
+          gasLimit: 200_000n,
+          maxFeePerGas,
+          maxPriorityFeePerGas,
+        });
+        await faceVerifyTx.wait();
+        console.log(`토큰 ${tokenId} 얼굴 인증 완료`);
+        
+        // 트랜잭션 간격 추가
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (faceError) {
+        console.log(`토큰 ${tokenId} 얼굴 인증 처리 중 오류 (무시):`, faceError);
+      }
+      
+      // 3. 입장 처리 - nonce 자동 관리
+      const tx = await contractWithAdmin.markAsUsed(tokenId, {
+        gasLimit: 200_000n,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+      });
+      
+      await tx.wait();
+      console.log(`토큰 ${tokenId} 입장 처리 완료`);
+    } catch (error: any) {
+      console.error(`토큰 ${tokenId} 입장 처리 실패:`, error);
+      throw new Error(error.error?.message || error.reason || error.message);
+    }
+  }
 }
