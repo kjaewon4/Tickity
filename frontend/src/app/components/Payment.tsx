@@ -55,17 +55,33 @@ export default function Payment() {
 
     const fetchUser = async () => {
       const token = localStorage.getItem('accessToken');
+      console.log('🔍 사용자 정보 로딩 시작:', { hasToken: !!token });
+      
       if (token) {
         try {
           const res = await apiClient.getUserWithToken(token);
-          if (res.success && res.data?.user) setUser(res.data.user);
-          else localStorage.removeItem('accessToken');
-        } catch {
+          console.log('📥 사용자 정보 API 응답:', res);
+          
+          if (res.success && res.data?.user) {
+            setUser(res.data.user);
+            console.log('✅ 사용자 정보 설정 완료:', res.data.user);
+          } else {
+            console.error('❌ 사용자 정보 로딩 실패:', res);
+            localStorage.removeItem('accessToken');
+            alert('사용자 정보를 불러올 수 없습니다. 다시 로그인해주세요.');
+          }
+        } catch (error) {
+          console.error('❌ 사용자 정보 API 오류:', error);
           localStorage.removeItem('accessToken');
+          alert('사용자 정보를 불러오는 중 오류가 발생했습니다. 다시 로그인해주세요.');
         } finally {
           setLoading(false);
         }
-      } else setLoading(false);
+      } else {
+        console.log('❌ 액세스 토큰이 없습니다.');
+        setLoading(false);
+        alert('로그인이 필요합니다.');
+      }
     };
 
     fetchUser();
@@ -99,7 +115,25 @@ export default function Payment() {
     const userId = user?.id;
     const price = ticketPrice + bookingFee;
 
+    console.log('🔍 결제 요청 정보:', {
+      concertId,
+      row,
+      col,
+      sectionId,
+      seatNumber,
+      userId,
+      price,
+      user: user
+    });
+
     if (!concertId || row === undefined || col === undefined || !userId || !price) {
+      console.error('❌ 결제 정보 부족:', {
+        concertId: !!concertId,
+        row: row !== undefined,
+        col: col !== undefined,
+        userId: !!userId,
+        price: !!price
+      });
       alert('결제 정보가 부족합니다.');
       return;
     }
@@ -114,8 +148,12 @@ export default function Payment() {
       price: Number(price),
     };
 
+    console.log('📤 결제 API 요청 페이로드:', payload);
+
     try {
       const res = await apiClient.post<TicketMintResult>('/tickets', payload);
+      console.log('📥 결제 API 응답:', res);
+      
       if (res.success && res.data) {
         const { token_id, tx_hash, metadata_uri, seat_number } = res.data;
 
@@ -128,13 +166,14 @@ export default function Payment() {
 
         router.push(`/complete?${query}`);
       } else {
+        console.error('❌ 결제 실패 응답:', res);
         alert('결제 실패: ' + (res.message || res.error || '알 수 없는 오류'));
       }
-        } catch (err) {
-          console.error('결제 요청 중 오류:', err);
-          alert('결제 중 오류가 발생했습니다.');
-        }
-      };
+    } catch (err) {
+      console.error('결제 요청 중 오류:', err);
+      alert('결제 중 오류가 발생했습니다.');
+    }
+  };
 
 return (
   <main className="bg-white text-sm text-gray-800">

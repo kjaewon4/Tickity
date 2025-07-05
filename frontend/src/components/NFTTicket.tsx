@@ -13,6 +13,7 @@ interface NFTTicketProps {
     seatInfo: string;
     price: number;
     tokenId: string;
+    Holder: string;
   };
   onClose?: () => void;
   onViewDetails?: () => void;
@@ -112,9 +113,9 @@ const NFTTicket: React.FC<NFTTicketProps> = ({
           </div>
           <div className="text-right space-y-4">
             <div className="space-y-2">
-              <p className="text-xs text-gray-500">예매번호</p>
+              <p className="text-xs text-gray-500">예매자</p>
               <p className="text-lg font-bold font-mono tracking-widest text-white">
-                {ticket.tokenId}
+                {ticket.Holder}
               </p>
             </div>
             <div className="space-y-2">
