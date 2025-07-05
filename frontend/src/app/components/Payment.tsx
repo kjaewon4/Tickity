@@ -111,17 +111,6 @@ export default function Payment({
     const userId = user?.id;
     const price = ticketPrice + bookingFee;
 
-    console.log('🔍 결제 요청 정보:', {
-      concertId,
-      row,
-      col,
-      sectionId,
-      seatNumber,
-      userId,
-      price,
-      user: user
-    });
-
     if (!concertId || row === undefined || col === undefined || !userId || !price) {
       console.error('❌ 결제 정보 부족:', {
         concertId: !!concertId,
