@@ -156,13 +156,13 @@ export default function HomePage() {
   const categories = ['전체', '여자아이돌', '남자아이돌', '솔로 가수', '내한공연', '랩/힙합'];
 
   return (
-    <main className="px-4 pt-20 pb-10 bg-white min-h-screen w-full max-w-[1700px] mx-auto">
+    <main className="px-4 pt-40 pb-10 bg-white min-h-screen w-full max-w-[1700px] mx-auto">
       <div className="mb-10 relative px-2">
         <Slider {...sliderSettings} className="-mx-[6px]">
           {upcomingConcerts.map((concert) => (
             <div
               key={concert.id}
-              className="w-[260px] px-[6px] cursor-pointer"
+              className="w-[260px] px-[12px] cursor-pointer"
               onClick={() => router.push(createSeoConcertUrl(concert.title, concert.id))}
             >
               <div className="h-[400px] rounded-xl shadow overflow-hidden bg-white relative">
@@ -190,7 +190,7 @@ export default function HomePage() {
       </div>
 
       <div className="px-2">
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-12">
           {categories.map((category) => (
             <button
               key={category}
@@ -206,11 +206,11 @@ export default function HomePage() {
         </div>
 
 
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-12">
           <h2 className="text-2xl font-bold text-gray-800">콘서트 둘러보기</h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
           {concerts.map((concert) => (
             <div
               key={concert.id}

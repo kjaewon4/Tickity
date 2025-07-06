@@ -157,6 +157,13 @@ class ApiClient {
     });
   }
 
+    // 주민등록번호 복호화 API 호출
+  async getResidentNumber(userId: string): Promise<ApiResponse<{ residentNumber: string }>> {
+    return this.request<{ residentNumber: string }>(`/users/resident-number/${userId}`, {
+      method: 'GET',
+    });
+  }
+
   // QR 코드 데이터 조회
   async getQRData(ticketId: string): Promise<ApiResponse<{
     tokenId: string;

@@ -42,7 +42,7 @@ const ConcertHeader: React.FC<ConcertHeaderProps> = ({
         <button 
           onClick={onFavoriteToggle} 
           disabled={favoriteLoading}
-          className={`text-gray-400 hover:text-red-500 text-2xl transition-colors ${
+          className={`text-gray-400 hover:text-red-500 text-2xl transition-colors cursor-pointer ${
             favoriteLoading ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
