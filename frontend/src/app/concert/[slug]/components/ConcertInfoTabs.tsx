@@ -24,7 +24,7 @@ const ConcertInfoTabs: React.FC<ConcertInfoTabsProps> = ({
         {tabs.map((tab) => (
           <button
             key={tab}
-            className={`pb-3 ${activeTab === tab ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`}
+            className={`pb-3 cursor-pointer ${activeTab === tab ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`}
             onClick={() => onTabChange(tab)}
           >
             {tab}

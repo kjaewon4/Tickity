@@ -87,7 +87,7 @@ const BookingBox: React.FC<BookingBoxProps> = ({
       const isSelected = selectedTime === label;
       return (
         <button
-          className={`w-full rounded-md px-5 py-3 flex justify-between items-center text-base ${isSelected ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-blue-100'}`}
+          className={`w-full rounded-md px-5 py-3 flex justify-between items-center text-base cursor-pointer ${isSelected ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-blue-100'}`}
           onClick={() => onTimeChange(label)}
         >
           <span>{label}</span>
@@ -110,7 +110,7 @@ const BookingBox: React.FC<BookingBoxProps> = ({
     </div>
   ) : (
     <button
-      className="w-full bg-blue-600 text-white rounded-md py-4 font-semibold text-base hover:bg-blue-700 disabled:bg-gray-300"
+      className="w-full bg-blue-600 text-white rounded-md py-4 font-semibold text-base hover:bg-blue-700 disabled:bg-gray-300 cursor-pointer"
       onClick={onReservation}
       disabled={!selectedTime}
     >
