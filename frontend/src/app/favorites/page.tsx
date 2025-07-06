@@ -30,6 +30,7 @@ const FavoritesPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null); // null: 확인 중, true: 로그인됨, false: 로그인 안됨
   const [userId, setUserId] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('전체');
 
   // 로그인 상태 확인 및 찜한 공연 목록 가져오기
   useEffect(() => {
@@ -199,83 +200,111 @@ const FavoritesPage = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-10">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">찜한 공연</h1>
-          <p className="text-gray-600">
-            {favorites?.length || 0}개의 공연을 찜했습니다
-          </p>
-        </div>
+  const categories = ['전체', '여자아이돌', '남자아이돌', '솔로 가수', '내한공연', '랩/힙합'];
+  const filteredFavorites =
+  selectedCategory === '전체'
+    ? favorites
+    : favorites.filter(
+        (fav) => fav.concerts.category === selectedCategory
+      );
 
-        {favorites.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-4">
-              <svg className="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">아직 찜한 공연이 없습니다</h3>
-            <p className="text-gray-500 mb-6">관심 있는 공연을 찜해보세요!</p>
-            <button
-              onClick={() => router.push('/')}
-              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
-            >
-              공연 둘러보기
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {favorites.map((favorite) => (
-              <div key={favorite.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="relative h-48">
-                  <LazyImage
-                    src={favorite.concerts.poster_url || '/images/default-poster.png'}
-                    alt={favorite.concerts.title}
-                    fill
-                    className="object-cover"
-                    quality={70}
-                    priority={false}
-                    imageSize="small"
-                  />
-                  <button
-                    onClick={() => handleRemoveFavorite(favorite.concerts.id)}
-                    className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-10"
-                    title="찜하기 삭제"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2">
-                    {favorite.concerts.title}
-                  </h3>
-                  <p className="text-gray-600 text-sm mb-2">
-                    {favorite.concerts.main_performer}
-                  </p>
-                  <p className="text-gray-500 text-sm mb-2">
-                    {favorite.concerts.venues?.name || '장소 미정'}
-                  </p>
-                  <p className="text-gray-500 text-sm mb-3">
-                    {new Date(favorite.concerts.start_date).toLocaleDateString('ko-KR')} {favorite.concerts.start_time}
-                  </p>
-                  <button
-                    onClick={() => router.push(createSeoConcertUrl(favorite.concerts.title, favorite.concerts.id))}
-                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    상세보기
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+ return (
+  <main className="px-4 pt-40 pb-10 bg-white min-h-screen w-full max-w-[1700px] mx-auto">
+    {/* 찜한 공연 타이틀 영역 */}
+    <div className="mb-10">
+      <h1 className="text-3xl font-bold text-gray-800 mb-2">찜한 공연</h1>
+      <p className="text-gray-600">
+        {favorites?.length || 0}개의 공연을 찜했습니다
+      </p>
+    </div>
+
+    {/* 카테고리 필터 버튼 */}
+    <div className="pr-2">
+      <div className="flex flex-wrap gap-2 mb-12">
+        {categories.map((category) => (
+          <button
+            key={category}
+            onClick={() => setSelectedCategory(category)}
+            className={`px-6 py-2.5 rounded-full text-base font-semibold cursor-pointer shadow-lg transition-all border border-gray-300 ${
+              selectedCategory === category
+                ? 'bg-blue-500 text-white'
+                : 'bg-white text-black hover:bg-blue-500 hover:text-white'
+            }`}
+          >
+            {category}
+          </button>
+        ))}
       </div>
     </div>
-  );
+
+    {/* 공연 카드 렌더링 */}
+    {favorites.length === 0 ? (
+      <div className="text-center py-12">
+        <div className="text-gray-400 mb-4">
+          <svg className="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">아직 찜한 공연이 없습니다</h3>
+        <p className="text-gray-500 mb-6">관심 있는 공연을 찜해보세요!</p>
+        <button
+          onClick={() => router.push('/')}
+          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+        >
+          공연 둘러보기
+        </button>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
+        {filteredFavorites.map((favorite) => (
+          <div key={favorite.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+             <div className="h-[300px] relative">
+              <LazyImage
+                src={favorite.concerts.poster_url || '/images/default-poster.png'}
+                alt={favorite.concerts.title}
+                fill
+                sizes="300px"
+                className="object-cover"
+                quality={70}
+                priority={false}
+                imageSize="small"
+              />
+              <button
+                onClick={() => handleRemoveFavorite(favorite.concerts.id)}
+                className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-10 cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2">
+                {favorite.concerts.title}
+              </h3>
+              <p className="text-gray-600 text-sm mb-2">
+                {favorite.concerts.main_performer}
+              </p>
+              <p className="text-gray-500 text-sm mb-2">
+                {favorite.concerts.venues?.name || '장소 미정'}
+              </p>
+              <p className="text-gray-500 text-sm mb-3">
+                {new Date(favorite.concerts.start_date).toLocaleDateString('ko-KR')} {favorite.concerts.start_time}
+              </p>
+              <button
+                onClick={() => router.push(createSeoConcertUrl(favorite.concerts.title, favorite.concerts.id))}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors cursor-pointer"
+              >
+                상세보기
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </main>
+);
+
 };
 
 export default FavoritesPage; 
