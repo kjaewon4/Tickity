@@ -203,15 +203,7 @@ export const getUserTickets = async (
 // ───────────────────────────────────────────────────────────
 export const getUserTicketsWithVerification = async (
   userId: string
-): Promise<(TicketWithDetails & { 
-  verification: {
-    ownershipValid: boolean;
-    usageStatusValid: boolean;
-    faceVerificationValid: boolean;
-    cancellationStatusValid: boolean;
-    errors: string[];
-  }
-})[]> => {
+): Promise<any[]> => {
   // 1. 기본 티켓 정보 조회
   const tickets = await getUserTickets(userId);
 
@@ -275,7 +267,7 @@ export const getUserTicketsWithVerification = async (
     })
   );
 
-  return ticketsWithVerification;
+  return ticketsWithVerification as any[];
 };
 
 // ───────────────────────────────────────────────────────────
@@ -482,12 +474,11 @@ export const cancelOnChain = async (tokenId: number): Promise<{ reopenTime: numb
 
     let reopenTime: number | undefined;
     
-    // !!! 여기가 핵심 변경 지점입니다 !!!
-    // this.contract.interface 대신 contract.interface를 직접 사용합니다.
+    // parseLog null 체크 추가
     for (const log of receipt.logs as Log[]) {
       try {
-        const parsed = contract.interface.parseLog(log); // <--- 'this.' 제거!
-        if (parsed.name === 'TicketCancelled') {
+        const parsed = contract.interface.parseLog(log);
+        if (parsed && parsed.name === 'TicketCancelled') { // null 체크 추가
           // BigInt를 Number로 변환 (ethers v6에서 BigInt가 기본 반환 타입일 수 있음)
           reopenTime = Number(parsed.args.reopenTime); 
           console.log(`[cancelOnChain] 'TicketCancelled' event found. Parsed args:`, parsed.args);
@@ -621,7 +612,11 @@ export const generateQRData = async (ticketId: string): Promise<{
       throw new Error('NFT가 민팅되지 않은 티켓입니다');
     }
 
-    if (!ticket.users?.wallet_address) {
+    // users 관계 안전하게 접근
+    const users = ticket.users as any;
+    const userWalletAddress = Array.isArray(users) ? users[0]?.wallet_address : users?.wallet_address;
+    
+    if (!userWalletAddress) {
       throw new Error('사용자 지갑 주소를 찾을 수 없습니다');
     }
 
@@ -636,7 +631,7 @@ export const generateQRData = async (ticketId: string): Promise<{
       tokenId: ticket.nft_token_id.toString(),
       contractAddress: contractAddress,
       ticketId: ticketId.toString(),
-      walletAddress: ticket.users.wallet_address
+      walletAddress: userWalletAddress
     };
 
     const qrString = JSON.stringify(qrData);
@@ -647,7 +642,7 @@ export const generateQRData = async (ticketId: string): Promise<{
       tokenId: ticket.nft_token_id.toString(),
       contractAddress,
       ticketId: ticketId.toString(),
-      walletAddress: ticket.users.wallet_address,
+      walletAddress: userWalletAddress,
       qrString
     };
 
@@ -681,23 +676,39 @@ export const verifyQRCode = async (qrDataString: string): Promise<{
     } catch (parseError) {
       console.error('JSON 파싱 실패:', parseError);
       console.error('원본 데이터:', qrDataString);
-      
-      // 더미 데이터로 테스트
-      qrData = {
-        tokenId: '0',
-        contractAddress: '0x0000000000000000000000000000000000000000',
-        ticketId: 'dummy-ticket-id',
-        walletAddress: '0x0000000000000000000000000000000000000000'
-      };
+      throw new Error('QR 데이터 형식이 올바르지 않습니다');
     }
     
-    const { tokenId, contractAddress, ticketId, walletAddress } = qrData;
-
-    if (!tokenId || !contractAddress || !ticketId || !walletAddress) {
-      throw new Error('QR 코드 데이터가 유효하지 않습니다 (필수 필드 누락)');
+    // 2. QR 데이터 형식 호환성 처리
+    let tokenId, contractAddress, ticketId, walletAddress;
+    
+    if (qrData.tokenId && qrData.ticketId) {
+      // 새로운 형식 또는 기존 QR 스캔 형식
+      tokenId = qrData.tokenId;
+      ticketId = qrData.ticketId;
+      contractAddress = qrData.contractAddress || process.env.TICKET_MANAGER_ADDRESS;
+      walletAddress = qrData.walletAddress || qrData.holder; // holder 필드를 walletAddress로 사용
+      
+      console.log('🔄 QR 데이터 형식 변환:', {
+        원본_tokenId: qrData.tokenId,
+        원본_holder: qrData.holder,
+        변환된_walletAddress: walletAddress,
+        contractAddress
+      });
+    } else {
+      // 기존 형식
+      const extracted = qrData;
+      tokenId = extracted.tokenId;
+      contractAddress = extracted.contractAddress;
+      ticketId = extracted.ticketId;
+      walletAddress = extracted.walletAddress;
     }
 
-    // 2. 티켓 정보 조회 (UI 표시용)
+    if (!tokenId || !contractAddress || !ticketId || !walletAddress) {
+      throw new Error(`QR 코드 데이터가 유효하지 않습니다 (필수 필드 누락): tokenId=${tokenId}, contractAddress=${contractAddress}, ticketId=${ticketId}, walletAddress=${walletAddress}`);
+    }
+
+    // 3. 티켓 정보 조회 (UI 표시용)
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
       .select(`
@@ -712,7 +723,7 @@ export const verifyQRCode = async (qrDataString: string): Promise<{
       throw new Error('티켓을 찾을 수 없습니다');
     }
 
-    // 3. 블록체인 중심 검증 수행
+    // 4. 블록체인 중심 검증 수행
     const { BlockchainVerificationService } = await import('../blockchain/verification.service');
     const blockchainVerification = new BlockchainVerificationService();
     
@@ -760,7 +771,7 @@ export const verifyQRCode = async (qrDataString: string): Promise<{
     if (faceResult.error) errors.push(faceResult.error);
     if (cancellationResult.error) errors.push(cancellationResult.error);
 
-    // 4. 로그 출력
+    // 5. 로그 출력
     console.log('🔍 QR 인증 - 블록체인 중심 검증:', {
       tokenId,
       ticketId,
@@ -772,7 +783,7 @@ export const verifyQRCode = async (qrDataString: string): Promise<{
       cancellationValid: cancellationResult.isValid
     });
 
-    // 5. 결과 반환
+    // 6. 결과 반환
     return {
       isValid: canEnter,
       ticketInfo: {

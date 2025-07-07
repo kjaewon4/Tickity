@@ -57,7 +57,7 @@ export default function AuthCallbackPage() {
 
           if (user.hasEmbedding === false) {
             // ✅ 임베딩 없으면 등록 페이지로 이동
-            window.location.href = `http://localhost:8000/static/face_registerG.html?user_id=${user.id}&accessToken=${accessToken}&refreshToken=${refreshToken}`;
+            router.push(`/face-registration?user_id=${user.id}&accessToken=${accessToken}&refreshToken=${refreshToken}`);
           } else if (hasName && hasResidentNumber) {
             // 기존 사용자이고 정보가 완전한 경우 메인 페이지로
             router.replace('/');

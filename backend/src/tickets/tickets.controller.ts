@@ -616,6 +616,107 @@ router.post(
   }
 );
 
+/**
+ * 티켓 ID로 사용자 ID 조회 (QR 스캔 시 사용)
+ * POST /tickets/user-by-ticket
+ */
+router.post(
+  '/user-by-ticket',
+  async (req: Request, res: Response<ApiResponse & { data?: { userId: string } }>) => {
+    try {
+      const { ticketId } = req.body;
+      if (!ticketId) {
+        return res.status(400).json({
+          success: false,
+          error: '티켓 ID가 필요합니다.'
+        });
+      }
+
+      // 티켓 정보 조회
+      const { data: ticketData, error } = await supabase
+        .from('tickets')
+        .select('user_id')
+        .eq('id', ticketId)
+        .single();
+
+      if (error || !ticketData) {
+        console.error('티켓 조회 오류:', error);
+        return res.status(404).json({
+          success: false,
+          error: '티켓을 찾을 수 없습니다.'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: { userId: ticketData.user_id }
+      });
+    } catch (err) {
+      console.error('티켓으로 사용자 조회 오류:', err);
+      res.status(500).json({
+        success: false,
+        error: '사용자 조회 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
+/**
+ * 얼굴 인증 완료 표시 (블록체인)
+ * POST /tickets/face-verification-complete
+ */
+router.post(
+  '/face-verification-complete',
+  async (req: Request, res: Response<ApiResponse>) => {
+    try {
+      const { tokenId, userId, faceHash } = req.body;
+      if (!tokenId || !userId) {
+        return res.status(400).json({
+          success: false,
+          error: '토큰 ID와 사용자 ID가 필요합니다.'
+        });
+      }
+
+      console.log(`🎭 얼굴 인증 완료 처리 시작: 토큰 ID ${tokenId}, 사용자 ID ${userId}, 얼굴 해시: ${faceHash}`);
+
+      // 블록체인에 얼굴 인증 완료 기록 (얼굴 해시 포함)
+      try {
+        if (faceHash) {
+          console.log(`🔐 얼굴 해시 확인됨: ${faceHash}`);
+        } else {
+          console.log(`⚠️ 얼굴 해시 없음 - 기본 인증 처리`);
+        }
+        
+        // 블록체인에 얼굴 인증 완료 등록
+        const txHash = await blockchain.setFaceVerified(Number(tokenId), faceHash);
+        console.log(`✅ 블록체인 얼굴 인증 완료: 트랜잭션 ${txHash}`);
+
+        res.json({
+          success: true,
+          data: { 
+            transactionHash: txHash,
+            faceHashReceived: !!faceHash
+          }
+        });
+      } catch (blockchainError: any) {
+        console.error('❌ 블록체인 얼굴 인증 처리 실패:', blockchainError.message);
+        
+        // 구체적인 오류 메시지 전달
+        res.status(500).json({
+          success: false,
+          error: `블록체인 얼굴 인증 실패: ${blockchainError.message || blockchainError.reason || '알 수 없는 오류'}`
+        });
+      }
+    } catch (err) {
+      console.error('얼굴 인증 완료 처리 오류:', err);
+      res.status(500).json({
+        success: false,
+        error: '얼굴 인증 완료 처리 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
 // seats 테이블에서 seat_id 조회
 export async function findSeatIdByPosition(sectionId: string, row: number, col: number): Promise<string> {
   const { data: seat, error } = await supabase

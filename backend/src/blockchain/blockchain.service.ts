@@ -191,37 +191,7 @@ export class BlockchainService {
       const adminSigner = new Wallet(ADMIN_KEY, PROVIDER);
       const contractWithAdmin = this.contract.connect(adminSigner);
       
-      // 🧪 테스트용: 얼굴 인증 우회를 위해 먼저 얼굴 인증 처리
-      try {
-        // 1. 더미 얼굴 해시 등록
-        const dummyFaceHash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-        const faceHashTx = await contractWithAdmin.registerFaceHash(tokenId, dummyFaceHash, {
-          gasLimit: 200_000n,
-          maxFeePerGas,
-          maxPriorityFeePerGas,
-        });
-        await faceHashTx.wait();
-        console.log(`토큰 ${tokenId} 얼굴 해시 등록 완료`);
-        
-        // 트랜잭션 간격 추가
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // 2. 얼굴 인증 통과 표시
-        const faceVerifyTx = await contractWithAdmin.markFaceVerified(tokenId, {
-          gasLimit: 200_000n,
-          maxFeePerGas,
-          maxPriorityFeePerGas,
-        });
-        await faceVerifyTx.wait();
-        console.log(`토큰 ${tokenId} 얼굴 인증 완료`);
-        
-        // 트랜잭션 간격 추가
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (faceError) {
-        console.log(`토큰 ${tokenId} 얼굴 인증 처리 중 오류 (무시):`, faceError);
-      }
-      
-      // 3. 입장 처리 - nonce 자동 관리
+      // 입장 처리 - nonce 자동 관리
       const tx = await contractWithAdmin.markAsUsed(tokenId, {
         gasLimit: 200_000n,
         maxFeePerGas,
@@ -232,6 +202,76 @@ export class BlockchainService {
       console.log(`토큰 ${tokenId} 입장 처리 완료`);
     } catch (error: any) {
       console.error(`토큰 ${tokenId} 입장 처리 실패:`, error);
+      throw new Error(error.error?.message || error.reason || error.message);
+    }
+  }
+
+  /**
+   * 얼굴 해시 등록 (관리자 전용)
+   */
+  async registerFaceHash(tokenId: number, faceHash: string): Promise<string> {
+    try {
+      const adminSigner = new Wallet(ADMIN_KEY, PROVIDER);
+      const contractWithAdmin = this.contract.connect(adminSigner);
+      
+      console.log(`🔐 얼굴 해시 등록 시작: 토큰 ${tokenId}, 해시 ${faceHash}`);
+      
+      // 얼굴 해시를 bytes32로 변환 (0x 접두사 제거 후 32바이트로 패딩)
+      const hashBytes32 = faceHash.startsWith('0x') ? faceHash : `0x${faceHash}`;
+      
+      const registerTx = await contractWithAdmin.registerFaceHash(tokenId, hashBytes32, {
+        gasLimit: 200_000n,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+      });
+      
+      const receipt = await registerTx.wait();
+      console.log(`✅ 토큰 ${tokenId} 얼굴 해시 등록 완료: ${registerTx.hash}`);
+      
+      return registerTx.hash;
+    } catch (error: any) {
+      console.error(`토큰 ${tokenId} 얼굴 해시 등록 실패:`, error);
+      throw new Error(error.error?.message || error.reason || error.message);
+    }
+  }
+
+  /**
+   * 얼굴 인증 완료 처리 (관리자 전용)
+   */
+  async setFaceVerified(tokenId: number, faceHash?: string): Promise<string> {
+    try {
+      const adminSigner = new Wallet(ADMIN_KEY, PROVIDER);
+      const contractWithAdmin = this.contract.connect(adminSigner);
+      
+      console.log(`🎭 얼굴 인증 완료 처리 시작: 토큰 ${tokenId}${faceHash ? `, 해시 ${faceHash}` : ''}`);
+      
+      // 1. 얼굴 해시가 있으면 먼저 등록
+      if (faceHash) {
+        console.log('🔐 얼굴 해시 등록 중...');
+        await this.registerFaceHash(tokenId, faceHash);
+        console.log('✅ 얼굴 해시 등록 완료, 즉시 다음 단계 진행');
+        
+        // 아주 짧은 대기 시간 (nonce 안정화)
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      // 2. 최신 nonce 확인 후 얼굴 인증 통과 표시
+      const currentNonce = await adminSigner.getNonce();
+      console.log(`🔢 현재 관리자 nonce: ${currentNonce}`);
+      
+      const faceVerifyTx = await contractWithAdmin.markFaceVerified(tokenId, {
+        gasLimit: 200_000n,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        nonce: currentNonce, // 명시적으로 nonce 지정
+      });
+      
+      const receipt = await faceVerifyTx.wait();
+      console.log(`✅ 토큰 ${tokenId} 얼굴 인증 완료: ${faceVerifyTx.hash}`);
+      
+      return faceVerifyTx.hash;
+    } catch (error: any) {
+      console.error(`토큰 ${tokenId} 얼굴 인증 처리 실패:`, error);
       throw new Error(error.error?.message || error.reason || error.message);
     }
   }

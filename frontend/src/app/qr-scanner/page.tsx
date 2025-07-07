@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import QRScanner from '@/components/QRScanner';
+import FaceVerificationComponent from '@/components/FaceVerificationComponent';
 
 interface VerificationResult {
   isValid: boolean;
@@ -27,13 +28,48 @@ interface VerificationResult {
 
 export default function QRScannerPage() {
   const [showScanner, setShowScanner] = useState(false);
+  const [showFaceVerification, setShowFaceVerification] = useState(false);
+  const [qrScanResult, setQrScanResult] = useState<any>(null);
+  const [targetUserId, setTargetUserId] = useState<string>('');
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isProcessingEntry, setIsProcessingEntry] = useState(false);
 
-  const handleScanSuccess = (result: VerificationResult) => {
-    setVerificationResult(result);
+  const handleScanSuccess = async (result: any) => {
+    console.log('🔍 QR 스캔 성공:', result);
+    setQrScanResult(result);
     setShowScanner(false);
     setError(null);
+
+    // QR 데이터에서 사용자 ID 추출
+    if (result.ticketInfo?.ticketId) {
+      try {
+        // 티켓 ID로 사용자 ID 조회
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tickets/user-by-ticket`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ticketId: result.ticketInfo.ticketId
+          }),
+        });
+
+        const userData = await response.json();
+        if (userData.success && userData.data.userId) {
+          console.log('🔍 조회된 사용자 ID:', userData.data.userId);
+          setTargetUserId(userData.data.userId);
+          setShowFaceVerification(true);
+        } else {
+          setError(`사용자 조회 실패: ${userData.error || '알 수 없는 오류'}`);
+        }
+      } catch (error: any) {
+        console.error('사용자 정보 조회 오류:', error);
+        setError('사용자 정보 조회중 오류가 발생했습니다.');
+      }
+    } else {
+      setError('QR 코드에서 티켓 정보를 찾을 수 없습니다.');
+    }
   };
 
   const handleScanError = (errorMessage: string) => {
@@ -43,6 +79,77 @@ export default function QRScannerPage() {
 
   const handleCloseScanner = () => {
     setShowScanner(false);
+  };
+
+  const handleFaceVerificationSuccess = async (faceHash?: string) => {
+    console.log('🎭 얼굴 인증 성공! 입장 처리 시작...', { faceHash });
+    setShowFaceVerification(false);
+    setIsProcessingEntry(true);
+
+    try {
+      // 1. 블록체인에 얼굴 인증 완료 표시 (face_hash 포함)
+      if (qrScanResult?.ticketInfo?.tokenId) {
+        const faceCompleteResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tickets/face-verification-complete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            tokenId: qrScanResult.ticketInfo.tokenId,
+            userId: targetUserId,
+            faceHash: faceHash // AI 서버에서 받은 얼굴 해시 전달
+          }),
+        });
+
+        const faceCompleteResult = await faceCompleteResponse.json();
+        console.log('🎭 블록체인 얼굴 인증 처리 결과:', faceCompleteResult);
+
+        if (!faceCompleteResult.success) {
+          console.warn('⚠️ 블록체인 얼굴 인증 처리 실패:', faceCompleteResult.error);
+          // 얼굴 해시 등록 실패 시 오류 표시하고 중단
+          setError(`블록체인 얼굴 해시 등록 실패: ${faceCompleteResult.error || '알 수 없는 오류'}`);
+          setIsProcessingEntry(false);
+          return;
+        }
+      }
+
+      // 2. 최종 검증 및 입장 처리
+      const verifyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tickets/verify-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          qrData: JSON.stringify(qrScanResult.ticketInfo || qrScanResult)
+        }),
+      });
+
+      const finalResult = await verifyResponse.json();
+      console.log('🔍 최종 검증 결과:', finalResult);
+
+      if (finalResult.success) {
+        setVerificationResult(finalResult.data);
+      } else {
+        setError(finalResult.error || '검증 처리 중 오류가 발생했습니다.');
+      }
+    } catch (err) {
+      console.error('입장 처리 오류:', err);
+      setError('입장 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsProcessingEntry(false);
+    }
+  };
+
+  const handleFaceVerificationCancel = () => {
+    setShowFaceVerification(false);
+    setQrScanResult(null);
+    setTargetUserId('');
+    setError('얼굴 인증이 취소되었습니다.');
+  };
+
+  const handleRetryFaceVerification = () => {
+    setError(null);
+    setShowFaceVerification(true);
   };
 
   const getStatusColor = (isValid: boolean) => {
@@ -68,7 +175,7 @@ export default function QRScannerPage() {
       reasons.push('이미 사용된 티켓');
     }
     if (!result.verification.faceVerificationValid) {
-      reasons.push('얼굴 인증 미완료 (테스트 중 우회됨)');
+      reasons.push('얼굴 인증 미완료');
     }
     if (!result.verification.cancellationStatusValid) {
       reasons.push('취소된 티켓');
@@ -85,7 +192,7 @@ export default function QRScannerPage() {
           
           <div className="text-center mb-8">
             <p className="text-gray-600 mb-4">
-              NFT 티켓의 QR 코드를 스캔하여 인증하세요.
+              NFT 티켓의 QR 코드를 스캔하고 얼굴 인증을 통해 입장하세요.
             </p>
             <button
               onClick={() => setShowScanner(true)}
@@ -95,10 +202,27 @@ export default function QRScannerPage() {
             </button>
           </div>
 
+          {isProcessingEntry && (
+            <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6">
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700 mr-3"></div>
+                <span>입장 처리 중입니다. 잠시만 기다려주세요...</span>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
               <strong className="font-bold">오류:</strong>
               <span className="ml-2">{error}</span>
+              {error.includes('얼굴 인증') && qrScanResult && (
+                <button
+                  onClick={handleRetryFaceVerification}
+                  className="ml-4 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+                >
+                  다시 시도
+                </button>
+              )}
             </div>
           )}
 
@@ -182,6 +306,8 @@ export default function QRScannerPage() {
                 <button
                   onClick={() => {
                     setVerificationResult(null);
+                    setQrScanResult(null);
+                    setTargetUserId('');
                     setError(null);
                   }}
                   className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600"
@@ -200,6 +326,22 @@ export default function QRScannerPage() {
           onScanError={handleScanError}
           onClose={handleCloseScanner}
         />
+      )}
+
+      {showFaceVerification && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <h2 className="text-xl font-bold mb-4 text-center">얼굴 인증</h2>
+            <p className="text-gray-600 mb-4 text-center">
+              입장을 위해 얼굴 인증을 진행해주세요.
+            </p>
+            <FaceVerificationComponent
+              targetUserId={targetUserId}
+              onSuccess={handleFaceVerificationSuccess}
+              onCancel={handleFaceVerificationCancel}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

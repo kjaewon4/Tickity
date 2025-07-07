@@ -56,7 +56,7 @@ export default function LoginPage() {
               const user = response.data.user;
               if (user.hasEmbedding === false) {
                 console.log('임베딩 없음, 얼굴 등록 페이지로 이동');
-                window.location.href = `http://localhost:8000/static/face_register.html?user_id=${user.id}`;
+                router.push(`/face-registration?user_id=${user.id}`);
                 return;
               }
 
@@ -137,7 +137,7 @@ export default function LoginPage() {
         const userId = user.id; // ✅ user.id 사용
       
         if (response.data.hasEmbedding === false) {
-    window.location.href = `http://localhost:8000/static/face_register.html?user_id=${userId}`;
+    router.push(`/face-registration?user_id=${userId}`);
         } else {
           // embedding 있으면 메인 페이지로 이동
           window.location.href = '/';
