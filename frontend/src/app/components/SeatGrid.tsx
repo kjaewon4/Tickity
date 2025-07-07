@@ -162,7 +162,7 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
 
   const handleSeatClick = (rowIdx: number, colIdx: number) => {
     const seat = seatMap[rowIdx]?.[colIdx];
-    if (!seat || seat.status === 'sold') return;
+    if (!seat || ['sold', 'hold'].includes(seat.status.toLowerCase())) return;
 
     const seatKey = `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`;
     const seatInfo = `${floor} ${seatKey}`;
@@ -270,27 +270,23 @@ const SeatGrid: FC<SeatGridProps> = ({ concertId, sectionId, onSeatSelect }) => 
                     </div>
                     <div className={`flex ${gap}`}>
                       {row.map((seat, colIdx) => (
-                        <div
-                          key={colIdx}
-                          onClick={() => handleSeatClick(rowIdx, colIdx)}
-                          className={`${seatSize} font-medium rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center ${
-                            seat === null
-                              ? 'invisible'
-                              : seat.status === 'sold'
-                              ? 'bg-gray-200 cursor-not-allowed opacity-50'
-                              : seat.status === 'hold'
-                              ? 'bg-orange-200 cursor-not-allowed opacity-75'
-                              : sectionGrade === 'VIP석'
-                              ? selectedSeat === `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`
-                                ? 'bg-pink-300 text-pink-900 shadow-lg ring-2 ring-pink-300'
-                                : 'bg-pink-200 hover:bg-pink-300 border border-pink-300 text-pink-800'
-                              : selectedSeat === `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`
-                              ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-300'
-                              : 'bg-blue-100 hover:bg-blue-200 border border-blue-200'
-                          }`}
-                        >
-                          
-                        </div>
+                      <div
+                        key={colIdx}
+                        onClick={() => handleSeatClick(rowIdx, colIdx)}
+                        className={`${seatSize} font-medium rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center ${
+                          seat === null
+                            ? 'invisible'
+                            : ['sold', 'hold'].includes(seat.status.toLowerCase())
+                            ? 'bg-gray-200 cursor-not-allowed opacity-50'
+                            : sectionGrade === 'VIP석'
+                            ? selectedSeat === `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`
+                              ? 'bg-pink-300 text-pink-900 shadow-lg ring-2 ring-pink-300'
+                              : 'bg-pink-200 hover:bg-pink-300 border border-pink-300 text-pink-800'
+                            : selectedSeat === `${zoneCode}구역 ${rowIdx + 1}열 ${String(colIdx + 1).padStart(3, '0')}번`
+                            ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-300'
+                            : 'bg-blue-100 hover:bg-blue-200 border border-blue-200'
+                        }`}
+                      />
                       ))}
                     </div>
                   </div>
