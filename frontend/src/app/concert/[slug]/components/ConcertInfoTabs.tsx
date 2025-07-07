@@ -73,8 +73,6 @@ const ConcertInfoTabs: React.FC<ConcertInfoTabsProps> = ({
                   <td className="p-4">
                     {concert.booking_fee ? `장당 ${concert.booking_fee.toLocaleString()}원` : '없음'}
                   </td>
-                  <th className="bg-gray-50 p-4 font-semibold">배송료</th>
-                  <td className="p-4">현장수령 무료, 배송 3,200원</td>
                 </tr>
                 <tr>
                   <th className="bg-gray-50 p-4 font-semibold">유효기간/이용조건</th>
