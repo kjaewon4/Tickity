@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import '../../globals.css';
@@ -6,13 +6,18 @@ import { useParams } from 'next/navigation';
 import { useConcertData, useAuth, useFavorite } from './hooks';
 import { ConcertHeader, ConcertInfoTabs, BookingBox } from './components';
 import OneTicketModal from '@/app/modal/OneTicketModal';
+import apiClient from '@/lib/apiClient';
+import { UserTicket } from '@/types/ticket';
 
 const ConcertDetail = () => {
   const { slug } = useParams();
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [activeTab, setActiveTab] = useState('공연정보');
-  const [showLimitModal, setShowLimitModal] = useState(true);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [isDuplicateBooking, setIsDuplicateBooking] = useState(false);
+  const [modalMode, setModalMode] = useState<'duplicate' | 'limit' | null>(null);
+  const [checkedDuplicate, setCheckedDuplicate] = useState(false); 
 
   // 커스텀 훅들 사용
   const { concert, policies, ticketInfo, loading, error } = useConcertData();
@@ -23,7 +28,7 @@ const ConcertDetail = () => {
     if (!concert?.start_date) return [];
     const start = new Date(concert.start_date);
     const year = start.getFullYear();
-    const month = start.getMonth(); // 0-based
+    const month = start.getMonth();
     const totalDays = new Date(year, month + 1, 0).getDate();
     const firstDay = new Date(year, month, 1).getDay();
     const days: Array<number | null> = [];
@@ -38,8 +43,56 @@ const ConcertDetail = () => {
     }
   }, [concert]);
 
+  useEffect(() => {
+    const checkDuplicate = async () => {
+      if (!concert || !userId) return;
+
+      try {
+        const res = await apiClient.getUserTickets(userId);
+        const tickets: UserTicket[] = res.data?.tickets ?? [];
+
+        const hasTicketForConcert = tickets.some(
+          (ticket) => ticket.concert?.id === concert.id
+        );
+
+        if (hasTicketForConcert) {
+          setIsDuplicateBooking(true);
+          setModalMode('duplicate');
+          setShowLimitModal(true);
+        }
+      } catch (err) {
+        console.error('중복 티켓 확인 실패:', err);
+      } finally {
+        setCheckedDuplicate(true); 
+      }
+    };
+
+    checkDuplicate();
+  }, [concert?.id, userId]);
+
+  // 중복 검사 후 1인 1매 안내 띄움 (중복 아닌 경우만)
+  useEffect(() => {
+    if (concert && checkedDuplicate && !isDuplicateBooking) {
+      setModalMode('limit');
+      setShowLimitModal(true);
+    }
+  }, [concert, checkedDuplicate, isDuplicateBooking]);
+
+  let seatPopup: Window | null = null;
+
   const handleReservation = () => {
+    if (isDuplicateBooking) {
+      setModalMode('duplicate');
+      setShowLimitModal(true);
+      return;
+    }
+
+    proceedToSeatSelection();
+  };
+
+  const proceedToSeatSelection = () => {
     if (!concert) return;
+
     localStorage.setItem('concertId', concert.id);
     localStorage.setItem('concertTitle', concert.title);
     localStorage.setItem('venueId', concert.venue_id);
@@ -47,16 +100,24 @@ const ConcertDetail = () => {
     localStorage.setItem('selectedTime', selectedTime);
     localStorage.setItem('bookingFee', concert.booking_fee.toString());
 
-    const width = 1172, height = 812;
+    const width = 1172,
+      height = 812;
     const left = window.screenX + (window.outerWidth - width) / 2;
     const top = window.screenY + (window.outerHeight - height) / 2;
 
-    const popup = window.open(
+    if (seatPopup && !seatPopup.closed) {
+      seatPopup.location.reload();
+      seatPopup.focus();
+      return;
+    }
+
+    seatPopup = window.open(
       '/seat',
       '_blank',
       `width=${width},height=${height},top=${top},left=${left},toolbar=no,menubar=no,scrollbars=no,resizable=no`
     );
-    if (popup) popup.focus();
+
+    if (seatPopup) seatPopup.focus();
   };
 
   // 달력 아래로 내리는 애니메이션
@@ -75,9 +136,17 @@ const ConcertDetail = () => {
 
   return (
     <div className="p-6 bg-white text-[#222] max-w-[1200px] mx-auto pt-40">
-      {/* 모달 랜더링 */}
-      {showLimitModal && (
-        <OneTicketModal onClose={() => setShowLimitModal(false)} />
+      {showLimitModal && modalMode && (
+        <OneTicketModal
+          isDuplicate={modalMode === 'duplicate'}
+          onClose={() => {
+            setShowLimitModal(false);
+            const currentMode = modalMode;
+            setModalMode(null);
+            if (currentMode === 'limit' && !isDuplicateBooking) {
+            }
+          }}
+        />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[600px_1fr] gap-20">
@@ -118,6 +187,8 @@ const ConcertDetail = () => {
             onDateChange={setSelectedDate}
             onTimeChange={setSelectedTime}
             onReservation={handleReservation}
+            isDisabled={isDuplicateBooking}
+            disabledReason={isDuplicateBooking ? '이미 예매한 공연입니다.' : undefined}
             concert={{
               start_date: concert.start_date,
               start_time: concert.start_time,

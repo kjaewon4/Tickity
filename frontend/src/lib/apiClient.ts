@@ -1,3 +1,6 @@
+import { TicketMintResult } from '../types/ticket';
+import { UserTicket } from '@/types/ticket';
+
 import { 
   SignupRequest, 
   LoginRequest, 
@@ -96,6 +99,19 @@ class ApiClient {
       },
     });
   }
+// 사용자 티켓 목록 조회 (userId 기반)
+async getUserTickets(userId: string): Promise<ApiResponse<{ tickets: UserTicket[] }>> {
+  return this.request<{ tickets: UserTicket[] }>(`/users/tickets/${userId}`, {
+    method: 'GET',
+  });
+}
+
+// 블록체인 민팅 티켓 조회 (NFT 티켓 목록용)
+async getMintedTickets(userId: string): Promise<ApiResponse<TicketMintResult[]>> {
+  return this.request(`/tickets/minted/${userId}`, {
+    method: 'GET',
+  });
+}
 
   // 사용자 정보 업데이트
   async updateUser(userData: { name: string; resident_number: string }): Promise<ApiResponse<{ success: boolean }>> {
