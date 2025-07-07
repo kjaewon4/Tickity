@@ -134,6 +134,7 @@ async function main() {
 
       const ticketId       = ticket.id
       let  concertRaw: string     = ticket.concert_id
+      const tokenId        = ticket.nft_token_id
       const seatNumber     = ticket.seat_number
       const uri            = ticket.token_uri!
       const price          = ticket.purchase_price
@@ -158,6 +159,7 @@ async function main() {
 
       try {
         const tx = await sbt.connect(adminWallet).mintTicket(
+          tokenId,
           concertBytes,
           seatNumber,
           uri,
@@ -166,11 +168,11 @@ async function main() {
         )
         const receipt = await tx.wait()
         // console.log(`✅ ${ticketId} mint 성공. 영수증:`, receipt); // receipt 객체 전체 출력
-        console.log(`✅ ${ticketId} mint 성공: ${receipt.hash}`)
+        console.log(`✅ ticketId: ${ticketId} mint 성공: ${receipt.hash}`)
 
         const { error: updErr } = await supabase
           .from('tickets')
-          .update({ tx_hash: receipt.transactionHash })
+          .update({ tx_hash: receipt.hash })
           .eq('id', ticketId)
         if (updErr) console.error(`   ❌ ${ticketId} DB 업데이트 실패:`, updErr.message)
       } catch (e: any) {
