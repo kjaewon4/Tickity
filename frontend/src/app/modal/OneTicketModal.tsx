@@ -3,10 +3,11 @@ import { IoClose } from 'react-icons/io5';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface OneTicketModalProps {
+  isDuplicate?: boolean;
   onClose: () => void;
 }
 
-const OneTicketModal: React.FC<OneTicketModalProps> = ({ onClose }) => {
+const OneTicketModal: React.FC<OneTicketModalProps> = ({ isDuplicate = false, onClose }) => {
   const [highlight, setHighlight] = useState(false);
 
   const handleBackdropClick = () => {
@@ -45,16 +46,26 @@ const OneTicketModal: React.FC<OneTicketModalProps> = ({ onClose }) => {
           {/* X 버튼 */}
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 text-gray-500 hover:text-gray-700 text-2xl"
+            className="absolute top-5 right-5 text-gray-500 hover:text-gray-700 text-2xl cursor-pointer"
           >
             <IoClose />
           </button>
 
           {/* 내용 */}
-          <h3 className="text-2xl font-bold mb-6 text-center">알림</h3>
+          <h3 className="text-2xl font-bold mb-6 text-center">
+            알림
+          </h3>
           <p className="text-base text-gray-700 text-center leading-relaxed">
-            해당 콘서트는{' '}
-            <span className="text-red-500 font-bold">1인 1매</span>만 예매 가능합니다.
+            {isDuplicate ? (
+              <>
+                해당 콘서트는 <span className="text-red-500 font-bold">이미 예매</span>하셨습니다. <br />
+                중복 예매는 <span className="text-red-500 font-bold">불가능</span>합니다.
+              </>
+            ) : (
+              <>
+                해당 콘서트는 <span className="text-red-500 font-bold">1인 1매</span>만 예매 가능합니다.
+              </>
+            )}
           </p>
         </motion.div>
       </motion.div>
