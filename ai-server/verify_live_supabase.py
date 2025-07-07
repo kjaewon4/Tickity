@@ -8,6 +8,7 @@ from config import supabase, THRESHOLD
 # ✅ 현재 파일 기준으로 루트 디렉토리를 sys.path에 등록
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from utils.similarity import cosine_similarity
+from utils.crypto_utils import decrypt_embedding
 
 # ✅ 모델 준비
 app = FaceAnalysis(name="buffalo_l", providers=['CPUExecutionProvider'])
@@ -17,12 +18,12 @@ from postgrest.exceptions import APIError
 
 def fetch_registered_embeddings():
     """
-    Supabase에서 모든 user_id와 embedding을 조회하여 dict로 반환
+    Supabase에서 모든 user_id와 암호화된 embedding을 조회하여 복호화 후 dict로 반환
     """
-    print("🔄 Supabase에서 임베딩 로딩 중...")
+    print("🔄 Supabase에서 암호화된 임베딩 로딩 중...")
 
     try:
-        response = supabase.table("face_embeddings").select("user_id, embedding").execute()
+        response = supabase.table("face_embeddings").select("user_id, embedding_enc").execute()
         data = response.data
     except APIError as e:
         print("❌ Supabase 조회 실패:", e.message)
@@ -31,10 +32,17 @@ def fetch_registered_embeddings():
     db = {}
     for item in data:
         user_id = item["user_id"]
-        embedding = np.array(item["embedding"])
-        db[user_id] = embedding
+        encrypted_embedding = item["embedding_enc"]
+        
+        try:
+            # 임베딩 복호화
+            decrypted_embedding = decrypt_embedding(encrypted_embedding)
+            db[user_id] = decrypted_embedding
+        except Exception as e:
+            print(f"⚠️ 사용자 {user_id}의 임베딩 복호화 실패: {e}")
+            continue
 
-    print(f"✅ {len(db)}명의 embedding 로딩 완료")
+    print(f"✅ {len(db)}명의 암호화된 임베딩 로딩 완료")
     return db
 
 
@@ -67,7 +75,7 @@ def main():
             best_match = "Unknown"
             best_score = -1
 
-            # ✅ DB embedding과 유사도 비교
+            # ✅ DB embedding과 유사도 비교 (복호화된 임베딩 사용)
             for user_id, reg_emb in db_embeddings.items():
                 score = cosine_similarity(live_emb, reg_emb)
                 if score > best_score:
