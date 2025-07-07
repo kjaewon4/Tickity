@@ -7,8 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /// @title Soulbound Ticket
 /// @notice Mint 후에는 전송·승인 불가, 관리자는 얼굴 인증·입장 처리 가능
 contract SoulboundTicket is ERC721, Ownable {
-    /// @notice 다음에 발행할 토큰 ID
-    uint256 public nextTokenId;
+    uint256 private _nonce;
 
     /// @notice 수수료 비율 (0.1% = 1 / 1 000)
     uint256 public constant FEE_NUMERATOR   = 1;
@@ -35,10 +34,36 @@ contract SoulboundTicket is ERC721, Ownable {
     /// @notice 토큰이 취소되었는지 여부 (영구 상태)
     mapping(uint256 => bool) public isCancelled;
 
+    mapping(uint256 => bool) private _minted;  // 중복 방지
+
     /// @param _admin 배포 시점에 지정할 관리자 지갑주소
     constructor(address _admin) ERC721("SBTicket", "SBT") Ownable(_admin) {
-        nextTokenId = 1;
+        transferOwnership(_admin);
     }
+
+     /// @dev 128bit 길이(≈36자리 10진수) 토큰ID 생성기
+    function _generateTokenId() internal returns (uint256) {
+    // 1) keccak256 해시 → 바로 uint256
+    uint256 tokenId = uint256(
+        keccak256(
+            abi.encodePacked(
+                _nonce,
+                block.timestamp,
+                msg.sender,
+                block.prevrandao,
+                blockhash(block.number - 1)
+            )
+        )
+    );
+
+        // 2) 중복 방지
+        require(!_minted[tokenId], "Token ID collision");
+        _minted[tokenId] = true;
+        _nonce += 1;
+
+        return tokenId;
+    }
+
 
     event TicketMinted(address indexed to, uint256 indexed tokenId, string uri);
 
@@ -59,29 +84,30 @@ contract SoulboundTicket is ERC721, Ownable {
             unicode"⛔ 이미 해당 공연을 mint했습니다"
         );
 
-        uint256 id = nextTokenId++;
-        _safeMint(msg.sender, id);
-        _tokenURIs[id] = uri;
+        // 온체인에서 유니크 ID 생성
+        uint256 tokenId = _generateTokenId();
+        _safeMint(msg.sender, tokenId);
+        _tokenURIs[tokenId] = uri;
 
         // 수수료 계산 및 관리자에게 전송
         uint256 fee = (price * FEE_NUMERATOR) / FEE_DENOMINATOR;
         (bool sent, ) = payable(owner()).call{ value: fee }("");
         require(sent, unicode"수수료 전송 실패");
 
-        // 티켓 정보 저장 (net price 저장)
-        tickets[id] = Ticket({
-            concertId:     concertId,
-            seatNumber:    seatNumber,
-            issuedAt:      block.timestamp,
-            price:         price - fee,
-            isUsed:        false,
-            isFaceVerified:false,
-            faceHash:      bytes32(0)
-        });
+         // 티켓 정보 저장 (net price 저장)
+         tickets[tokenId] = Ticket({
+             concertId:     concertId,
+             seatNumber:    seatNumber,
+             issuedAt:      block.timestamp,
+             price:         price - fee,
+             isUsed:        false,
+             isFaceVerified:false,
+             faceHash:      bytes32(0)
+         });
 
         hasMintedForConcert[msg.sender][concertId] = true;
 
-        emit TicketMinted(msg.sender, id, uri);
+        emit TicketMinted(msg.sender, tokenId, uri);
 
     }
 
