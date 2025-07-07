@@ -108,6 +108,11 @@
       color: white;
     }
 
+    button.disabled {
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
     .btn-secondary:hover {
       background: #4a5568;
     }
@@ -206,6 +211,8 @@
       <button id="recordBtn" class="btn-secondary" disabled>🎬 녹화 시작</button>
       <button id="stopRecordBtn" class="btn-danger" disabled>⏹️ 녹화 중지</button>
       <button id="registerBtn" class="btn-success" disabled>✅ 얼굴 등록</button>
+      <button id="uploadFileBtn" class="btn-primary">📁 파일 업로드 등록</button>
+      <input type="file" id="fileInput" accept="video/*" style="display:none" />
     </div>
 
     <div class="status" id="status">카메라를 시작해주세요</div>
@@ -213,36 +220,57 @@
   </div>
 
   <script>
+    let isRegistering = false; // 등록 진행 중 여부
     let stream = null, mediaRecorder = null, recordedChunks = [], isRecording = false, recordingTimer = null, recordingSeconds = 0;
-    const urlParams = new URLSearchParams(window.location.search);
+
     const video = document.getElementById("video"),
       startCameraBtn = document.getElementById("startCamera"),
       stopCameraBtn = document.getElementById("stopCamera"),
       recordBtn = document.getElementById("recordBtn"),
       stopRecordBtn = document.getElementById("stopRecordBtn"),
+      uploadFileBtn = document.getElementById("uploadFileBtn"),
+      fileInput = document.getElementById("fileInput"),
       registerBtn = document.getElementById("registerBtn"),
       status = document.getElementById("status"),
       result = document.getElementById("result"),
       recordingTime = document.getElementById("recordingTime"),
       timer = document.getElementById("timer");
 
-    // ✅ URL에서 user_id 파라미터 가져오기
-    function getQueryParam(param) {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get(param);
-    }
+    window.frontendUrl = "http://localhost:3000";
 
-    const user_id = getQueryParam("user_id");
+    const urlParams = new URLSearchParams(window.location.search);
+    const user_id = urlParams.get("user_id");
+
     console.log("✅ 받아온 user_id:", user_id);
 
+    function disableButtons() {
+      [registerBtn, uploadFileBtn, recordBtn, startCameraBtn, stopCameraBtn, stopRecordBtn].forEach(btn => {
+        btn.classList.add("disabled");
+        btn.disabled = true;
+      });
+    }
+
+    function enableButtons() {
+      [registerBtn, uploadFileBtn, recordBtn, startCameraBtn, stopCameraBtn, stopRecordBtn].forEach(btn => {
+        btn.classList.remove("disabled");
+        btn.disabled = false;
+      });
+    }
+
     startCameraBtn.addEventListener("click", async () => {
+      if (isRegistering) {
+        alert("⚠️ 얼굴 등록이 진행 중입니다. 잠시만 기다려주세요.");
+        return;
+      }
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
           audio: false
         });
         video.srcObject = stream;
-        startCameraBtn.disabled = true; stopCameraBtn.disabled = false; recordBtn.disabled = false;
+        startCameraBtn.classList.add("disabled"); startCameraBtn.disabled = true;
+        stopCameraBtn.classList.remove("disabled"); stopCameraBtn.disabled = false;
+        recordBtn.classList.remove("disabled"); recordBtn.disabled = false;
         status.textContent = "카메라가 준비되었습니다. 녹화를 시작하세요."; status.className = "status ready";
       } catch (error) {
         console.error("카메라 접근 오류:", error);
@@ -253,22 +281,35 @@
     stopCameraBtn.addEventListener("click", () => {
       if (isRecording) { alert("녹화 중에는 카메라를 종료할 수 없습니다."); return; }
       if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null; }
-      startCameraBtn.disabled = false; stopCameraBtn.disabled = true; recordBtn.disabled = true; stopRecordBtn.disabled = true; registerBtn.disabled = true;
+      startCameraBtn.classList.remove("disabled"); startCameraBtn.disabled = false;
+      stopCameraBtn.classList.add("disabled"); stopCameraBtn.disabled = true;
+      recordBtn.classList.add("disabled"); recordBtn.disabled = true;
+      stopRecordBtn.classList.add("disabled"); stopRecordBtn.disabled = true;
+      registerBtn.classList.add("disabled"); registerBtn.disabled = true;
       status.textContent = "카메라가 종료되었습니다. 카메라를 다시 시작하세요."; status.className = "status ready";
     });
 
     recordBtn.addEventListener("click", () => {
+      if (isRegistering) {
+        alert("⚠️ 얼굴 등록이 진행 중입니다. 잠시만 기다려주세요.");
+        return;
+      }
       if (!stream) return;
       recordedChunks = [];
       mediaRecorder = new MediaRecorder(stream, { mimeType: "video/webm" });
       mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
-        isRecording = false; recordBtn.disabled = false; stopRecordBtn.disabled = true; registerBtn.disabled = false;
+        isRecording = false;
+        recordBtn.classList.remove("disabled"); recordBtn.disabled = false;
+        stopRecordBtn.classList.add("disabled"); stopRecordBtn.disabled = true;
+        registerBtn.classList.remove("disabled"); registerBtn.disabled = false;
         recordingTime.style.display = "none"; clearInterval(recordingTimer);
         status.textContent = "녹화가 완료되었습니다. 얼굴 등록을 진행하세요."; status.className = "status ready";
       };
       mediaRecorder.start(); isRecording = true; recordingSeconds = 0;
-      recordBtn.disabled = true; stopRecordBtn.disabled = false; registerBtn.disabled = true;
+      recordBtn.classList.add("disabled"); recordBtn.disabled = true;
+      stopRecordBtn.classList.remove("disabled"); stopRecordBtn.disabled = false;
+      registerBtn.classList.add("disabled"); registerBtn.disabled = true;
       recordingTime.style.display = "block";
       recordingTimer = setInterval(() => { recordingSeconds++; timer.textContent = recordingSeconds; if (recordingSeconds >= 10) stopRecordBtn.click(); }, 1000);
       status.textContent = "녹화 중입니다..."; status.className = "status recording";
@@ -277,16 +318,22 @@
     stopRecordBtn.addEventListener("click", () => { if (mediaRecorder && isRecording) mediaRecorder.stop(); });
 
     registerBtn.addEventListener("click", async () => {
+      if (isRegistering) {
+        alert("⚠️ 얼굴 등록이 진행 중입니다. 잠시만 기다려주세요.");
+        return;
+      }
       if (recordedChunks.length === 0) {
         alert("먼저 비디오를 녹화해주세요.");
         return;
       }
-
       if (!user_id) {
         alert("사용자 ID가 없습니다. 다시 로그인해주세요.");
         window.location.href = "/login";
         return;
       }
+
+      isRegistering = true;
+      disableButtons();
 
       result.style.display = "block";
       result.className = "result loading";
@@ -295,33 +342,82 @@
       try {
         const videoBlob = new Blob(recordedChunks, { type: "video/webm" });
         const formData = new FormData();
-        formData.append("user_id", user_id); // ✅ URL 파라미터에서 받은 user_id 추가
+        formData.append("user_id", user_id);
         formData.append("video", videoBlob, "face_video.webm");
 
-        const response = await fetch("/face/register", {
-          method: "POST",
-          body: formData
-        });
+        const response = await fetch("/face/register", { method: "POST", body: formData });
         const resultData = await response.json();
 
         if (response.ok) {
           result.className = "result success";
-          result.innerHTML = `<h3>✅ 얼굴 등록 성공</h3>
-            <p>${resultData.message}</p>`;
+          result.innerHTML = `<h3>✅ 얼굴 등록 성공</h3><p>${resultData.message}</p>`;
           console.log('✅ DB 저장 결과:', resultData);
-
-          setTimeout(() => {
-            window.location.href = "http://localhost:3000/";
-          }, 3000);
+          setTimeout(() => { window.location.href = `${window.frontendUrl}/`; }, 3000);
         } else {
           result.className = "result error";
           result.innerHTML = `<h3>❌ 얼굴 등록 실패</h3><p>${resultData.detail}</p>`;
+          enableButtons(); isRegistering = false;
         }
-
       } catch (error) {
         console.error("등록 오류:", error);
         result.className = "result error";
         result.innerHTML = `<h3>❌ 등록 중 오류 발생</h3><p>${error.message}</p>`;
+        enableButtons(); isRegistering = false;
+      }
+    });
+
+    uploadFileBtn.addEventListener("click", () => {
+      if (isRegistering) {
+        alert("⚠️ 얼굴 등록이 진행 중입니다. 잠시만 기다려주세요.");
+        return;
+      }
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", async (event) => {
+      if (isRegistering) {
+        alert("⚠️ 얼굴 등록이 진행 중입니다. 잠시만 기다려주세요.");
+        return;
+      }
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (!user_id) {
+        alert("사용자 ID가 없습니다. 다시 로그인해주세요.");
+        window.location.href = "/login";
+        return;
+      }
+
+      isRegistering = true;
+      disableButtons();
+
+      result.style.display = "block";
+      result.className = "result loading";
+      result.innerHTML = "🔄 얼굴 등록 중...";
+
+      try {
+        const formData = new FormData();
+        formData.append("user_id", user_id);
+        formData.append("video", file, file.name);
+
+        const response = await fetch("/face/register", { method: "POST", body: formData });
+        const resultData = await response.json();
+
+        if (response.ok) {
+          result.className = "result success";
+          result.innerHTML = `<h3>✅ 얼굴 등록 성공</h3><p>${resultData.message}</p>`;
+          console.log('✅ DB 저장 결과:', resultData);
+          setTimeout(() => { window.location.href = `${window.frontendUrl}/`; }, 3000);
+        } else {
+          result.className = "result error";
+          result.innerHTML = `<h3>❌ 얼굴 등록 실패</h3><p>${resultData.detail}</p>`;
+          enableButtons(); isRegistering = false;
+        }
+      } catch (error) {
+        console.error("등록 오류:", error);
+        result.className = "result error";
+        result.innerHTML = `<h3>❌ 등록 중 오류 발생</h3><p>${error.message}</p>`;
+        enableButtons(); isRegistering = false;
       }
     });
 
