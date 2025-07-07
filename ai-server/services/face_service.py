@@ -1,6 +1,6 @@
 import uuid
 from fastapi import UploadFile, HTTPException
-from utils.io_utils import extract_embedding_from_video, extract_embedding_from_image
+from utils.io_utils import extract_embedding_from_video, extract_embedding_from_image, extract_embedding_from_video_optimized
 from utils.similarity import cosine_similarity
 from utils.crypto_utils import encrypt_embedding, decrypt_embedding
 from config import supabase, THRESHOLD
@@ -21,7 +21,7 @@ def is_test_id(user_id: str) -> bool:
 async def register_user_face_db(user_id: str, file: UploadFile, concert_id: str = None):
     user_id = validate_uuid_or_test_id(user_id)
     video_bytes = await file.read()
-    embedding = extract_embedding_from_video(video_bytes)
+    embedding = extract_embedding_from_video_optimized(video_bytes)
     if embedding is None:
         raise HTTPException(status_code=400, detail="❌ 얼굴을 감지하지 못했습니다.")
 
