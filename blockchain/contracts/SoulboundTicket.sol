@@ -7,8 +7,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /// @title Soulbound Ticket
 /// @notice Mint 후에는 전송·승인 불가, 관리자는 얼굴 인증·입장 처리 가능
 contract SoulboundTicket is ERC721, Ownable {
-    uint256 private _nonce;
-
     /// @notice 수수료 비율 (0.1% = 1 / 1 000)
     uint256 public constant FEE_NUMERATOR   = 1;
     uint256 public constant FEE_DENOMINATOR = 1000;
@@ -41,38 +39,16 @@ contract SoulboundTicket is ERC721, Ownable {
         transferOwnership(_admin);
     }
 
-     /// @dev 128bit 길이(≈36자리 10진수) 토큰ID 생성기
-    function _generateTokenId() internal returns (uint256) {
-    // 1) keccak256 해시 → 바로 uint256
-    uint256 tokenId = uint256(
-        keccak256(
-            abi.encodePacked(
-                _nonce,
-                block.timestamp,
-                msg.sender,
-                block.prevrandao,
-                blockhash(block.number - 1)
-            )
-        )
-    );
-
-        // 2) 중복 방지
-        require(!_minted[tokenId], "Token ID collision");
-        _minted[tokenId] = true;
-        _nonce += 1;
-
-        return tokenId;
-    }
-
-
     event TicketMinted(address indexed to, uint256 indexed tokenId, string uri);
 
     /// @notice 새 티켓 민팅 (예매)
+    /// @param tokenId     백엔드에서 생성한 16자리 숫자 tokenId
     /// @param concertId   공연 식별자
     /// @param seatNumber  좌석번호 (예: "A-01")
     /// @param uri         메타데이터 URI
     /// @param price       백엔드에서 전달한 티켓 가격 (msg.value 와 동일해야 함)
     function mintTicket(
+        uint256    tokenId,
         bytes32 concertId,
         string calldata seatNumber,
         string calldata uri,
@@ -83,9 +59,10 @@ contract SoulboundTicket is ERC721, Ownable {
             !hasMintedForConcert[msg.sender][concertId],
             unicode"⛔ 이미 해당 공연을 mint했습니다"
         );
+        require(!_minted[tokenId], unicode"⛔ Duplicate tokenId");
+        _minted[tokenId] = true;
+        hasMintedForConcert[msg.sender][concertId] = true;
 
-        // 온체인에서 유니크 ID 생성
-        uint256 tokenId = _generateTokenId();
         _safeMint(msg.sender, tokenId);
         _tokenURIs[tokenId] = uri;
 
@@ -188,7 +165,7 @@ contract SoulboundTicket is ERC721, Ownable {
                 abi.encodePacked(
                     block.timestamp,
                     tokenId,
-                    block.difficulty,
+                    block.prevrandao,
                     blockhash(block.number - 1)
                 )
             )

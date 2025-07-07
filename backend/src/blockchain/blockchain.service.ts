@@ -28,6 +28,30 @@ const FUND_AMOUNT  = '10000.0';                               // 새 지갑에 �
 const maxFeePerGas = parseUnits('2.5', 'gwei');         // 2500000000n
 const maxPriorityFeePerGas = parseUnits('1.5', 'gwei'); // 1500000000n
 
+async function generateUniqueTokenId(maxAttempts = 5): Promise<string> {
+  for (let i = 0; i < maxAttempts; i++) {
+    // 1) 16자리 랜덤 숫자 생성
+    const candidate = String(
+      Math.floor(1e15 + Math.random() * 9e15)  // 1e15 ~ 1e16-1
+    );
+
+    // 2) DB에 이미 있는지 미리 조회
+    const { data, error: queryErr } = await supabase
+      .from('tickets')
+      .select('id', { count: 'exact' })
+      .eq('nft_token_id', candidate);
+
+    if (queryErr) throw new Error('중복 조회 실패: ' + queryErr.message);
+    if ((data?.length ?? 0) === 0) {
+      // 중복 없으니 이 ID 확정
+      return candidate;
+    }
+    // 중복이면 다음 루프에서 새로 뽑기
+  }
+
+  throw new Error('유니크 토큰 ID 생성에 실패했습니다 (재시도 한도 초과)');
+}
+
 export class BlockchainService {
   private contract: SoulboundTicket;
   private provider: ethers.Provider;
@@ -95,8 +119,11 @@ export class BlockchainService {
     const contractWithSigner = this.contract.connect(signer);
     const price = parseEther(priceEth);
 
+    const tokenId = await generateUniqueTokenId(5);
+
     try {
       const tx = await contractWithSigner.mintTicket(
+        tokenId,
         concertId,
         seat,
         uri,
@@ -114,30 +141,10 @@ export class BlockchainService {
       if (receipt.status === 0) {
         throw new Error('트랜잭션이 실패했습니다 (status: 0)');
       }
-
-      // TicketMinted 이벤트 파싱
-      let tokenIdBn : number | undefined;
-      for (const log of receipt.logs as Log[]) {
-        try {
-          const parsed = this.contract.interface.parseLog(log);
-          if (parsed.name === 'TicketMinted') {
-            tokenIdBn  = parsed.args.tokenId; // BigNumber
-            break;
-          }
-        } catch (err) {
-          continue; // parse 실패 시 무시
-        }
-      }
-
-      if (tokenIdBn === undefined) {
-        throw new Error('토큰 ID를 추출하지 못했습니다.');
-      }
-
-      const tokenIdStr = tokenIdBn .toString(); 
-
+      
       return {
         txHash: tx.hash,
-        tokenId: tokenIdStr,
+        tokenId,
       };
 
     } catch (err) {
