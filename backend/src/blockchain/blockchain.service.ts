@@ -69,7 +69,7 @@ export class BlockchainService {
     seat: string,
     uri: string,
     priceEth: string
-  ): Promise<{ txHash: string; tokenId: number }> {
+  ): Promise<{ txHash: string; tokenId: string }> {
     const { data: userData, error: userErr } = await supabase
       .from('users')
       .select('wallet_address, private_key_encrypted')
@@ -116,12 +116,12 @@ export class BlockchainService {
       }
 
       // TicketMinted 이벤트 파싱
-      let tokenId: number | undefined;
+      let tokenIdBn : number | undefined;
       for (const log of receipt.logs as Log[]) {
         try {
           const parsed = this.contract.interface.parseLog(log);
           if (parsed.name === 'TicketMinted') {
-            tokenId = Number(parsed.args.tokenId);
+            tokenIdBn  = parsed.args.tokenId; // BigNumber
             break;
           }
         } catch (err) {
@@ -129,13 +129,15 @@ export class BlockchainService {
         }
       }
 
-      if (tokenId === undefined) {
+      if (tokenIdBn === undefined) {
         throw new Error('토큰 ID를 추출하지 못했습니다.');
       }
 
+      const tokenIdStr = tokenIdBn .toString(); 
+
       return {
         txHash: tx.hash,
-        tokenId,
+        tokenId: tokenIdStr,
       };
 
     } catch (err) {

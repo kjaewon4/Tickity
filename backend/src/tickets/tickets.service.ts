@@ -117,7 +117,7 @@ export async function createTicket(payload: {
 // }
 export async function updateTicketMintInfo(
     ticketId: string,
-    tokenId: number,
+    tokenId: string,
     txHash: string,
     concertId: string,
     seatId: string,
