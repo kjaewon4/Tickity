@@ -15,13 +15,19 @@ export const useAuth = (): UseAuthReturn => {
       
       if (accessToken) {
         try {
-          // API를 통해 사용자 정보 조회
+          // API를 통해 사용자 정보 조회 (타임아웃 설정)
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000); // 3초 타임아웃
+          
           const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/user`, {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
               'Content-Type': 'application/json'
-            }
+            },
+            signal: controller.signal
           });
+          
+          clearTimeout(timeoutId);
           
           if (response.ok) {
             const data = await response.json();

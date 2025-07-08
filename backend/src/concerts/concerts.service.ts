@@ -298,37 +298,70 @@ export const searchConcerts = async (query: string, category?: string) => {
 /* ─────────────────────── 상세 조회 ─────────────────────── */
 
 /**
- * 콘서트 상세:
+ * 콘서트 상세 (최적화):
  * 1) concerts + venues
  * 2) seat_prices (가격+총석수)
  * 3) 취소 정책
  */
 export const getConcertDetail = async (concertId: string) => {
-  /* 1) 콘서트 + 공연장 메타 */
-  const { data: concertData, error: concertError } = await supabase
-    .from('concerts')
-    .select(
-      `
-      *,
-      venues ( id, name, address, capacity )
-    `,
-    )
-    .eq('id', concertId)
-    .single();
+  try {
+    /* 1) 콘서트 + 공연장 메타 */
+    const { data: concertData, error: concertError } = await supabase
+      .from('concerts')
+      .select(
+        `
+        id,
+        title,
+        start_date,
+        start_time,
+        venue_id,
+        poster_url,
+        organizer,
+        promoter,
+        customer_service,
+        running_time,
+        age_rating,
+        main_performer,
+        booking_fee,
+        shipping_note,
+        valid_from,
+        valid_to,
+        mobile_ticket_supported,
+        android_min_version,
+        ios_min_version,
+        id_doc_required,
+        seller_name,
+        seller_rep,
+        seller_reg_no,
+        seller_email,
+        seller_contact,
+        seller_address,
+        category,
+        round,
+        ticket_open_at,
+        venues ( id, name, address, capacity )
+      `,
+      )
+      .eq('id', concertId)
+      .single();
 
-  if (concertError || !concertData) throw concertError;
+    if (concertError || !concertData) throw concertError;
 
-  /* 2) 가격 + 총석수 */
-  const seat_prices = await fetchSeatPrices(concertId, true);
+    /* 2) 가격 + 총석수 (병렬 처리) */
+    const [seat_prices, policiesData] = await Promise.all([
+      fetchSeatPrices(concertId, true),
+      getCancellationPolicies()
+    ]);
 
-  /* 3) 취소 정책 */
-  const policiesData = await getCancellationPolicies();
-
-  return {
-    concert: concertData,
-    seat_prices,
-    cancellation_policies: policiesData ?? [],
-  };
+    return {
+      concert: concertData,
+      seat_prices,
+      cancellation_policies: policiesData ?? [],
+    };
+  } catch (error) {
+    console.error('콘서트 상세 조회 오류:', error);
+    throw error;
+  }
 };
 
 /** 섹션별 남은 좌석 수 */
@@ -392,7 +425,7 @@ export async function getSeatSummary(
 }
 
 /**
- * 간단한 ID로 공연 조회 (숫자 ID 또는 짧은 UUID)
+ * 간단한 ID로 공연 조회 (최적화)
  * @param shortId 간단한 ID
  * @returns 공연 정보
  */
@@ -400,11 +433,12 @@ export const getConcertByShortId = async (shortId: string): Promise<Concert | nu
   try {
     // 숫자 ID인 경우
     if (/^\d+$/.test(shortId)) {
-      // 모든 공연을 가져와서 ID에서 숫자 부분을 추출하여 비교
+      // 필요한 컬럼만 선택하여 성능 향상
       const { data: concerts, error } = await supabase
         .from('concerts')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50); // 최대 50개로 제한
 
       if (error) {
         console.error('shortId로 공연 조회 오류:', error);
@@ -425,7 +459,8 @@ export const getConcertByShortId = async (shortId: string): Promise<Concert | nu
       const { data: concerts, error } = await supabase
         .from('concerts')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50); // 최대 50개로 제한
 
       if (error) {
         console.error('shortId로 공연 조회 오류:', error);

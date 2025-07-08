@@ -47,24 +47,27 @@ const ConcertDetail = () => {
     const checkDuplicate = async () => {
       if (!concert || !userId) return;
 
-      try {
-        const res = await apiClient.getUserTickets(userId);
-        const tickets: UserTicket[] = res.data?.tickets ?? [];
+      // 로딩 중에는 중복 체크를 지연시킴
+      setTimeout(async () => {
+        try {
+          const res = await apiClient.getUserTickets(userId);
+          const tickets: UserTicket[] = res.data?.tickets ?? [];
 
-        const hasTicketForConcert = tickets.some(
-          (ticket) => ticket.concert?.id === concert.id
-        );
+          const hasTicketForConcert = tickets.some(
+            (ticket) => ticket.concert?.id === concert.id
+          );
 
-        if (hasTicketForConcert) {
-          setIsDuplicateBooking(true);
-          setModalMode('duplicate');
-          setShowLimitModal(true);
+          if (hasTicketForConcert) {
+            setIsDuplicateBooking(true);
+            setModalMode('duplicate');
+            setShowLimitModal(true);
+          }
+        } catch (err) {
+          console.error('중복 티켓 확인 실패:', err);
+        } finally {
+          setCheckedDuplicate(true); 
         }
-      } catch (err) {
-        console.error('중복 티켓 확인 실패:', err);
-      } finally {
-        setCheckedDuplicate(true); 
-      }
+      }, 1000); // 1초 지연
     };
 
     checkDuplicate();
@@ -130,7 +133,15 @@ const ConcertDetail = () => {
     }
   }, [activeTab]);
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600 text-lg">콘서트 정보를 불러오는 중...</p>
+        <p className="text-gray-400 text-sm mt-2">잠시만 기다려주세요</p>
+      </div>
+    </div>
+  );
   if (error) return <div className="p-6 text-red-500">{error}</div>;
   if (!concert || !ticketInfo) return <div className="p-6">콘서트 정보를 찾을 수 없습니다.</div>;
 
