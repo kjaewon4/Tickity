@@ -52,12 +52,32 @@ export default function AuthGuard({ children, adminOnly = false }: AuthGuardProp
         if (userData.success && userData.data?.user) {
           const isLoggedIn = true;
           
-          // 관리자 권한 확인
-          const adminAddress = '0x030fd25c452078627Db888f8B22aF1c0fEcDCf97';
-          const userWalletAddress = userData.data.user.walletAddress;
-          const isAdmin = userWalletAddress?.toLowerCase() === adminAddress.toLowerCase();
-          
-          setAuthState({ isLoggedIn, isAdmin, loading: false });
+          // 관리자 주소를 백엔드에서 가져오기
+          try {
+            const adminResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/admin-address`);
+            let adminAddress = '0xcf317Ec96aC41442dCb8a5f03196C00736C1f2d9'; // 기본값
+            
+            if (adminResponse.ok) {
+              const adminData = await adminResponse.json();
+              if (adminData.success && adminData.data?.adminAddress) {
+                adminAddress = adminData.data.adminAddress;
+              }
+            }
+            
+            // 관리자 권한 확인
+            const userWalletAddress = userData.data.user.walletAddress;
+            const isAdmin = userWalletAddress?.toLowerCase() === adminAddress.toLowerCase();
+            
+            setAuthState({ isLoggedIn, isAdmin, loading: false });
+          } catch (error) {
+            console.error('관리자 주소 조회 실패:', error);
+            // 기본값으로 관리자 권한 확인
+            const adminAddress = '0xcf317Ec96aC41442dCb8a5f03196C00736C1f2d9';
+            const userWalletAddress = userData.data.user.walletAddress;
+            const isAdmin = userWalletAddress?.toLowerCase() === adminAddress.toLowerCase();
+            
+            setAuthState({ isLoggedIn, isAdmin, loading: false });
+          }
         } else {
           setAuthState({ isLoggedIn: false, isAdmin: false, loading: false });
         }
