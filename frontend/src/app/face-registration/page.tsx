@@ -167,8 +167,8 @@ export default function FaceRegistrationPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="p-8 max-w-md w-full mx-4">
           <div className="text-center">
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
               <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -184,18 +184,18 @@ export default function FaceRegistrationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-white py-8">
       <div className="container mx-auto px-4 max-w-2xl">
-        <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="p-6">
           <h1 className="text-3xl font-bold text-center mb-8">얼굴 등록</h1>
           
-          <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-6">
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded mb-6">
             <h3 className="font-bold">사용 방법</h3>
             <ul className="mt-2 list-disc list-inside text-sm">
               <li>얼굴이 화면 중앙에 잘 보이도록 위치하세요</li>
               <li>녹화 버튼을 눌러 3초간 비디오를 촬영하세요 (자동 중지)</li>
               <li>자동으로 얼굴 정보가 등록됩니다</li>
-              <li>🎯 <strong>AI가 3초 동안 여러 프레임을 분석해 최적의 얼굴 데이터를 생성합니다</strong></li>
+              <li><strong>AI가 3초 동안 여러 프레임을 분석해 최적의 얼굴 데이터를 생성합니다</strong></li>
             </ul>
           </div>
 
@@ -241,7 +241,7 @@ export default function FaceRegistrationPage() {
               <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
                 <div className="text-white text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-                  <div className="text-lg">🧠 AI가 얼굴 데이터를 분석 중...</div>
+                  <div className="text-lg">AI가 얼굴 데이터를 분석 중...</div>
                   <div className="text-sm mt-2">KMeans 클러스터링 + 이상치 제거</div>
                 </div>
               </div>
@@ -252,7 +252,7 @@ export default function FaceRegistrationPage() {
           {isRecording && (
             <div className="text-center mb-6">
               <div className="text-xl font-bold text-red-600">
-                🎥 녹화 중... {recordingTime}/3초
+                녹화 중... {recordingTime}/3초
               </div>
               <div className="text-sm text-gray-600 mt-1">
                 AI가 최적의 프레임들을 자동 선별합니다
@@ -267,20 +267,20 @@ export default function FaceRegistrationPage() {
                 disabled={!cameraReady}
                 className="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {cameraReady ? '🎬 3초 녹화 시작' : '카메라 준비 중...'}
+                {cameraReady ? '3초 녹화 시작' : '카메라 준비 중...'}
               </button>
             ) : isRegistering ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
-                <span className="text-blue-600">🧠 AI 분석 중... (KMeans + 이상치 제거)</span>
+                <span className="text-blue-600">AI 분석 중... (KMeans + 이상치 제거)</span>
               </div>
             ) : (
-              <div className="text-gray-600">🎥 녹화 중...</div>
+              <div className="text-gray-600">녹화 중...</div>
             )}
           </div>
 
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded mb-6">
               <strong className="font-bold">오류:</strong>
               <span className="ml-2">{error}</span>
               <div className="mt-2">
@@ -302,12 +302,9 @@ export default function FaceRegistrationPage() {
           )}
 
           <div className="mt-6 text-center">
-            <button
-              onClick={() => router.push('/login')}
-              className="text-gray-500 hover:text-gray-700 underline"
-            >
-              나중에 등록하기
-            </button>
+            <p className="text-sm text-gray-600">
+              얼굴 등록은 안전한 서비스 이용을 위해 필수입니다.
+            </p>
           </div>
         </div>
       </div>
