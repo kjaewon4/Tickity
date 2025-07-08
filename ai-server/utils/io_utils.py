@@ -16,20 +16,36 @@ except Exception as e:
     app = None
 
 def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
-    """CLAHE를 적용하여 조명을 보정합니다."""
+    """
+    CLAHE를 적용하여 조명을 보정합니다.
+    여성 얼굴의 경우 화장이나 조명으로 인한 대비 문제를 해결하기 위해 개선된 전처리를 적용합니다.
+    """
+    # 1. 기본 CLAHE 적용
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
     l = clahe.apply(l)
+    
+    # 2. 여성 얼굴을 위한 추가 밝기 조정
+    # 너무 어두운 부분을 약간 밝게 조정
+    l = cv2.addWeighted(l, 0.9, cv2.GaussianBlur(l, (0, 0), 10), 0.1, 0)
+    
     lab = cv2.merge([l, a, b])
-    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    enhanced_image = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    
+    # 3. 가벼운 가우시안 블러로 노이즈 제거 (화장이나 반사 때문에 생기는 노이즈)
+    enhanced_image = cv2.GaussianBlur(enhanced_image, (1, 1), 0)
+    
+    return enhanced_image
 
-def extract_embedding_from_video_optimized(video_bytes, frame_skip=2, det_score_threshold=0.2, yaw_threshold=60, num_clusters=5):
+def extract_embedding_from_video_optimized(video_bytes, frame_skip=1, det_score_threshold=0.15, yaw_threshold=70, num_clusters=5):
     """
     비디오에서 얼굴 임베딩을 추출하는 개선된 함수
     - KMeans 클러스터링으로 다양한 각도의 얼굴 선별
     - CLAHE 전처리로 조명 보정
     - 이상치 제거로 품질 향상
+    - 여성 얼굴 인식률 개선: 더 낮은 임계값 (0.15) 및 더 관대한 각도 (70도)
+    - 프레임 처리 일관성: 모든 프레임 분석 (frame_skip=1)
     """
     if app is None:
         print("❌ InsightFace 모델이 로드되지 않았습니다.")
@@ -58,7 +74,7 @@ def extract_embedding_from_video_optimized(video_bytes, frame_skip=2, det_score_
     poses = []  # 얼굴 포즈 정보 저장
     frame_count = 0
 
-    print(f"🎬 비디오 분석 시작 (frame_skip={frame_skip}, threshold={det_score_threshold})")
+    print(f"🎬 비디오 분석 시작 (frame_skip={frame_skip}, threshold={det_score_threshold}, yaw_threshold={yaw_threshold})")
 
     while True:
         ret, frame = cap.read()
@@ -70,8 +86,8 @@ def extract_embedding_from_video_optimized(video_bytes, frame_skip=2, det_score_
             frame_count += 1
             continue
 
-        # CLAHE 전처리 적용
-        frame = apply_clahe(frame)
+        # CLAHE 전처리 적용 (여성 얼굴을 위해 더 강한 조명 보정)
+        frame = apply_clahe(frame, clip_limit=2.5, tile_grid_size=(6, 6))
         
         # 얼굴 감지
         faces = app.get(frame)
@@ -86,7 +102,7 @@ def extract_embedding_from_video_optimized(video_bytes, frame_skip=2, det_score_
             # 디버깅: 모든 얼굴 감지 결과 로그
             print(f"🔍 프레임 {frame_count}: 얼굴 감지됨 - det_score={main_face.det_score:.3f}, yaw={yaw:.1f}°")
             
-            # 품질 기준 확인
+            # 품질 기준 확인 (더 관대한 기준)
             if main_face.det_score >= det_score_threshold and abs(yaw) <= yaw_threshold:
                 embeddings.append(main_face.embedding)
                 poses.append(abs(yaw))  # 절댓값으로 저장
@@ -109,8 +125,12 @@ def extract_embedding_from_video_optimized(video_bytes, frame_skip=2, det_score_
     if not embeddings:
         print("❌ 첫 번째 시도 실패. 더 관대한 설정으로 재시도...")
         
-        # 두 번째 시도: 더 관대한 설정
-        cap = cv2.VideoCapture(temp_path)
+        # 두 번째 시도: 더 관대한 설정 (여성 얼굴을 위해 더욱 관대하게)
+        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_file2:
+            temp_path2 = temp_file2.name
+            temp_file2.write(video_bytes)
+        
+        cap = cv2.VideoCapture(temp_path2)
         frame_count = 0
         fallback_embeddings = []
         
@@ -120,19 +140,25 @@ def extract_embedding_from_video_optimized(video_bytes, frame_skip=2, det_score_
                 break
 
             # 모든 프레임 분석 (프레임 스킵 없음)
-            frame = apply_clahe(frame, clip_limit=3.0, tile_grid_size=(4, 4))  # 더 강한 CLAHE
+            frame = apply_clahe(frame, clip_limit=4.0, tile_grid_size=(4, 4))  # 더 강한 CLAHE
             faces = app.get(frame)
             
             if faces:
                 main_face = max(faces, key=lambda x: x.bbox[2] * x.bbox[3])
-                # 매우 관대한 기준 (임계값 0.1, 각도 제한 없음)
-                if main_face.det_score >= 0.1:
+                # 매우 관대한 기준 (임계값 0.05, 각도 제한 없음)
+                if main_face.det_score >= 0.05:
                     fallback_embeddings.append(main_face.embedding)
                     print(f"🔄 Fallback 프레임 {frame_count}: det_score={main_face.det_score:.3f}")
 
             frame_count += 1
 
         cap.release()
+        
+        # 두 번째 임시 파일 정리
+        try:
+            os.unlink(temp_path2)
+        except:
+            pass
         
         if fallback_embeddings:
             embeddings = np.array(fallback_embeddings)

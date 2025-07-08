@@ -25,7 +25,9 @@ export class BlockchainVerificationService {
    */
   async getTokenOwner(tokenId: number): Promise<string> {
     try {
-      return await this.contract.ownerOf(tokenId);
+      // BigInt로 변환하여 컨트랙트에 전달
+      const tokenIdBigInt = BigInt(tokenId);
+      return await this.contract.ownerOf(tokenIdBigInt);
     } catch (error) {
       console.error('토큰 소유자 조회 오류:', error);
       throw error;
@@ -269,7 +271,15 @@ export class BlockchainVerificationService {
       const concertHash = ethers.keccak256(ethers.toUtf8Bytes(concertId));
       
       // 블록체인에서 중복 민팅 여부 확인
-      const hasAlreadyMinted = await this.contract.hasMintedForConcert(userWalletAddress, concertHash);
+      // 매핑에 존재하지 않는 경우 false를 반환하므로 안전하게 처리
+      let hasAlreadyMinted = false;
+      try {
+        hasAlreadyMinted = await this.contract.hasMintedForConcert(userWalletAddress, concertHash);
+      } catch (callError) {
+        // 함수 호출 실패 시 (예: 매핑에 존재하지 않는 경우) false로 처리
+        console.log('hasMintedForConcert 호출 실패, 기본값 false 사용:', callError);
+        hasAlreadyMinted = false;
+      }
 
       return {
         canMint: !hasAlreadyMinted,

@@ -118,7 +118,7 @@ export default function MyTicketsPage() {
           ticket.nft_token_id !== null && 
           ticket.nft_token_id !== undefined &&
           ticket.nft_token_id !== '0' &&
-          Number(ticket.nft_token_id) > 0
+          BigInt(ticket.nft_token_id) > BigInt(0)
         );
 
         if (mintedTickets.length === 0) {
