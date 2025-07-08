@@ -24,7 +24,7 @@ def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
     lab = cv2.merge([l, a, b])
     return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
-def extract_embedding_from_video_optimized(video_bytes, frame_skip=3, det_score_threshold=0.3, yaw_threshold=45, num_clusters=5):
+def extract_embedding_from_video_optimized(video_bytes, frame_skip=2, det_score_threshold=0.2, yaw_threshold=60, num_clusters=5):
     """
     비디오에서 얼굴 임베딩을 추출하는 개선된 함수
     - KMeans 클러스터링으로 다양한 각도의 얼굴 선별
@@ -83,11 +83,18 @@ def extract_embedding_from_video_optimized(video_bytes, frame_skip=3, det_score_
             # 얼굴 각도 계산 (yaw, pitch, roll)
             yaw = np.degrees(main_face.pose[1]) if hasattr(main_face, 'pose') else 0
             
+            # 디버깅: 모든 얼굴 감지 결과 로그
+            print(f"🔍 프레임 {frame_count}: 얼굴 감지됨 - det_score={main_face.det_score:.3f}, yaw={yaw:.1f}°")
+            
             # 품질 기준 확인
             if main_face.det_score >= det_score_threshold and abs(yaw) <= yaw_threshold:
                 embeddings.append(main_face.embedding)
                 poses.append(abs(yaw))  # 절댓값으로 저장
-                print(f"✅ 프레임 {frame_count}: det_score={main_face.det_score:.3f}, yaw={yaw:.1f}°")
+                print(f"✅ 프레임 {frame_count}: 기준 통과!")
+            else:
+                print(f"❌ 프레임 {frame_count}: 기준 미달 (det_threshold={det_score_threshold}, yaw_threshold={yaw_threshold})")
+        else:
+            print(f"👻 프레임 {frame_count}: 얼굴 감지 안됨")
 
         frame_count += 1
 
@@ -100,8 +107,39 @@ def extract_embedding_from_video_optimized(video_bytes, frame_skip=3, det_score_
         pass
     
     if not embeddings:
-        print("❌ 유효한 얼굴을 찾을 수 없습니다.")
-        return None
+        print("❌ 첫 번째 시도 실패. 더 관대한 설정으로 재시도...")
+        
+        # 두 번째 시도: 더 관대한 설정
+        cap = cv2.VideoCapture(temp_path)
+        frame_count = 0
+        fallback_embeddings = []
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # 모든 프레임 분석 (프레임 스킵 없음)
+            frame = apply_clahe(frame, clip_limit=3.0, tile_grid_size=(4, 4))  # 더 강한 CLAHE
+            faces = app.get(frame)
+            
+            if faces:
+                main_face = max(faces, key=lambda x: x.bbox[2] * x.bbox[3])
+                # 매우 관대한 기준 (임계값 0.1, 각도 제한 없음)
+                if main_face.det_score >= 0.1:
+                    fallback_embeddings.append(main_face.embedding)
+                    print(f"🔄 Fallback 프레임 {frame_count}: det_score={main_face.det_score:.3f}")
+
+            frame_count += 1
+
+        cap.release()
+        
+        if fallback_embeddings:
+            embeddings = np.array(fallback_embeddings)
+            print(f"✅ Fallback으로 {len(embeddings)}개 임베딩 수집")
+        else:
+            print("❌ Fallback에서도 얼굴을 찾을 수 없습니다.")
+            return None
 
     embeddings = np.array(embeddings)
     print(f"📊 총 {len(embeddings)}개의 임베딩 수집됨")
