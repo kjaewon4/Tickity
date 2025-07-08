@@ -642,5 +642,62 @@ router.post('/:concertId/seats/hold', async (req, res) => {
   });
 });
 
+// 클라이언트가 결제창 이탈 시, HOLD → ABALIABLE
+router.post('/:concertId/seats/available', async (req, res) => {
+  const { concertId } = req.params;
+  const { sectionId, row, col, userId } = req.body;
+
+  if (!concertId || !sectionId || row === undefined || col === undefined || !userId) {
+    return res.status(400).json({
+      success: false,
+      error: '필수 정보가 부족합니다.'
+    });
+  }
+
+  // 1. 좌표 → seat_id 조회
+  const seatId = await ticketsService.findSeatIdByPosition(sectionId, row, col);
+  
+  const { data: existingStatus } = await supabase
+    .from('concert_seats')
+    .select('current_status')
+    .eq('concert_id', concertId)
+    .eq('seat_id', seatId)
+    .single();
+
+  if (existingStatus?.current_status == 'AVAILABLE') {
+    return res.status(409).json({
+      success: false,
+      error: '이미 AVAILABLE 좌석입니다.'
+    });
+  }
+
+
+  const { error: updateError } = await supabase
+    .from('concert_seats')
+    .update({
+      current_status: 'AVAILABLE',
+      last_action_user: null,
+      hold_expires_at: null
+    })
+    .match({
+      concert_id: concertId,
+      seat_id: seatId,
+      current_status: 'HOLD'
+    });
+
+  if (updateError) {
+    console.error('AVAILABLE 업데이트 실패:', updateError.message);
+    return res.status(500).json({
+      success: false,
+      error: '좌석을 AVAILABLE 상태로 변경하는 데 실패했습니다.'
+    });
+  }
+
+  return res.json({
+    success: true,
+    message: '좌석이 AVAILABLE 상태로 설정되었습니다.',
+    seatId,
+  });
+});
 
 export default router; 
