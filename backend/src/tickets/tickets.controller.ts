@@ -5,7 +5,6 @@ import { generateMetadataForTicket } from './metadata.service';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import { ApiResponse } from '../types/auth';
 import { supabase } from '../lib/supabaseClient';
-import { keccak256, toUtf8Bytes } from 'ethers';
 
 const router = Router();
 const blockchain = new BlockchainService();
@@ -84,12 +83,10 @@ router.post('/', async (req: Request, res: Response<ApiResponse>) => {
     const ethPerWon = 1 / 4_000_000;
     const ethAmount = (price * ethPerWon).toFixed(6); // 소수점 6자리 제한 (지수 표기 방지) 예: "0.033025"
 
-    const concertHash = keccak256(toUtf8Bytes(concertId)); // bytes32 변환
-
-    // 3. NFT 민팅 실행 (seatNumber는 on-chain에 저장됨)
+    // 3. NFT 민팅 실행 (concertId는 문자열로 전달, 내부에서 bytes32로 변환)
     const { tokenId, txHash } = await blockchain.mintTicket(
       userId,
-      concertHash,
+      concertId, // 문자열로 전달 (내부에서 bytes32로 변환)
       ticket.id,
       seatNumber,
       metadataURI,
