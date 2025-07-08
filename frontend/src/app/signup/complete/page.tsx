@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/apiClient';
-import { UserMetadata } from '@/types/auth';
+import SocialSignupForm from '../../components/auth/SocialSignupForm';
 
 // 사용자 정보 타입 정의
 interface UserInfo {
@@ -13,10 +13,10 @@ interface UserInfo {
 export default function CompleteSignupPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [realName, setRealName] = useState<string>('');
+  const [name, setName] = useState<string>('');
   const [residentNumber, setResidentNumber] = useState<string>('');
   const [error, setError] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isSigningUp, setIsSigningUp] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
 
   // 주민번호 형식 검증
@@ -29,7 +29,7 @@ export default function CompleteSignupPage() {
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     const urlRefresh = urlParams.get('refresh');
-    
+
     if (urlToken && urlRefresh) {
       // URL에서 받은 토큰을 localStorage에 저장
       localStorage.setItem('accessToken', urlToken);
@@ -38,38 +38,35 @@ export default function CompleteSignupPage() {
 
     // 로컬 스토리지에서 토큰 확인 (Google OAuth 또는 일반 로그인)
     const accessToken = localStorage.getItem('accessToken');
-    const refreshToken = localStorage.getItem('refreshToken');2
+    const refreshToken = localStorage.getItem('refreshToken');
 
     if (accessToken && refreshToken) {
       // 현재 로그인된 사용자 정보 가져오기
       const getUserInfo = async (): Promise<void> => {
         try {
           const response = await apiClient.getUser();
-          
+
           if (response.data?.user) {
             const user = response.data.user;
-            
+
             // 기존 사용자인지 확인 - 더 엄격한 검증
             const hasName = user.name && user.name.trim() !== '';
-            const hasResidentNumber = user.residentNumber && 
-                                    user.residentNumber !== '1900-01-01' && 
-                                    user.residentNumber !== '' &&
-                                    user.residentNumber !== 'not_provided';
-            
+            const hasResidentNumber = user.residentNumber &&
+              user.residentNumber !== '1900-01-01' &&
+              user.residentNumber !== '' &&
+              user.residentNumber !== 'not_provided';
+
             if (hasName && hasResidentNumber) {
               // 기존 사용자이고 정보가 완전하면 바로 메인 페이지로
               router.replace('/');
               return;
             }
 
-            // 정보가 불완전한 경우 사용자 정보 설정하고 입력 받기
-            setUserInfo({
-              email: user.email || ''
-            });
-            
+            setUserInfo({ email: user.email || '' });
+
             // 기존 이름이 있다면 기본값으로 설정 (구글에서 가져온 이름 등)
             if (user.name && user.name.trim() !== '') {
-              setRealName(user.name.trim());
+              setName(user.name.trim());
             }
           } else {
             // 로그인되지 않은 경우 로그인 페이지로 리다이렉트
@@ -92,7 +89,7 @@ export default function CompleteSignupPage() {
   }, [router]);
 
   const handleCompleteSignup = async (): Promise<void> => {
-    if (!realName.trim()) {
+    if (!name.trim()) {
       setError('이름을 입력해주세요.');
       return;
     }
@@ -105,13 +102,13 @@ export default function CompleteSignupPage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsSigningUp(true);
     setError('');
 
     try {
       // 현재 사용자 정보 가져오기
       const response = await apiClient.getUser();
-      
+
       if (!response.data?.user) {
         setError('사용자 정보를 찾을 수 없습니다.');
         return;
@@ -121,25 +118,28 @@ export default function CompleteSignupPage() {
 
       // 사용자가 데이터베이스에 있는지 확인
       const userCheckResponse = await apiClient.getUser();
-      
+
       let updateResponse;
       let isSuccess = false;
-      
+
       try {
-        if (userCheckResponse.data?.user && userCheckResponse.data.user.residentNumber && userCheckResponse.data.user.residentNumber !== '') {
-          // 기존 사용자 - 정보 업데이트
+        if (
+          userCheckResponse.data?.user &&
+          userCheckResponse.data.user.residentNumber &&
+          userCheckResponse.data.user.residentNumber !== ''
+        ) {
           updateResponse = await apiClient.updateUser({
-            name: realName.trim(),
+            name: name.trim(),
             resident_number: residentNumber
           });
         } else {
           // 신규 사용자 - 사용자 생성
           updateResponse = await apiClient.createGoogleUser({
-            name: realName.trim(),
+            name: name.trim(),
             resident_number: residentNumber
           });
         }
-        
+
         isSuccess = updateResponse.success;
       } catch (createError: any) {
         console.error('사용자 생성/업데이트 오류:', createError);
@@ -163,7 +163,7 @@ export default function CompleteSignupPage() {
       console.error('사용자 정보 업데이트 오류:', error.message);
       setError('사용자 정보 업데이트 중 오류가 발생했습니다.');
     } finally {
-      setIsLoading(false);
+      setIsSigningUp(false);
     }
   };
 
@@ -171,8 +171,8 @@ export default function CompleteSignupPage() {
     // 메시지 설정 로직 (필요시 구현)
   };
 
-  const handleRealNameChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    setRealName(e.target.value);
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    setName(e.target.value);
   };
 
   const handleResidentNumberChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -184,78 +184,23 @@ export default function CompleteSignupPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-      <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full mx-4">
-        <h1 className="text-2xl font-bold text-center mb-6">회원가입</h1>
-        
+      <div className="w-full max-w-md bg-white p-8 rounded shadow">
+        <h1 className="text-2xl font-bold mb-6 text-center">Tickity 회원가입</h1>
         {userInfo && (
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-2">이메일</p>
-            <p className="font-medium">{userInfo.email}</p>
+          <div className="text-center text-gray-500 text-sm mb-6">
+            {userInfo.email} 계정으로 가입 진행 중입니다.
           </div>
         )}
-
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="realName" className="block text-sm font-medium text-gray-700 mb-1">
-              이름 *
-            </label>
-            <input
-              type="text"
-              id="realName"
-              value={realName}
-              onChange={handleRealNameChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="이름을 입력하세요"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="residentNumber" className="block text-sm font-medium text-gray-700 mb-1">
-              주민번호 *
-            </label>
-            <input
-              type="text"
-              id="residentNumber"
-              value={residentNumber}
-              onChange={handleResidentNumberChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="주민번호 7자리 (예: 9501013)"
-              maxLength={7}
-              required
-            />
-            <div className="text-xs text-gray-500 mt-1">
-              생년월일 6자리 + 성별 1자리 (예: 9501013)
-            </div>
-          </div>
-
-          {error && (
-            <div className="text-red-600 text-sm bg-red-50 p-3 rounded-md">
-              {error}
-            </div>
-          )}
-
-          <button
-            onClick={handleCompleteSignup}
-            disabled={isLoading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? '처리 중...' : '가입하기'}
-          </button>
-        </div>
-
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            이미 계정이 있으신가요?{' '}
-            <button
-              onClick={() => router.push('/login')}
-              className="text-blue-600 hover:text-blue-700 font-medium"
-            >
-              로그인하기
-            </button>
-          </p>
-        </div>
+        <SocialSignupForm
+          name={name}
+          residentNumber={residentNumber}
+          error={error}
+          isSigningUp={isSigningUp}
+          onNameChange={handleNameChange}
+          onResidentNumberChange={handleResidentNumberChange}
+          onSignup={handleCompleteSignup}
+        />
       </div>
     </div>
   );
-} 
+}
