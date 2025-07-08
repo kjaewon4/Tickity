@@ -1157,4 +1157,34 @@ router.post('/validate-email', async (req: Request, res: Response<ApiResponse>) 
   }
 });
 
+/**
+ * 관리자 주소 조회
+ * GET /auth/admin-address
+ */
+router.get('/admin-address', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const adminAddress = process.env.ADMIN_ADDRESS;
+    
+    if (!adminAddress) {
+      return res.status(500).json({
+        success: false,
+        error: '관리자 주소가 설정되지 않았습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        adminAddress
+      }
+    });
+  } catch (error) {
+    console.error('관리자 주소 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '관리자 주소 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 export default router; 
