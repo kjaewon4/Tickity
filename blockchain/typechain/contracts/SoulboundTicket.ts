@@ -39,7 +39,6 @@ export interface SoulboundTicketInterface extends Interface {
       | "markFaceVerified"
       | "mintTicket"
       | "name"
-      | "nextTokenId"
       | "owner"
       | "ownerOf"
       | "registerFaceHash"
@@ -112,13 +111,9 @@ export interface SoulboundTicketInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "mintTicket",
-    values: [BytesLike, string, string, BigNumberish]
+    values: [BigNumberish, BytesLike, string, string, BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "nextTokenId",
-    values?: undefined
-  ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "ownerOf",
@@ -207,10 +202,6 @@ export interface SoulboundTicketInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "mintTicket", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "nextTokenId",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "ownerOf", data: BytesLike): Result;
   decodeFunctionResult(
@@ -447,6 +438,7 @@ export interface SoulboundTicket extends BaseContract {
 
   mintTicket: TypedContractMethod<
     [
+      tokenId: BigNumberish,
       concertId: BytesLike,
       seatNumber: string,
       uri: string,
@@ -457,8 +449,6 @@ export interface SoulboundTicket extends BaseContract {
   >;
 
   name: TypedContractMethod<[], [string], "view">;
-
-  nextTokenId: TypedContractMethod<[], [bigint], "view">;
 
   owner: TypedContractMethod<[], [string], "view">;
 
@@ -587,6 +577,7 @@ export interface SoulboundTicket extends BaseContract {
     nameOrSignature: "mintTicket"
   ): TypedContractMethod<
     [
+      tokenId: BigNumberish,
       concertId: BytesLike,
       seatNumber: string,
       uri: string,
@@ -598,9 +589,6 @@ export interface SoulboundTicket extends BaseContract {
   getFunction(
     nameOrSignature: "name"
   ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "nextTokenId"
-  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
