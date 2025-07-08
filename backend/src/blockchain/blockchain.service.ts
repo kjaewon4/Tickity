@@ -177,7 +177,7 @@ export class BlockchainService {
     }
   }
 
-  async getTokenURI(tokenId: number): Promise<string> {
+  async getTokenURI(tokenId: number | string): Promise<string> {
     try {
       // BigInt로 변환하여 컨트랙트에 전달
       const tokenIdBigInt = BigInt(tokenId);
@@ -187,7 +187,7 @@ export class BlockchainService {
     }
   }
 
-  async getTokenOwner(tokenId: number): Promise<string> {
+  async getTokenOwner(tokenId: number | string): Promise<string> {
     try {
       // BigInt로 변환하여 컨트랙트에 전달
       const tokenIdBigInt = BigInt(tokenId);
@@ -200,13 +200,16 @@ export class BlockchainService {
   /**
    * 입장 처리 (관리자 전용)
    */
-  async markAsUsed(tokenId: number): Promise<void> {
+  async markAsUsed(tokenId: number | string): Promise<void> {
     try {
       const adminSigner = new Wallet(ADMIN_KEY, PROVIDER);
       const contractWithAdmin = this.contract.connect(adminSigner);
       
+      // BigInt로 변환하여 컨트랙트에 전달
+      const tokenIdBigInt = BigInt(tokenId);
+      
       // 입장 처리 - nonce 자동 관리
-      const tx = await contractWithAdmin.markAsUsed(tokenId, {
+      const tx = await contractWithAdmin.markAsUsed(tokenIdBigInt, {
         gasLimit: 200_000n,
         maxFeePerGas,
         maxPriorityFeePerGas,
@@ -223,7 +226,7 @@ export class BlockchainService {
   /**
    * 얼굴 해시 등록 (관리자 전용)
    */
-  async registerFaceHash(tokenId: number, faceHash: string): Promise<string> {
+  async registerFaceHash(tokenId: number | string, faceHash: string): Promise<string> {
     try {
       const adminSigner = new Wallet(ADMIN_KEY, PROVIDER);
       const contractWithAdmin = this.contract.connect(adminSigner);
@@ -233,7 +236,10 @@ export class BlockchainService {
       // 얼굴 해시를 bytes32로 변환 (0x 접두사 제거 후 32바이트로 패딩)
       const hashBytes32 = faceHash.startsWith('0x') ? faceHash : `0x${faceHash}`;
       
-      const registerTx = await contractWithAdmin.registerFaceHash(tokenId, hashBytes32, {
+      // BigInt로 변환하여 컨트랙트에 전달
+      const tokenIdBigInt = BigInt(tokenId);
+      
+      const registerTx = await contractWithAdmin.registerFaceHash(tokenIdBigInt, hashBytes32, {
         gasLimit: 200_000n,
         maxFeePerGas,
         maxPriorityFeePerGas,
@@ -252,28 +258,47 @@ export class BlockchainService {
   /**
    * 얼굴 인증 완료 처리 (관리자 전용)
    */
-  async setFaceVerified(tokenId: number, faceHash?: string): Promise<string> {
+  async setFaceVerified(tokenId: number | string, faceHash?: string): Promise<string> {
     try {
       const adminSigner = new Wallet(ADMIN_KEY, PROVIDER);
       const contractWithAdmin = this.contract.connect(adminSigner);
       
       console.log(`🎭 얼굴 인증 완료 처리 시작: 토큰 ${tokenId}${faceHash ? `, 해시 ${faceHash}` : ''}`);
       
-      // 1. 얼굴 해시가 있으면 먼저 등록
-      if (faceHash) {
-        console.log('🔐 얼굴 해시 등록 중...');
+      // BigInt로 변환하여 컨트랙트에 전달
+      const tokenIdBigInt = BigInt(tokenId);
+      
+      // 1. 현재 티켓 상태 확인 (이미 얼굴 해시가 등록되어 있는지 확인)
+      const currentTicket = await this.contract.tickets(tokenIdBigInt);
+      const hasExistingFaceHash = currentTicket.faceHash !== '0x0000000000000000000000000000000000000000000000000000000000000000';
+      
+      console.log(`🔍 기존 얼굴 해시 상태: ${hasExistingFaceHash ? '이미 등록됨' : '미등록'}`);
+      
+      // 2. 얼굴 해시가 새로 제공되었고, 아직 등록되지 않은 경우에만 등록
+      if (faceHash && !hasExistingFaceHash) {
+        console.log('🔐 새로운 얼굴 해시 등록 중...');
         await this.registerFaceHash(tokenId, faceHash);
-        console.log('✅ 얼굴 해시 등록 완료, 즉시 다음 단계 진행');
+        console.log('✅ 얼굴 해시 등록 완료, 다음 단계 진행');
         
-        // 아주 짧은 대기 시간 (nonce 안정화)
+        // 짧은 대기 시간 (nonce 안정화)
         await new Promise(resolve => setTimeout(resolve, 200));
+      } else if (faceHash && hasExistingFaceHash) {
+        console.log('⏭️ 얼굴 해시가 이미 등록되어 있어 등록 과정을 건너뜁니다');
+      } else if (!faceHash) {
+        console.log('⚠️ 얼굴 해시 없이 기본 인증 처리');
       }
       
-      // 2. 최신 nonce 확인 후 얼굴 인증 통과 표시
+      // 3. 얼굴 인증 통과 표시 (이미 인증된 상태인지 확인)
+      if (currentTicket.isFaceVerified) {
+        console.log('✅ 이미 얼굴 인증이 완료된 티켓입니다');
+        return 'already_verified'; // 기존 상태 반환
+      }
+      
+      // 4. 최신 nonce 확인 후 얼굴 인증 통과 표시
       const currentNonce = await adminSigner.getNonce();
       console.log(`🔢 현재 관리자 nonce: ${currentNonce}`);
       
-      const faceVerifyTx = await contractWithAdmin.markFaceVerified(tokenId, {
+      const faceVerifyTx = await contractWithAdmin.markFaceVerified(tokenIdBigInt, {
         gasLimit: 200_000n,
         maxFeePerGas,
         maxPriorityFeePerGas,
