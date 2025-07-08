@@ -176,14 +176,20 @@ router.post(
 
       // 1) DB: 좌석 예약 해제
       await ticketsService.setSeatReserved(seatId, false);
+
+         
+			// 환불 금액 계산 후 반환 { originalPriceWon, cancellationFeeWon, refundedAmountWon } 
+      const { originalPriceWon, cancellationFeeWon, refundedAmountWon } = await ticketsService.calculateRefundAmountWon(ticketId);
+      console.log("originalPriceWon, cancellationFeeWon, refundedAmountWon: ",originalPriceWon, cancellationFeeWon, refundedAmountWon);
+
       // 2) on-chain: cancelTicket 호출 → reopenTime 반환
       const {reopenTime, transactionHash}  = await ticketsService.cancelOnChain(
-        Number(tokenId)
+        Number(tokenId),refundedAmountWon
       );
       // 3) DB: 티켓 취소 정보 저장
-      await ticketsService.markTicketCancelled(ticketId, reopenTime, transactionHash);
+      await ticketsService.markTicketCancelled(ticketId, reopenTime, transactionHash, cancellationFeeWon, refundedAmountWon);
 
-      res.json({ success: true, data: { reopenTime } });
+      res.json({ success: true, data: { reopenTime, originalPriceWon, cancellationFeeWon, refundedAmountWon } });
     } catch (err) {
       console.error('티켓 취소 오류:', err);
       res

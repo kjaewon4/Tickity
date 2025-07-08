@@ -38,6 +38,13 @@ contract SoulboundTicket is ERC721, Ownable {
     constructor(address _admin) ERC721("SBTicket", "SBT") Ownable(_admin) {
         transferOwnership(_admin);
     }
+    
+    // 새로운 코드 추가: 컨트랙트가 이더를 직접 받을 수 있도록 receive 함수 추가
+    receive() external payable {
+        // 이 함수가 호출되면 컨트랙트는 전송된 이더를 받아서 자체 잔액에 추가합니다.
+        // 특별히 해야 할 로직이 없다면 비워두거나 이벤트 로그를 남길 수 있습니다.
+        // emit EthReceived(msg.sender, msg.value); // 필요시 이벤트 추가
+    }
 
     event TicketMinted(address indexed to, uint256 indexed tokenId, string uri);
 
@@ -148,10 +155,11 @@ contract SoulboundTicket is ERC721, Ownable {
     /// @notice 티켓이 취소될 때 발생시키는 이벤트
     /// @param tokenId     취소된 토큰 ID
     /// @param reopenTime  다시 오픈 가능한 Unix timestamp
-    event TicketCancelled(uint256 indexed tokenId, uint256 reopenTime);
+    /// @param refundAmount  환불된 이더 금액 (wei)
+    event TicketCancelled(uint256 indexed tokenId, uint256 reopenTime, uint256 refundAmount);
 
     /// @notice 티켓 취소 (관리자 전용), 12시간 이내 랜덤 재오픈
-    function cancelTicket(uint256 tokenId) external onlyOwner {
+    function cancelTicket(uint256 tokenId, uint256 refundAmount) external onlyOwner {
         require(tickets[tokenId].issuedAt != 0, unicode"❌ 존재하지 않는 티켓");
         require(!isCancelled[tokenId], unicode"⛔ 이미 취소된 티켓");
         // 1) 상태 변경
@@ -174,8 +182,17 @@ contract SoulboundTicket is ERC721, Ownable {
         // 3) 재오픈 시점
         uint256 reopenTime = block.timestamp + randOffset;
 
+        // 4) 사용자에게 이더 환불 전송
+        // 중요: 컨트랙트가 충분한 이더를 보유하고 있어야 합니다.
+        // 만약 컨트랙트가 티켓 판매 금액을 받지 않고 단순 관리만 한다면 이 부분은 백엔드에서 처리해야 합니다.
+        // 현재는 컨트랙트가 판매 금액을 받고 환불도 처리하는 경우를 가정합니다.
+       // ERC721의 ownerOf 함수를 사용하여 현재 토큰 소유자를 가져옵니다.
+        address payable recipient = payable(ownerOf(tokenId)); // <--- 수정된 부분
+        require(address(this).balance >= refundAmount, unicode"컨트랙트 잔액 부족");
+        recipient.transfer(refundAmount);
+
         // 4) 이벤트 발행
-        emit TicketCancelled(tokenId, reopenTime);
+        emit TicketCancelled(tokenId, reopenTime, refundAmount);
     }
 
     /// @notice 티켓 재오픈 (관리자 전용)

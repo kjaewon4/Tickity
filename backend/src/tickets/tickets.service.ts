@@ -48,6 +48,13 @@ export interface TicketWithDetails extends Ticket {
   };
 }
 
+// 취소 정책 데이터의 타입 정의 (Supabase 응답에 따라 조정)
+interface CancellationPolicy {
+  id: string; // uuid
+  period_desc: string; // 예: "관람일 10일전까지", "관람일 2일전~1일전까지"
+  fee_desc: string; // 예: "없음", "티켓금액의 30%"
+}
+
 // ───────────────────────────────────────────────────────────
 // 모든 티켓 조회
 // ───────────────────────────────────────────────────────────
@@ -443,22 +450,29 @@ export const setSeatReserved = async (
 ) => {
   const { error } = await supabase
     .from('concert_seats')
-    .update({ current_status: reserved ? 'reserved' : 'AVAILABLE' })
+    .update({ current_status: reserved ? 'SOLD' : 'AVAILABLE' })
     .eq('seat_id', seatId);
 
   if (error) {
     console.error('setSeatReserved 오류:', error);
-    throw error;
+    throw error;  
   }
 };
 
 // ───────────────────────────────────────────────────────────
 // 온체인: 티켓 취소 → 재오픈 시간 반환
 // ───────────────────────────────────────────────────────────
-export const cancelOnChain = async (tokenId: number): Promise<{ reopenTime: number; transactionHash: string }> => {
+export const cancelOnChain = async (tokenId: number,   refundedAmountWon: number // 백엔드에서 계산된 원화 환불 금액
+): Promise<{ reopenTime: number; transactionHash: string }> => {
   console.log(`[cancelOnChain] Attempting to cancel ticket with tokenId: ${tokenId}`);
+  
+  // 원화 환불 금액을 ETH로 변환 (string)
+  const refundedEthString = convertWonToEth(refundedAmountWon);
+  // ETH 문자열을 Wei (BigInt)로 변환하여 컨트랙트에 전달
+  const refundedEthWei = ethers.parseEther(refundedEthString); // <--- Wei로 변환
+
   try {
-    const tx = await contract.cancelTicket(tokenId);
+    const tx = await contract.cancelTicket(tokenId, refundedEthWei);
     console.log(`[cancelOnChain] Transaction sent, hash: ${tx.hash}`);
 
     const receipt = await tx.wait();
@@ -504,22 +518,196 @@ export const cancelOnChain = async (tokenId: number): Promise<{ reopenTime: numb
   }
 };
 
+// DB에서 티켓 정보 및 콘서트 날짜를 조회하는 헬퍼 함수 (재사용 가능성 있음)
+export const getTicketAndConcertInfo = async (ticketId: string) => {
+    const { data: ticketData, error: ticketError } = await supabase
+        .from('tickets')
+        .select(`
+            purchase_price,
+            concerts (
+                start_date
+            )
+        `)
+        .eq('id', ticketId)
+        .single();
+
+    if (ticketError || !ticketData) {
+        throw new Error(`티켓 정보 조회 오류: ${ticketError?.message || '정보 없음'}`);
+    }
+    return {
+        originalPriceWon: Number(ticketData.purchase_price),
+        concertStartDate: ticketData.concerts?.start_date
+    };
+};
+
+
+
+// 현재 ETH 가격을 가져오는 함수 (실제 구현에서는 외부 API 연동)
+export const getCurrentEthPriceWon = async (): Promise<number> => {
+    // 실제로는 여기에 CoinGecko, Upbit 등의 API를 호출하여 최신 ETH/KRW 가격을 가져오는 로직 구현
+    // 예시:
+    return 4_000_000; // 1 ETH = 400만원 (임시 값)
+};
+
+// 취소 정책을 기반으로 수수료율을 가져오는 함수
+export const getCancellationPolicy = async (daysUntilConcert: number): Promise<number> => {
+  const { data, error } = await supabase
+    .from('cancellation_policies')
+    .select('period_desc, fee_desc')
+    // 중요: DB에서 가져온 정책들을 daysUntilConcert와 비교하기 쉬운 순서로 정렬해야 합니다.
+    // 예를 들어, 남은 일수가 많은 것부터 적은 것 순으로 정렬하면 if-else if 로직이 더 단순해집니다.
+    // 현재 `period_desc`가 문자열이라 직접 정렬이 어려울 수 있으므로,
+    // 가능하다면 DB에 `min_days`, `max_days` 컬럼을 추가하고 그 기준으로 정렬하는 것을 권장합니다.
+    // 여기서는 일단 'period_desc'로 정렬한 후 코드 내부에서 처리합니다.
+    // (만약 '관람일 10일전까지'가 가장 긴 기간이고 수수료가 없다면, 그게 먼저 체크되어야 합니다.)
+    .order('period_desc', { ascending: true }); // 문자열 정렬이므로 실제 의미와 다를 수 있음. 수동 정렬 필요 시 유의.
+
+  if (error) {
+    console.error('getCancellationPolicy 오류:', error);
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    console.warn('취소 정책 데이터가 DB에 없습니다. 기본 수수료 0% 적용.');
+    return 0;
+  }
+
+  let feePercentage = 0; // 기본 수수료 0%
+
+  // DB에서 가져온 정책들을 유효한 날짜 범위로 변환하여 저장할 배열
+  const parsedPolicies: { min: number; max: number; fee: number }[] = [];
+
+  for (const policy of data as CancellationPolicy[]) {
+    const { period_desc, fee_desc } = policy;
+    let minDays: number | null = null;
+    let maxDays: number | null = null;
+    let fee = 0;
+
+    // 'period_desc' 문자열 파싱
+    const matchesUntil = period_desc.match(/관람일 (\d+)일전까지/);
+    const matchesRange = period_desc.match(/관람일 (\d+)일전~(\d+)일전까지/);
+
+    if (matchesUntil) {
+      minDays = parseInt(matchesUntil[1], 10);
+      maxDays = Infinity; // "N일전까지"는 N일 이상 남은 경우
+    } else if (matchesRange) {
+      // "관람일 X일전~Y일전까지"에서 X는 더 먼 날짜(큰 숫자), Y는 더 가까운 날짜(작은 숫자)
+      maxDays = parseInt(matchesRange[1], 10); // 예를 들어 9일전
+      minDays = parseInt(matchesRange[2], 10); // 예를 들어 7일전
+    } else if (period_desc === "없음") {
+      minDays = 0; // 모든 기간에 해당
+      maxDays = Infinity;
+    }
+    // 다른 패턴이 있다면 여기에 추가
+
+    // 'fee_desc' 문자열 파싱
+    const feeMatch = fee_desc.match(/(\d+)%/); // "티켓금액의 N%" 패턴
+    if (fee_desc === "없음") {
+      fee = 0;
+    } else if (feeMatch) {
+      fee = parseFloat(feeMatch[1]) / 100; // N%를 0.N 형태로 변환
+    }
+
+    if (minDays !== null && maxDays !== null) {
+      parsedPolicies.push({ min: minDays, max: maxDays, fee: fee });
+    }
+  }
+
+  // 파싱된 정책들을 `daysUntilConcert`에 맞춰 순회하며 정확한 수수료를 찾습니다.
+  // **가장 중요한 부분: 정책 적용 순서.**
+  // 일반적으로 남은 일수가 많은 (수수료가 낮은) 정책부터 체크하거나
+  // 남은 일수가 적은 (수수료가 높은) 정책부터 체크하여 먼저 일치하는 것을 적용합니다.
+  // 현재 DB 이미지와 "관람일 10일전까지" (없음), "관람일 9일~7일전까지" (10%),
+  // "관람일 6일~3일전까지" (20%), "관람일 2일전~1일전까지" (30%) 순서를 보면,
+  // 남은 일수가 많을수록 수수료가 낮으므로, `min` 값이 큰 순서(내림차순)로 정렬하여 처리하는 것이 논리적입니다.
+  parsedPolicies.sort((a, b) => b.min - a.min); // minDays가 큰 순서 (더 먼 날짜)부터 정렬
+
+  for (const policy of parsedPolicies) {
+    if (daysUntilConcert >= policy.min) { // daysUntilConcert가 해당 정책의 최소 일수 이상인 경우 (최대 일수까지)
+      // "관람일 10일전까지" (min=10, max=Infinity) -> daysUntilConcert >= 10
+      // "관람일 9일~7일전까지" (min=7, max=9) -> daysUntilConcert >= 7 && daysUntilConcert <= 9
+      // 현재 `period_desc` 패턴에서 `matchesRange`는 `maxDays`가 더 큰 숫자, `minDays`가 더 작은 숫자이므로
+      // `daysUntilConcert >= policy.min && (policy.max === Infinity || daysUntilConcert <= policy.max)`
+      if (policy.max === Infinity || daysUntilConcert <= policy.max) {
+        feePercentage = policy.fee;
+        break; // 적합한 정책을 찾았으므로 루프 종료
+      }
+    }
+  }
+  
+  return feePercentage;
+};
+
+// 환불 금액 (원화)을 계산하는 핵심 함수
+export const calculateRefundAmountWon = async (ticketId: string): Promise<{ originalPriceWon: number; cancellationFeeWon: number; refundedAmountWon: number }> => {
+    // 1. DB에서 티켓 구매 가격과 콘서트 시작 날짜 조회
+    const { originalPriceWon, concertStartDate } = await getTicketAndConcertInfo(ticketId);
+
+    if (!originalPriceWon || !concertStartDate) {
+        throw new Error('티켓 가격 또는 콘서트 날짜 정보가 부족하여 환불 금액을 계산할 수 없습니다.');
+    }
+
+    // 2. 현재 날짜와 콘서트 시작 날짜 간의 차이 (남은 일수) 계산
+    const concertDate = new Date(concertStartDate); // 콘서트 시작일 Date 객체
+    const today = new Date();                     // 오늘 날짜 Date 객체
+
+    // 날짜 계산의 정확성을 위해 시/분/초를 0으로 설정하여 일(day) 단위로만 비교
+    concertDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
+    const diffTime = Math.abs(concertDate.getTime() - today.getTime()); // 밀리초 단위 차이
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));      // 일 단위 차이 (올림)
+    
+    console.log(`[calculateRefundAmountWon] 콘서트까지 남은 일수: ${diffDays}일`);
+
+    // 3. 남은 일수를 기반으로 취소 수수료 비율 가져오기
+    const feePercentage = await getCancellationPolicy(diffDays);
+    console.log(`[calculateRefundAmountWon] 적용된 취소 수수료 비율: ${feePercentage * 100}%`);
+
+    // 4. 최종 환불 금액 계산
+    const cancellationFeeWon = originalPriceWon * feePercentage;
+    const refundedAmountWon = originalPriceWon - cancellationFeeWon;
+    
+    console.log(`[calculateRefundAmountWon] 원본 가격: ${originalPriceWon}원`);
+    console.log(`[calculateRefundAmountWon] 취소 수수료: ${cancellationFeeWon}원`);
+    console.log(`[calculateRefundAmountWon] 최종 환불 금액: ${refundedAmountWon}원`);
+
+    return { originalPriceWon, cancellationFeeWon, refundedAmountWon };
+};
+
+/**
+ * 원화를 ETH로 변환합니다. (toFixed로 지수 표기 방지)
+ * @param priceWon 원화 금액
+ * @returns ETH 금액 (소수점 6자리 string)
+ */
+export const convertWonToEth = (priceWon: number): string => {
+  // 실제로는 여기에 CoinGecko, Upbit 등의 API를 호출하여 최신 ETH/KRW 가격을 가져오는 로직 구현
+  // 예시: 1 ETH = 4,000,000원 기준
+  const ethPerWon = 1 / 4_000_000;
+  const ethAmount = (priceWon * ethPerWon).toFixed(6);
+  console.log(`[convertWonToEth] ${priceWon}원 -> ${ethAmount} ETH`);
+  return ethAmount;
+};
+
 // ───────────────────────────────────────────────────────────
 // DB: 티켓 취소 정보 저장
 // ───────────────────────────────────────────────────────────
 export const markTicketCancelled = async (
   ticketId: string,
   reopenTime: number,
-  refundTxHash: string | null
+  refundTxHash: string | null,
+  cancellationFeeWon: any, 
+  refundedAmount: any
 ) => {
   const { error } = await supabase
     .from('tickets')
     .update({
       canceled_at:      new Date(),
-      cancellation_fee: 0,
+      cancellation_fee: cancellationFeeWon,
       refund_tx_hash:   refundTxHash,
       is_cancelled:     true,
-      reopen_time:      reopenTime
+      reopen_time:      reopenTime,
+      refunded_amount: refundedAmount
     })
     .eq('id', ticketId);
   if (error) {
