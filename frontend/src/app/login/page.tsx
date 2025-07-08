@@ -180,8 +180,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white px-4 mt-25">
-      {/* ✅ 고정된 로고 영역 */}
+    <div className="flex flex-col min-h-screen bg-white px-4 mt-25 pt-16">
+      {/* 고정된 로고 영역 */}
       <div className={`flex flex-col items-center justify-start mt-20 ${!showEmailForm ? 'mb-24' : 'mb-8'}`}>
         <Image
           src="/images/Tickity.svg"
@@ -196,8 +196,8 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ✅ 로그인 영역 */}
-      <div className="flex flex-col items-center flex-grow">
+      {/* 로그인 영역 */}
+      <div className="flex flex-col items-center">
         <div className={`w-full max-w-md ${!showEmailForm ? 'mt-[40px]' : ''}`}>
           {showEmailForm ? (
             <motion.div
@@ -215,7 +215,7 @@ export default function LoginPage() {
               />
 
               <button
-                className="w-full bg-blue-600 text-white py-3 mt-8 rounded-md font-semibold text-lg hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+                className="w-full bg-blue-600 text-white py-3 mt-8 rounded-xl font-semibold text-lg hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
                 onClick={handleLogin}
                 disabled={isLoading}
               >
@@ -239,7 +239,7 @@ export default function LoginPage() {
 
               <button
                 onClick={handleGoogleLogin}
-                className="w-full bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-md font-semibold hover:bg-gray-100 flex items-center justify-center text-lg cursor-pointer"
+                className="w-full bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-xl font-semibold hover:bg-gray-100 flex items-center justify-center text-lg cursor-pointer"
               >
                 <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />

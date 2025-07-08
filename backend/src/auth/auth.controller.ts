@@ -1157,4 +1157,76 @@ router.post('/validate-email', async (req: Request, res: Response<ApiResponse>) 
   }
 });
 
+/**
+ * 관리자 주소 조회 (API 키 또는 관리자 권한)
+ * GET /auth/admin-address
+ */
+router.get('/admin-address', async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const adminAddress = process.env.ADMIN_ADDRESS;
+    
+    if (!adminAddress) {
+      return res.status(500).json({
+        success: false,
+        error: '관리자 주소가 설정되지 않았습니다.'
+      });
+    }
+
+    // 방법 1: API 키로 간단 인증
+    const apiKey = req.headers['x-api-key'] || req.query.api_key;
+    const validApiKey = process.env.ADMIN_API_KEY;
+    
+    if (apiKey && validApiKey && apiKey === validApiKey) {
+      return res.json({
+        success: true,
+        data: { adminAddress }
+      });
+    }
+
+    // 방법 2: JWT 토큰으로 관리자 권한 확인
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+        
+        if (!userError && user) {
+          const { data: userProfile, error: profileError } = await supabase
+            .from('users')
+            .select('wallet_address')
+            .eq('id', user.id)
+            .single();
+
+          if (!profileError && userProfile) {
+            const isAdmin = userProfile.wallet_address?.toLowerCase() === adminAddress.toLowerCase();
+            
+            if (isAdmin) {
+              return res.json({
+                success: true,
+                data: { adminAddress }
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('JWT 인증 오류:', error);
+      }
+    }
+
+    // 인증 실패
+    return res.status(401).json({
+      success: false,
+      error: '유효한 API 키 또는 관리자 권한이 필요합니다.'
+    });
+
+  } catch (error) {
+    console.error('관리자 주소 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '관리자 주소 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 export default router; 

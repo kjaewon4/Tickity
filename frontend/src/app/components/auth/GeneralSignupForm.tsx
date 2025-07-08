@@ -43,7 +43,7 @@ const GeneralSignupForm = ({
   getEmailMessageClass,
 }: GeneralSignupFormProps) => {
   return (
-    <div className="bg-white rounded-xl shadow-md p-6 w-full">
+    <div className="bg-white p-6 w-full">
       <p className="text-lg text-gray-600 mb-4 text-center">
         이메일을 입력하고 확인 버튼을 눌러주세요
       </p>
@@ -141,7 +141,7 @@ const GeneralSignupForm = ({
       <button
         onClick={onSignup}
         disabled={isSigningUp || emailStatus !== 'available'}
-        className={`w-full py-3 rounded-md font-semibold text-white transition text-lg cursor-pointer ${
+        className={`w-full py-3 rounded-xl font-semibold text-white transition text-lg cursor-pointer ${
           isSigningUp || emailStatus !== 'available'
             ? 'bg-gray-400 cursor-not-allowed'
             : 'bg-blue-600 hover:bg-blue-700'
