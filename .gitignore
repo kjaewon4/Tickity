@@ -9,6 +9,8 @@ blockchain/cache/
 blockchain/artifacts/
 blockchain/typechain/
 blockchain/typechain-types/
+/cache/
+/artifacts/
 
 # Solidity cache and debug files
 *.dbg
