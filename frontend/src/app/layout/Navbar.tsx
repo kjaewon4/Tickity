@@ -63,7 +63,7 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
         if (!response || !response.tickets) return setRecentTickets([]);
 
         const filtered = response.tickets.filter(
-          t => t.nft_token_id && t.nft_token_id !== '0' && Number(t.nft_token_id) > 0
+          t => t.nft_token_id && t.nft_token_id !== '0' && BigInt(t.nft_token_id) > BigInt(0)
         );
 
         const limited = filtered.slice(0, 3);

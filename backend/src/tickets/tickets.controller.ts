@@ -439,18 +439,19 @@ router.get(
         });
       }
 
-      const tokenIdNum = Number(tokenId);
+      // 토큰 ID 유효성 검사 (BigInt 사용)
+      const tokenIdBigInt = BigInt(tokenId);
       
       // 토큰 ID 0 필터링
-      if (tokenIdNum === 0) {
+      if (tokenIdBigInt === 0n) {
         return res.status(400).json({
           success: false,
           error: '유효하지 않은 토큰 ID입니다.'
         });
       }
 
-      // 블록체인에서 토큰 URI 조회
-      const tokenURI = await blockchain.getTokenURI(tokenIdNum);
+      // 블록체인에서 토큰 URI 조회 (Number로 변환하여 전달)
+      const tokenURI = await blockchain.getTokenURI(Number(tokenId));
       
       if (!tokenURI) {
         return res.status(404).json({

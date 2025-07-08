@@ -83,7 +83,7 @@ export interface SoulboundTicketInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "cancelTicket",
-    values: [BigNumberish]
+    values: [BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "getApproved",
@@ -299,11 +299,20 @@ export namespace OwnershipTransferredEvent {
 }
 
 export namespace TicketCancelledEvent {
-  export type InputTuple = [tokenId: BigNumberish, reopenTime: BigNumberish];
-  export type OutputTuple = [tokenId: bigint, reopenTime: bigint];
+  export type InputTuple = [
+    tokenId: BigNumberish,
+    reopenTime: BigNumberish,
+    refundAmount: BigNumberish
+  ];
+  export type OutputTuple = [
+    tokenId: bigint,
+    reopenTime: bigint,
+    refundAmount: bigint
+  ];
   export interface OutputObject {
     tokenId: bigint;
     reopenTime: bigint;
+    refundAmount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -403,7 +412,7 @@ export interface SoulboundTicket extends BaseContract {
   balanceOf: TypedContractMethod<[owner: AddressLike], [bigint], "view">;
 
   cancelTicket: TypedContractMethod<
-    [tokenId: BigNumberish],
+    [tokenId: BigNumberish, refundAmount: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -546,7 +555,11 @@ export interface SoulboundTicket extends BaseContract {
   ): TypedContractMethod<[owner: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "cancelTicket"
-  ): TypedContractMethod<[tokenId: BigNumberish], [void], "nonpayable">;
+  ): TypedContractMethod<
+    [tokenId: BigNumberish, refundAmount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "getApproved"
   ): TypedContractMethod<[tokenId: BigNumberish], [string], "view">;
@@ -739,7 +752,7 @@ export interface SoulboundTicket extends BaseContract {
       OwnershipTransferredEvent.OutputObject
     >;
 
-    "TicketCancelled(uint256,uint256)": TypedContractEvent<
+    "TicketCancelled(uint256,uint256,uint256)": TypedContractEvent<
       TicketCancelledEvent.InputTuple,
       TicketCancelledEvent.OutputTuple,
       TicketCancelledEvent.OutputObject
