@@ -34,7 +34,7 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const modalRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const buttonRef = useRef<HTMLDivElement>(null); 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const ticketDropdownRef = useRef<HTMLDivElement>(null);
   const ticketButtonRef = useRef<HTMLButtonElement>(null);
@@ -133,12 +133,13 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
     setShowTicketDropdown(false);
   }, [pathname]);
 
-  const getPopupPosition = () => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      return { top: rect.bottom + window.scrollY + 8, left: rect.right - 240 };
-    }
-    return { top: 0, left: 0 };
+  const getPopupPosition = (): React.CSSProperties => {
+    if (!buttonRef.current) return {};
+    const rect = buttonRef.current.getBoundingClientRect();
+    return {
+      top: rect.top + rect.height + 8,
+      left: rect.right - 256,
+    };
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -209,9 +210,13 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
           </div>
 
           {!loading && user ? (
-            <div className="relative flex items-center gap-2">
+            <div className="relative flex items-center gap-2 pl-3">
               {gender && (
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden">
+                <div
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden cursor-pointer"
+                  ref={buttonRef}
+                  onClick={() => setModalOpen(prev => !prev)}
+                >
                   <img
                     src={gender === 'male' ? '/images/boy_profile.png' : '/images/girl_profile.png'}
                     alt="프로필 이미지"
@@ -219,13 +224,6 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
                   />
                 </div>
               )}
-              <button
-                ref={buttonRef}
-                onClick={() => setModalOpen(prev => !prev)}
-                className="flex items-center gap-1 text-sm md:text-base font-semibold text-gray-800 underline underline-offset-2 cursor-pointer"
-              >
-                {getUserDisplayName(user)}님
-              </button>
               {modalOpen && typeof window !== 'undefined' && createPortal(
                 <div
                   ref={modalRef}
