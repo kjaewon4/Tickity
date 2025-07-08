@@ -41,34 +41,64 @@ export default function QRScannerPage() {
     setShowScanner(false);
     setError(null);
 
-    // QR 데이터에서 사용자 ID 추출
-    if (result.ticketInfo?.ticketId) {
-      try {
-        // 티켓 ID로 사용자 ID 조회
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tickets/user-by-ticket`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ticketId: result.ticketInfo.ticketId
-          }),
-        });
+    // 먼저 QR 검증을 수행해서 티켓 상태 확인
+    try {
+      const verifyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tickets/verify-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          qrData: JSON.stringify(result.ticketInfo || result)
+        }),
+      });
 
-        const userData = await response.json();
-        if (userData.success && userData.data.userId) {
-          console.log('🔍 조회된 사용자 ID:', userData.data.userId);
-          setTargetUserId(userData.data.userId);
-          setShowFaceVerification(true);
-        } else {
-          setError(`사용자 조회 실패: ${userData.error || '알 수 없는 오류'}`);
+      const verifyResult = await verifyResponse.json();
+      console.log('🔍 QR 검증 결과:', verifyResult);
+
+      if (verifyResult.success) {
+        // 이미 사용된 티켓인지 확인
+        if (!verifyResult.data.isValid) {
+          // 사용 불가능한 티켓인 경우 바로 결과 표시
+          setVerificationResult(verifyResult.data);
+          return;
         }
-      } catch (error: any) {
-        console.error('사용자 정보 조회 오류:', error);
-        setError('사용자 정보 조회중 오류가 발생했습니다.');
+
+        // 사용 가능한 티켓인 경우에만 얼굴 인증 진행
+        if (result.ticketInfo?.ticketId) {
+          try {
+            // 티켓 ID로 사용자 ID 조회
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tickets/user-by-ticket`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                ticketId: result.ticketInfo.ticketId
+              }),
+            });
+
+            const userData = await response.json();
+            if (userData.success && userData.data.userId) {
+              console.log('🔍 조회된 사용자 ID:', userData.data.userId);
+              setTargetUserId(userData.data.userId);
+              setShowFaceVerification(true);
+            } else {
+              setError(`사용자 조회 실패: ${userData.error || '알 수 없는 오류'}`);
+            }
+          } catch (error: any) {
+            console.error('사용자 정보 조회 오류:', error);
+            setError('사용자 정보 조회중 오류가 발생했습니다.');
+          }
+        } else {
+          setError('QR 코드에서 티켓 정보를 찾을 수 없습니다.');
+        }
+      } else {
+        setError(verifyResult.error || 'QR 검증에 실패했습니다.');
       }
-    } else {
-      setError('QR 코드에서 티켓 정보를 찾을 수 없습니다.');
+    } catch (error: any) {
+      console.error('QR 검증 오류:', error);
+      setError('QR 검증 중 오류가 발생했습니다.');
     }
   };
 
@@ -124,13 +154,36 @@ export default function QRScannerPage() {
         }),
       });
 
-      const finalResult = await verifyResponse.json();
-      console.log('🔍 최종 검증 결과:', finalResult);
+      const verifyResult = await verifyResponse.json();
+      console.log('🔍 최종 검증 결과:', verifyResult);
 
-      if (finalResult.success) {
-        setVerificationResult(finalResult.data);
+      if (verifyResult.success && verifyResult.data.isValid) {
+        // 검증 성공 시 입장 처리 수행
+        const entryResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tickets/process-entry`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            tokenId: qrScanResult.ticketInfo.tokenId,
+            ticketId: qrScanResult.ticketInfo.ticketId,
+            userId: targetUserId
+          }),
+        });
+
+        const entryResult = await entryResponse.json();
+        console.log('🎫 입장 처리 결과:', entryResult);
+
+        if (entryResult.success) {
+          setVerificationResult(verifyResult.data);
+        } else {
+          setError(entryResult.error || '입장 처리 중 오류가 발생했습니다.');
+        }
+      } else if (verifyResult.success) {
+        // 검증은 성공했지만 입장 불가능한 경우 (이미 사용된 티켓 등)
+        setVerificationResult(verifyResult.data);
       } else {
-        setError(finalResult.error || '검증 처리 중 오류가 발생했습니다.');
+        setError(verifyResult.error || '검증 처리 중 오류가 발생했습니다.');
       }
     } catch (err) {
       console.error('입장 처리 오류:', err);

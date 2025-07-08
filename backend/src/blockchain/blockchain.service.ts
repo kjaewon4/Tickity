@@ -122,9 +122,12 @@ export class BlockchainService {
     const tokenId = await generateUniqueTokenId(5);
 
     try {
+      // concertId를 bytes32로 변환
+      const concertIdBytes32 = ethers.keccak256(ethers.toUtf8Bytes(concertId));
+      
       const tx = await contractWithSigner.mintTicket(
         tokenId,
-        concertId,
+        concertIdBytes32,
         seat,
         uri,
         price,

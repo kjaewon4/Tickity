@@ -24,7 +24,7 @@ def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
     lab = cv2.merge([l, a, b])
     return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
-def extract_embedding_from_video_optimized(video_bytes, frame_skip=3, det_score_threshold=0.6, yaw_threshold=30, num_clusters=5):
+def extract_embedding_from_video_optimized(video_bytes, frame_skip=3, det_score_threshold=0.3, yaw_threshold=45, num_clusters=5):
     """
     비디오에서 얼굴 임베딩을 추출하는 개선된 함수
     - KMeans 클러스터링으로 다양한 각도의 얼굴 선별
@@ -38,14 +38,20 @@ def extract_embedding_from_video_optimized(video_bytes, frame_skip=3, det_score_
     # 비디오 바이트를 메모리 버퍼로 변환
     video_buffer = io.BytesIO(video_bytes)
     
-    # OpenCV로 비디오 읽기
-    temp_path = '/tmp/temp_video.webm'
-    with open(temp_path, 'wb') as f:
-        f.write(video_bytes)
+    # OpenCV로 비디오 읽기 (임시 파일 사용)
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_file:
+        temp_path = temp_file.name
+        temp_file.write(video_bytes)
     
     cap = cv2.VideoCapture(temp_path)
     if not cap.isOpened():
         print("❌ 비디오를 열 수 없습니다.")
+        # 임시 파일 정리
+        try:
+            os.unlink(temp_path)
+        except:
+            pass
         return None
 
     embeddings = []
@@ -86,6 +92,12 @@ def extract_embedding_from_video_optimized(video_bytes, frame_skip=3, det_score_
         frame_count += 1
 
     cap.release()
+    
+    # 임시 파일 정리
+    try:
+        os.unlink(temp_path)
+    except:
+        pass
     
     if not embeddings:
         print("❌ 유효한 얼굴을 찾을 수 없습니다.")
