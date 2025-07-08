@@ -12,6 +12,7 @@ import { BlockchainService } from '../blockchain/blockchain.service';
 import { blockchainVerification } from '../blockchain/verification.service';
 import { generateMetadataForTicket } from './metadata.service';
 import { updateConcertSeatStatus } from '../seats/concertSeats.service';
+import { SoulboundTicket__factory } from '../../../blockchain/typechain';
 
 // 로컬 체인 배포 주소 등 불러올 .deployed
 dotenv.config({ path: path.resolve(__dirname, '../../../blockchain/.deployed') });
@@ -24,7 +25,8 @@ const CONTRACT   = process.env.TICKET_MANAGER_ADDRESS!;
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const admin    = new ethers.Wallet(ADMIN_KEY, provider);
-const contract = new ethers.Contract(CONTRACT, TicketJSON.abi, admin);
+// TypeChain 팩토리를 사용하여 컨트랙트 인스턴스 생성
+const contract = SoulboundTicket__factory.connect(CONTRACT, admin);
 const blockchain = new BlockchainService();
 
 // ───────────────────────────────────────────────────────────
@@ -175,7 +177,7 @@ export const getUserTickets = async (
         poster_url,
         venues ( name )
       ),
-      seats ( id, label, row_idx, col_idx, seat_grades ( grade_name ) )
+      seats ( id, row_idx, col_idx, seat_grades ( grade_name ) )
     `)
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
@@ -197,7 +199,6 @@ export const getUserTickets = async (
     },
     seat: t.seats && {
       id:        t.seats.id,
-      label:     t.seats.label,
       row_idx:   t.seats.row_idx,
       col_idx:   t.seats.col_idx,
       grade_name: t.seats.seat_grades?.grade_name || ''
@@ -230,7 +231,7 @@ export const getUserTicketsWithVerification = async (
         };
       }
 
-      const tokenId = parseInt(ticket.nft_token_id);
+      const tokenId = Number(ticket.nft_token_id);
 
       try {
         // 병렬로 모든 검증 수행
@@ -409,7 +410,7 @@ export const getTicketById = async (
         poster_url,
         venues ( name )
       ),
-      seats ( id, label, row_idx, col_idx, seat_grades ( grade_name ) )
+      seats ( id, row_idx, col_idx, seat_grades ( grade_name ) )
     `)
     .eq('id', ticketId)
     .eq('user_id', userId)
@@ -433,7 +434,6 @@ export const getTicketById = async (
     },
     seat: data.seats && {
       id:        data.seats.id,
-      label:     data.seats.label,
       row_idx:   data.seats.row_idx,
       col_idx:   data.seats.col_idx,
       grade_name: data.seats.seat_grades?.grade_name || ''
@@ -472,7 +472,9 @@ export const cancelOnChain = async (tokenId: number,   refundedAmountWon: number
   const refundedEthWei = ethers.parseEther(refundedEthString); // <--- Wei로 변환
 
   try {
-    const tx = await contract.cancelTicket(tokenId, refundedEthWei);
+    // tokenId를 BigInt로 변환하여 전달
+    const tokenIdBigInt = BigInt(tokenId);
+    const tx = await contract.cancelTicket(tokenIdBigInt, refundedEthWei);
     console.log(`[cancelOnChain] Transaction sent, hash: ${tx.hash}`);
 
     const receipt = await tx.wait();

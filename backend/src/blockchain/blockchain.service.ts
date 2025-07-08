@@ -179,7 +179,9 @@ export class BlockchainService {
 
   async getTokenURI(tokenId: number): Promise<string> {
     try {
-      return await this.contract.tokenURI(tokenId);
+      // BigInt로 변환하여 컨트랙트에 전달
+      const tokenIdBigInt = BigInt(tokenId);
+      return await this.contract.tokenURI(tokenIdBigInt);
     } catch (error: any) {
       throw new Error(error.error?.message || error.reason || error.message);
     }
@@ -187,7 +189,9 @@ export class BlockchainService {
 
   async getTokenOwner(tokenId: number): Promise<string> {
     try {
-      return await this.contract.ownerOf(tokenId);
+      // BigInt로 변환하여 컨트랙트에 전달
+      const tokenIdBigInt = BigInt(tokenId);
+      return await this.contract.ownerOf(tokenIdBigInt);
     } catch (error: any) {
       throw new Error(error.error?.message || error.reason || error.message);
     }
