@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>실시간 얼굴 인증 테스트</title>
+</head>
+
+<body>
+  <h1>실시간 얼굴 인증 테스트 (/verify-frame)</h1>
+
+  <video id="video" width="320" height="240" autoplay></video>
+  <p id="status"></p>
+
+  <script>
+    const video = document.getElementById("video");
+    const status = document.getElementById("status");
+    const targetUserId = "c2440e95-0434-413a-8577-ed3b81b1b7d4"; // ✅ 실제 user_id
+
+    // ✅ load-user-embedding 호출
+    async function loadUserEmbedding() {
+      const formData = new FormData();
+      formData.append("target_user_id", targetUserId);
+
+      const res = await fetch("http://localhost:8000/face/load-user-embedding", {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      console.log("🔄 load-user-embedding 결과:", data);
+    }
+
+    // ✅ 카메라 스트림 시작
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        console.error("카메라 오류:", err);
+        alert("카메라 접근 불가");
+      });
+
+    // ✅ 1초마다 캡처 후 POST 요청
+    async function verifyLoop() {
+      while (true) {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 320;
+        canvas.height = video.videoHeight || 240;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg"));
+
+        const formData = new FormData();
+        formData.append("frame", blob, "frame.jpg");
+        formData.append("target_user_id", targetUserId);
+
+        try {
+          status.innerText = "🔄 인증 요청 중...";
+          const res = await fetch("http://localhost:8000/face/verify-frame", {
+            method: "POST",
+            body: formData
+          });
+          const data = await res.json();
+          console.log(data);
+
+          if (data.success) {
+            status.innerText = data.verified
+              ? `✅ 인증 성공\n유사도: ${data.score.toFixed(4)}`
+              : `❌ 인증 실패\n유사도: ${data.score.toFixed(4)}`;
+          } else {
+            status.innerText = `⚠️ 오류: ${data.error || '알 수 없는 오류'}`;
+          }
+
+        } catch (err) {
+          console.error("요청 오류:", err);
+          status.innerText = "❌ 인증 요청 실패";
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    // ✅ embedding load 후 루프 시작
+    video.addEventListener("loadedmetadata", async () => {
+      await loadUserEmbedding();
+      verifyLoop();
+    });
+  </script>
+
+</body>
+</html>

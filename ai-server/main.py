@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from config import FRONTEND_URL
 from routers import face
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
@@ -26,3 +27,4 @@ app.add_middleware(
 
 # Face API 라우터 등록
 app.include_router(face.router, prefix="/face", tags=["Face API"])
+app.mount("/static", StaticFiles(directory="static"), name="static")
