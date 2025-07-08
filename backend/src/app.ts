@@ -17,6 +17,8 @@ import ticketsRouter from './tickets/tickets.controller';
 import authRouter from './auth/auth.controller';
 import chatbotRouter from './chatbot/chatbot.controller';
 import uploadsRouter from './uploads/uploads.controller';
+import cancellationPoliciesRouter from './cancellation_policies/cancellation_policies.controller';
+import morgan from 'morgan';
 
 scheduleReleaseExpiredSeats(); // 1분마다 자동으로 만료된 좌석을 AVAILABLE로 복구
 startReopenScheduler()
@@ -46,6 +48,7 @@ app.use(cors({
 
 app.use(bodyParser.json());
 app.use(express.json());
+app.use(morgan('dev'));
 
 // Auth (로그인/회원가입 등)
 app.use('/auth', authRouter);
@@ -64,5 +67,6 @@ app.use('/tickets', ticketsRouter);
 
 app.use('/chatbot', chatbotRouter);
 app.use('/uploads', uploadsRouter);
+app.use('/cancellation-policies', cancellationPoliciesRouter);
 
 export default app; 
