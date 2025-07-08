@@ -657,22 +657,38 @@ router.post('/:concertId/seats/available', async (req, res) => {
   // 1. 좌표 → seat_id 조회
   const seatId = await ticketsService.findSeatIdByPosition(sectionId, row, col);
   
-  const { data: existingStatus } = await supabase
+  const { data: existingSeat, error: fetchError } = await supabase
     .from('concert_seats')
     .select('current_status')
     .eq('concert_id', concertId)
     .eq('seat_id', seatId)
     .single();
 
-  if (existingStatus?.current_status == 'AVAILABLE') {
-    return res.status(409).json({
+    if (fetchError) {
+    console.error('좌석 상태 조회 실패:', fetchError.message);
+    return res.status(500).json({
       success: false,
-      error: '이미 AVAILABLE 좌석입니다.'
+      error: '좌석 정보를 조회하는 데 실패했습니다.'
     });
   }
 
+  // 좌석이 존재하지 않는 경우 처리
+  if (!existingSeat) {
+    return res.status(404).json({
+      success: false,
+      error: '해당 좌석을 찾을 수 없습니다.'
+    });
+  }
 
-  const { error: updateError } = await supabase
+  // SOLD 상태일 때만 명시적인 오류 메시지를 반환
+  if (existingSeat.current_status === 'SOLD') {
+    return res.status(409).json({ // 409 Conflict는 여전히 적절합니다.
+      success: false,
+      error: '이미 판매 완료된 좌석입니다.'
+    });
+  }
+
+  const { error: updateError, count } = await supabase
     .from('concert_seats')
     .update({
       current_status: 'AVAILABLE',
@@ -682,7 +698,7 @@ router.post('/:concertId/seats/available', async (req, res) => {
     .match({
       concert_id: concertId,
       seat_id: seatId,
-      current_status: 'HOLD'
+      current_status: existingSeat.current_status // 현재 조회된 상태 그대로 매치 (HOLD or AVAILABLE)
     });
 
   if (updateError) {
@@ -690,6 +706,16 @@ router.post('/:concertId/seats/available', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: '좌석을 AVAILABLE 상태로 변경하는 데 실패했습니다.'
+    });
+  }
+
+  // 업데이트가 실제로 발생하지 않았을 경우 (예: 이미 AVAILABLE이었음)
+  if (!count || count === 0) {
+    console.log(`[${new Date().toISOString()}] 콘서트 ID: ${concertId}, 좌석 ID: ${seatId}는 이미 AVAILABLE 상태였습니다.`);
+    return res.json({
+      success: true,
+      message: '좌석은 이미 AVAILABLE 상태였거나 성공적으로 설정되었습니다.',
+      seatId,
     });
   }
 
