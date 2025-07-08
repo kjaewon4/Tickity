@@ -71,8 +71,15 @@ export const useConcertData = (): UseConcertDataReturn => {
           return;
         }
 
-        // 짧은 ID로 공연 조회
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/${shortId}`);
+        // 짧은 ID로 공연 조회 (타임아웃 설정)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5초 타임아웃
+        
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/concerts/${shortId}`, {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
         const json = await res.json();
 
         if (json.success && json.data) {
@@ -84,7 +91,11 @@ export const useConcertData = (): UseConcertDataReturn => {
           setError('공연 정보를 찾을 수 없습니다.');
         }
       } catch (err) {
-        setError('공연 정보를 불러오는 중 오류가 발생했습니다.');
+        if (err.name === 'AbortError') {
+          setError('요청 시간이 초과되었습니다. 다시 시도해주세요.');
+        } else {
+          setError('공연 정보를 불러오는 중 오류가 발생했습니다.');
+        }
       } finally {
         setLoading(false);
       }
