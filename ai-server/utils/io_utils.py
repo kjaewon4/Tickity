@@ -15,6 +15,12 @@ except Exception as e:
     print(f"❌ InsightFace 모델 로드 실패: {e}")
     app = None
 
+def apply_gamma(image, gamma=1.2):
+    invGamma = 1.0 / gamma
+    table = np.array([(i / 255.0) ** invGamma * 255
+                      for i in np.arange(256)]).astype("uint8")
+    return cv2.LUT(image, table)
+
 def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
     """
     CLAHE를 적용하여 조명을 보정합니다.
@@ -38,205 +44,102 @@ def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
     
     return enhanced_image
 
-def extract_embedding_from_video_optimized(video_bytes, frame_skip=1, det_score_threshold=0.15, yaw_threshold=70, num_clusters=5):
+
+def extract_embedding_from_image(image_bytes):
     """
-    비디오에서 얼굴 임베딩을 추출하는 개선된 함수
-    - KMeans 클러스터링으로 다양한 각도의 얼굴 선별
-    - CLAHE 전처리로 조명 보정
-    - 이상치 제거로 품질 향상
-    - 여성 얼굴 인식률 개선: 더 낮은 임계값 (0.15) 및 더 관대한 각도 (70도)
-    - 프레임 처리 일관성: 모든 프레임 분석 (frame_skip=1)
+    단일 이미지에서 얼굴 임베딩을 추출 (det_score 필터링, gamma correction 추가)
     """
     if app is None:
         print("❌ InsightFace 모델이 로드되지 않았습니다.")
         return None
 
-    # 비디오 바이트를 메모리 버퍼로 변환
-    video_buffer = io.BytesIO(video_bytes)
-    
-    # OpenCV로 비디오 읽기 (임시 파일 사용)
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_file:
-        temp_path = temp_file.name
-        temp_file.write(video_bytes)
-    
-    cap = cv2.VideoCapture(temp_path)
-    if not cap.isOpened():
-        print("❌ 비디오를 열 수 없습니다.")
-        # 임시 파일 정리
-        try:
-            os.unlink(temp_path)
-        except:
-            pass
+    arr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        print("❌ 이미지를 디코딩하지 못했습니다.")
         return None
 
-    embeddings = []
-    poses = []  # 얼굴 포즈 정보 저장
-    frame_count = 0
+    # CLAHE 전처리 적용
+    img = apply_clahe(img)
 
-    print(f"🎬 비디오 분석 시작 (frame_skip={frame_skip}, threshold={det_score_threshold}, yaw_threshold={yaw_threshold})")
+    # 추가: gamma correction 적용
+    img = apply_gamma(img, gamma=1.2)
+
+    faces = app.get(img)
+
+    if not faces:
+        print("❌ 얼굴을 감지하지 못했습니다.")
+        return None
+
+    if len(faces) > 1:
+        print(f"⚠️ 여러 얼굴 감지됨: {len(faces)}개. 가장 큰 얼굴만 사용.")
+
+    # 가장 큰 얼굴 선택
+    main_face = max(faces, key=lambda x: (x.bbox[2] - x.bbox[0]) * (x.bbox[3] - x.bbox[1]))
+
+    # det_score 필터링
+    if main_face.det_score < 0.3:
+        print(f"❌ 얼굴 det_score 낮음: {main_face.det_score:.3f}")
+        return None
+
+    return main_face.embedding
+
+def extract_embedding_from_video_kmeans(video_bytes, frame_skip=3, det_score_threshold=0.6, num_clusters=5):
+    tmp_path = "./temp_video.mp4"
+    with open(tmp_path, 'wb') as f:
+        f.write(video_bytes)
+
+    cap = cv2.VideoCapture(tmp_path)
+    embeddings = []
+    frame_idx = 0
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-
-        # 프레임 스킵
-        if frame_count % frame_skip != 0:
-            frame_count += 1
+        frame_idx += 1
+        if frame_idx % frame_skip != 0:
             continue
 
-        # CLAHE 전처리 적용 (여성 얼굴을 위해 더 강한 조명 보정)
-        frame = apply_clahe(frame, clip_limit=2.5, tile_grid_size=(6, 6))
-        
-        # 얼굴 감지
-        faces = app.get(frame)
-        
-        if faces:
-            # 가장 큰 얼굴 선택
-            main_face = max(faces, key=lambda x: x.bbox[2] * x.bbox[3])
-            
-            # 얼굴 각도 계산 (yaw, pitch, roll)
-            yaw = np.degrees(main_face.pose[1]) if hasattr(main_face, 'pose') else 0
-            
-            # 디버깅: 모든 얼굴 감지 결과 로그
-            print(f"🔍 프레임 {frame_count}: 얼굴 감지됨 - det_score={main_face.det_score:.3f}, yaw={yaw:.1f}°")
-            
-            # 품질 기준 확인 (더 관대한 기준)
-            if main_face.det_score >= det_score_threshold and abs(yaw) <= yaw_threshold:
-                embeddings.append(main_face.embedding)
-                poses.append(abs(yaw))  # 절댓값으로 저장
-                print(f"✅ 프레임 {frame_count}: 기준 통과!")
-            else:
-                print(f"❌ 프레임 {frame_count}: 기준 미달 (det_threshold={det_score_threshold}, yaw_threshold={yaw_threshold})")
-        else:
-            print(f"👻 프레임 {frame_count}: 얼굴 감지 안됨")
+        resized = cv2.resize(frame, (640, 480))
+        enhanced = apply_clahe(resized)
+        rgb = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
+        faces = app.get(rgb)
 
-        frame_count += 1
+        if faces:
+            main_face = max(faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]))
+            if main_face.det_score >= det_score_threshold:
+                embeddings.append(main_face.embedding)
 
     cap.release()
-    
-    # 임시 파일 정리
-    try:
-        os.unlink(temp_path)
-    except:
-        pass
-    
+    os.remove(tmp_path)
+
     if not embeddings:
-        print("❌ 첫 번째 시도 실패. 더 관대한 설정으로 재시도...")
-        
-        # 두 번째 시도: 더 관대한 설정 (여성 얼굴을 위해 더욱 관대하게)
-        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_file2:
-            temp_path2 = temp_file2.name
-            temp_file2.write(video_bytes)
-        
-        cap = cv2.VideoCapture(temp_path2)
-        frame_count = 0
-        fallback_embeddings = []
-        
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            # 모든 프레임 분석 (프레임 스킵 없음)
-            frame = apply_clahe(frame, clip_limit=4.0, tile_grid_size=(4, 4))  # 더 강한 CLAHE
-            faces = app.get(frame)
-            
-            if faces:
-                main_face = max(faces, key=lambda x: x.bbox[2] * x.bbox[3])
-                # 매우 관대한 기준 (임계값 0.05, 각도 제한 없음)
-                if main_face.det_score >= 0.05:
-                    fallback_embeddings.append(main_face.embedding)
-                    print(f"🔄 Fallback 프레임 {frame_count}: det_score={main_face.det_score:.3f}")
-
-            frame_count += 1
-
-        cap.release()
-        
-        # 두 번째 임시 파일 정리
-        try:
-            os.unlink(temp_path2)
-        except:
-            pass
-        
-        if fallback_embeddings:
-            embeddings = np.array(fallback_embeddings)
-            print(f"✅ Fallback으로 {len(embeddings)}개 임베딩 수집")
-        else:
-            print("❌ Fallback에서도 얼굴을 찾을 수 없습니다.")
-            return None
+        print("❌ 유효한 embedding 없음")
+        return None
 
     embeddings = np.array(embeddings)
-    print(f"📊 총 {len(embeddings)}개의 임베딩 수집됨")
+    print(f"✅ 총 {len(embeddings)}개 embedding 추출 완료")
 
-    # KMeans 클러스터링으로 다양한 각도 대표 선별
-    if len(embeddings) > num_clusters:
-        try:
-            kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=10)
-            cluster_labels = kmeans.fit_predict(embeddings)
-            
-            # 각 클러스터에서 중심에 가장 가까운 임베딩 선택
-            selected_embeddings = []
-            for i in range(num_clusters):
-                cluster_embeddings = embeddings[cluster_labels == i]
-                if len(cluster_embeddings) > 0:
-                    # 클러스터 중심에 가장 가까운 임베딩 선택
-                    center = kmeans.cluster_centers_[i]
-                    distances = np.linalg.norm(cluster_embeddings - center, axis=1)
-                    best_idx = np.argmin(distances)
-                    selected_embeddings.append(cluster_embeddings[best_idx])
-            
-            embeddings = np.array(selected_embeddings)
-            print(f"🎯 KMeans로 {len(embeddings)}개 대표 임베딩 선별")
-            
-        except Exception as e:
-            print(f"⚠️ KMeans 실패, 원본 사용: {e}")
+    # ✅ KMeans 클러스터링으로 대표 embedding 5개 선택
+    try:
+        kmeans = KMeans(n_clusters=min(num_clusters, len(embeddings)), random_state=42)
+        labels = kmeans.fit_predict(embeddings)
 
-    # 이상치 제거 (IQR 방식)
-    if len(embeddings) > 3:
-        # 각 임베딩의 품질을 다른 임베딩들과의 유사도로 측정
-        similarities = []
-        for i, emb in enumerate(embeddings):
-            other_embs = np.delete(embeddings, i, axis=0)
-            sim_scores = np.dot(emb, other_embs.T)  # 코사인 유사도
-            similarities.append(np.mean(sim_scores))
-        
-        similarities = np.array(similarities)
-        q1, q3 = np.percentile(similarities, [25, 75])
-        iqr = q3 - q1
-        lower_bound = q1 - 1.5 * iqr
-        upper_bound = q3 + 1.5 * iqr
-        
-        # 이상치가 아닌 임베딩만 선택
-        valid_indices = np.where((similarities >= lower_bound) & (similarities <= upper_bound))[0]
-        if len(valid_indices) > 0:
-            embeddings = embeddings[valid_indices]
-            print(f"🔍 이상치 제거 후 {len(embeddings)}개 임베딩 유지")
+        cluster_embeddings = []
+        for i in range(kmeans.n_clusters):
+            cluster_indices = np.where(labels == i)[0]
+            cluster_embs = embeddings[cluster_indices]
+            center = kmeans.cluster_centers_[i]
+            distances = np.linalg.norm(cluster_embs - center, axis=1)
+            best_idx = np.argmin(distances)
+            cluster_embeddings.append(cluster_embs[best_idx])
 
-    # 최종 임베딩 계산 (가중 평균)
-    if len(embeddings) > 1:
-        # 품질 가중치 계산 (다른 임베딩들과의 유사도 기반)
-        weights = []
-        for emb in embeddings:
-            others = embeddings[embeddings != emb].reshape(-1, embeddings.shape[1])
-            if len(others) > 0:
-                similarities = np.dot(emb, others.T)
-                weight = np.mean(similarities)
-            else:
-                weight = 1.0
-            weights.append(weight)
-        
-        weights = np.array(weights)
-        weights = weights / np.sum(weights)  # 정규화
-        
-        # 가중 평균으로 최종 임베딩 계산
-        final_embedding = np.average(embeddings, axis=0, weights=weights)
-        print(f"🎯 가중 평균으로 최종 임베딩 생성 (품질 점수: {np.mean(weights):.3f})")
-    else:
-        final_embedding = embeddings[0]
-        print("📍 단일 임베딩 사용")
+        final_embeddings = np.array(cluster_embeddings)
+        print(f"🎯 KMeans로 {len(final_embeddings)}개 대표 embedding 선별")
+        return final_embeddings
 
-    return final_embedding
-
-
+    except Exception as e:
+        print(f"⚠️ KMeans 실패, 전체 평균 embedding 사용: {e}")
+        mean_emb = np.mean(embeddings, axis=0).reshape(1, -1)
+        return mean_emb

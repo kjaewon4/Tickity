@@ -77,14 +77,21 @@ def main():
 
             # ✅ DB embedding과 유사도 비교 (복호화된 임베딩 사용)
             for user_id, reg_emb in db_embeddings.items():
-                score = cosine_similarity(live_emb, reg_emb)
+                if reg_emb.ndim == 2:
+                    # 다중 embedding (5,512)
+                    scores = [cosine_similarity(live_emb, emb) for emb in reg_emb]
+                    score = max(scores)
+                else:
+                    score = cosine_similarity(live_emb, reg_emb)
+
+                # ✅ threshold 비교
                 if score > best_score:
                     best_score = score
                     best_match = user_id if score > THRESHOLD else "Unknown"
 
             # ✅ 결과 화면에 표시
-            cv2.rectangle(display_frame, tuple(bbox[:2]), tuple(bbox[2:]), (0, 255, 0), 2)
             label = f"{best_match} ({best_score:.2f})"
+            cv2.rectangle(display_frame, tuple(bbox[:2]), tuple(bbox[2:]), (0, 255, 0), 2)
             cv2.putText(display_frame, label, (bbox[0], bbox[1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
