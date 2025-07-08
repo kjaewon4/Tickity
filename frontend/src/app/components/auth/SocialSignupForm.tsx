@@ -21,7 +21,7 @@ const SocialSignupForm = ({
   onSignup,
 }: SocialSignupFormProps) => {
   return (
-    <div className="bg-white rounded-xl shadow-md p-6 w-full">
+    <div className="bg-white p-6 w-full">
       <p className="text-lg text-gray-600 mb-4 text-center">
         이름과 주민번호 7자리를 입력해 주세요
       </p>
@@ -59,7 +59,7 @@ const SocialSignupForm = ({
       <button
         onClick={onSignup}
         disabled={isSigningUp}
-        className={`w-full py-3 rounded-md font-semibold text-white text-lg transition cursor-pointer ${
+        className={`w-full py-3 rounded-xl font-semibold text-white text-lg transition cursor-pointer ${
           isSigningUp
             ? 'bg-gray-400 cursor-not-allowed'
             : 'bg-blue-600 hover:bg-blue-700'
