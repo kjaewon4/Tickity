@@ -11,7 +11,7 @@ interface ConfirmModalProps {
 const ConfirmModal: React.FC<ConfirmModalProps> = ({ message, onConfirm, onCancel }) => {
   return (
     <div className="fixed inset-0 bg-opacity-40 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full border border-gray-300">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full border border-gray-300 focus-within:text-blue-500">
         <p className="text-sm mb-4">{message}</p>
         <div className="flex justify-end gap-3">
           <button
