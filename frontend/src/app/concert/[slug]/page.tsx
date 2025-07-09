@@ -51,39 +51,43 @@ const ConcertDetail = () => {
   useEffect(() => {
     if (!concert || !userId) return;
 
-    const checkDuplicate = async () => {
-      try {
-        const res = await apiClient.getUserTickets(userId);
-        const tickets: UserTicket[] = res.data?.tickets ?? [];
+  const checkDuplicate = async () => {
+    try {
+      const res = await apiClient.getUserTickets(userId);
+      const tickets: UserTicket[] = res.data?.tickets ?? [];
 
-        const hasTicketForConcert = tickets.some(
-          (ticket) => ticket.concert?.id === concert.id
-        );
+      const hasTicketForConcert = tickets.some(
+        (ticket) => ticket.concert?.id === concert.id
+      );
 
-        if (hasTicketForConcert) {
-          setIsDuplicateBooking(true);
-          setModalMode('duplicate');
-          setShowLimitModal(true);
-        }
-      } catch (err) {
-        console.error('중복 티켓 확인 실패:', err);
-      } finally {
-        setCheckedDuplicate(true);
+      if (hasTicketForConcert) {
+        setIsDuplicateBooking(true);
+        setModalMode('duplicate');
+        setShowLimitModal(true);
       }
-    };
-
-    const timer = setTimeout(checkDuplicate, 1000); // 1초 지연 실행
-
-    return () => clearTimeout(timer); // cleanup
-  }, [concert?.id, userId]);
-
-  // 중복이 아닌 경우 1인 1매 모달 띄우기
-  useEffect(() => {
-    if (concert && checkedDuplicate && !isDuplicateBooking) {
-      setModalMode('limit');
-      setShowLimitModal(true);
+    } catch (err) {
+      console.error('중복 티켓 확인 실패:', err);
+    } finally {
+      setCheckedDuplicate(true);
     }
-  }, [concert, checkedDuplicate, isDuplicateBooking]);
+  };
+
+  // 즉시 한 번 실행
+  checkDuplicate();
+
+  // 1초 후에도 한 번 더 실행
+  const timer = setTimeout(checkDuplicate, 1000);
+
+  return () => clearTimeout(timer); // cleanup
+}, [concert?.id, userId]);
+
+// 중복 아닌 경우 모달 띄우기
+useEffect(() => {
+  if (concert && checkedDuplicate && !isDuplicateBooking) {
+    setModalMode('limit');
+    setShowLimitModal(true);
+  }
+}, [concert?.id, checkedDuplicate, isDuplicateBooking]);
 
   // 예매 버튼 클릭 시 실시간 중복 검사 또는 로그인 확인
   const handleReservation = async () => {
