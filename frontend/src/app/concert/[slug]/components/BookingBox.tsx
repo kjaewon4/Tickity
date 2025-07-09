@@ -130,8 +130,8 @@ const BookingBox: React.FC<BookingBoxProps> = ({
           {!selectedTime
             ? '시간을 선택하세요'
             : isDisabled
-            ? disabledReason || '예약 불가'
-            : '예약하기'}
+            ? disabledReason || '예매 불가'
+            : '예매하기'}
         </button>
       )}
     </div>

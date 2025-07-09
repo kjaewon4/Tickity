@@ -180,7 +180,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white px-4 mt-25 pt-16">
+    <div className="flex flex-col min-h-screen bg-white px-4 mt-16">
       {/* 고정된 로고 영역 */}
       <div className={`flex flex-col items-center justify-start mt-20 ${!showEmailForm ? 'mb-24' : 'mb-8'}`}>
         <Image
@@ -190,7 +190,7 @@ export default function LoginPage() {
           height={60}
           priority
         />
-        <div className="text-center mt-4">
+        <div className="text-center mt-4 mb-8">
           <p className="text-lg font-semibold text-gray-900 mb-1">Tickity 계정 하나로</p>
           <p className="text-sm text-gray-500">다른 서비스를 모두 이용할 수 있어요.</p>
         </div>
