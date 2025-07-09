@@ -917,6 +917,8 @@ export const verifyQRCode = async (qrDataString: string): Promise<{
     const { BlockchainVerificationService } = await import('../blockchain/verification.service');
     const blockchainVerification = new BlockchainVerificationService();
     
+    console.log('🔍 QR 검증 시작:', { tokenId, ticketId, walletAddress });
+    
     // 🎯 블록체인 중심 검증 (QR에서 추출한 지갑 주소 사용)
     const [ownershipResult, usageResult, faceResult, cancellationResult] = await Promise.all([
       // 소유권 검증: 블록체인 소유자 vs QR 지갑 주소
