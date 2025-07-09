@@ -214,12 +214,12 @@ export class BlockchainService {
       const currentNonce = await adminSigner.getNonce();
       console.log(`🔢 입장 처리용 현재 관리자 nonce: ${currentNonce}`);
       
-      // 입장 처리 - nonce 명시적 지정
+      // 입장 처리 - nonce 자동 관리 (명시적 지정 제거)
       const tx = await contractWithAdmin.markAsUsed(tokenIdBigInt, {
         gasLimit: 200_000n,
         maxFeePerGas,
         maxPriorityFeePerGas,
-        nonce: currentNonce, // 명시적으로 nonce 지정
+        // nonce: currentNonce, // 명시적 nonce 지정 제거
       });
       
       await tx.wait();
@@ -309,7 +309,7 @@ export class BlockchainService {
         gasLimit: 200_000n,
         maxFeePerGas,
         maxPriorityFeePerGas,
-        nonce: currentNonce, // 명시적으로 nonce 지정
+        // nonce: currentNonce, // 명시적 nonce 지정 제거
       });
       
       const receipt = await faceVerifyTx.wait();

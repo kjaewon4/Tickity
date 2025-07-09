@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function FaceRegistrationPage() {
+function FaceRegistrationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isRegistering, setIsRegistering] = useState(false);
@@ -309,5 +309,13 @@ export default function FaceRegistrationPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function FaceRegistrationPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <FaceRegistrationContent />
+    </Suspense>
   );
 } 
