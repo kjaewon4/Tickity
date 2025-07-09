@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/apiClient';
 import SocialSignupForm from '../../components/auth/SocialSignupForm';
@@ -10,7 +10,7 @@ interface UserInfo {
   email: string;
 }
 
-export default function CompleteSignupPage() {
+function CompleteSignupPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [name, setName] = useState<string>('');
@@ -202,5 +202,13 @@ export default function CompleteSignupPage() {
         />
       </div>
     </div>
+  );
+}
+
+export default function CompleteSignupPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CompleteSignupPageContent />
+    </Suspense>
   );
 }
