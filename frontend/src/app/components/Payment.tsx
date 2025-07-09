@@ -15,6 +15,17 @@ interface PaymentProps {
   onPaymentComplete: (result: TicketMintResult) => void
 }
 
+interface CancelPolicy {
+  id: string;
+  period_desc: string;
+  fee_desc: string;
+}
+
+interface CancelPolicyResponse {
+  success: boolean;
+  message: string;
+  data: CancelPolicy[];
+}
 export default function Payment({
   seatInfo,
   concertId,
@@ -24,12 +35,16 @@ export default function Payment({
 }: PaymentProps) {
   const [ticketPrice, setTicketPrice] = useState<number>(0);
   const [bookingFee, setBookingFee] = useState<number>(0);
+  const [concertTitle, setConcertTitle] = useState('');
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const total = ticketPrice + bookingFee;
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [policies, setPolicies] = useState<CancelPolicy[]>([]);
+  const [isAgreed, setIsAgreed] = useState(false);    
+  const [showError, setShowError] = useState(false);   
 
   useEffect(() => {
     const storedPrice = localStorage.getItem('concertPrice');
@@ -43,6 +58,9 @@ export default function Payment({
       const expires = new Date(expiresAtString).getTime();
       setExpiresAt(expires);
     }
+
+    const title = localStorage.getItem('concertTitle');
+    if (title) setConcertTitle(title);
 
     const fetchUser = async () => {
       const token = localStorage.getItem('accessToken');
@@ -104,6 +122,28 @@ export default function Payment({
     window.location.href = '/seat';
   };
 
+useEffect(() => {
+  const fetchCancellationPolicies = async () => {
+    const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/cancellation-policies`;
+
+    try {
+      const res = await fetch(endpoint);
+
+      const result = await res.json() as CancelPolicyResponse;
+
+      if (result && Array.isArray(result.data)) {
+        setPolicies(result.data); 
+      } else {
+        console.warn('[취소정책] result.data가 배열이 아님:', result);
+      }
+    } catch (err) {
+      console.error('[취소정책] fetch 중 에러 발생:', err);
+    }
+  };
+
+  fetchCancellationPolicies();
+}, []);
+
   const handlePayment = async () => {
     const row = Number(localStorage.getItem('selectedRow'));
     const col = Number(localStorage.getItem('selectedCol'));
@@ -112,7 +152,7 @@ export default function Payment({
     const price = ticketPrice + bookingFee;
 
     if (!concertId || row === undefined || col === undefined || !userId || !price) {
-      console.error('❌ 결제 정보 부족:', {
+      console.error('결제 정보 부족:', {
         concertId: !!concertId,
         row: row !== undefined,
         col: col !== undefined,
@@ -180,57 +220,65 @@ export default function Payment({
             </div>
           </div>
 
-          <h2 className="text-base font-bold mb-4">수령방법을 선택하세요</h2>
-          <label className="flex items-center gap-2 mb-6">
+          <h2 className="text-xl font-bold mb-4">수령방법을 선택하세요</h2>
+          <label className="flex items-center gap-2 mb-6 text-lg">
             <input type="radio" checked disabled className="accent-blue-500" />
             현장수령
-            <p className="text-xs text-gray-500 ml-2">
+            <p className="text-sm text-gray-500 ml-2">
               공연 당일 현장 교부처에서 예매번호 및 본인 확인 후 티켓을 수령하여 입장 가능합니다.
             </p>
           </label>
 
           {/* 주문자 정보 */}
-          <div className="border p-4 rounded mb-6 border-gray-300">
-            <h3 className="font-semibold mb-2">주문자정보</h3>
+          <div className="border p-4 rounded mb-12 border-gray-300">
+            <h3 className="font-semibold mb-2 text-lg">주문자정보</h3>
             <div className="flex items-center flex-wrap gap-2">
-              <span className="text-sm">이름</span>
-              <span className="font-medium text-sm">{user?.name}</span>
-              <span className="text-sm ml-6">이메일</span>
-              <span className="font-medium text-sm">{user?.email}</span>
+              <span className="text-base">이름</span>
+              <span className="font-medium text-base">{user?.name}</span>
+              <span className="text-base ml-6">이메일</span>
+              <span className="font-medium text-base">{user?.email}</span>
             </div>
-            <p className="text-xs text-gray-500 mt-3">
+            <p className="text-sm text-gray-500 mt-3">
               <span className="text-red-500">*</span> 입력하신 정보는 공연장에서 예매확인을 위해 사용될 수 있습니다.
             </p>
           </div>
 
           {/* 예매자 동의 */}
           <div className="border border-gray-300 p-4 rounded">
-            <h3 className="font-semibold mb-2">예매자 동의</h3>
-            <label className="flex items-center gap-2 mb-2">
-              <input type="checkbox" className="accent-blue-500" />
-              [필수] 예매 및 취소 수수료/취소기한을 확인하였으며 동의합니다.
-            </label>
-            <div className="border border-gray-200 rounded bg-gray-50 text-center text-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="font-semibold text-lg">예매자 동의</h4>
+              {showError && (
+                <span className="text-red-500 text-sm whitespace-nowrap">
+                  * 예매자 동의가 필요합니다.
+                </span>
+              )}
+            </div>
+            <div className="flex items-start gap-2 mb-2">
+              <input
+                type="checkbox"
+                className="accent-blue-500 mt-0.5 cursor-pointer"
+                checked={isAgreed}
+                onChange={(e) => {
+                  setIsAgreed(e.target.checked);
+                  if (e.target.checked) setShowError(false);
+                }}
+              />
+              <span className='text-sm text-gray-500'>[필수] 예매 및 취소 수수료/취소기한을 확인하였으며 동의합니다.</span>
+            </div>
+            <div className="border border-gray-100 rounded bg-gray-50 text-center text-base">
               <div className="grid grid-cols-2 font-medium border-b bg-white py-2">
                 <span>취소일</span>
                 <span>취소수수료</span>
               </div>
-              <div className="grid grid-cols-2 border-b py-2">
-                <span>2025.07.02 ~ 2025.07.09</span>
-                <span>없음</span>
-              </div>
-              <div className="grid grid-cols-2 border-b py-2">
-                <span>2025.07.10 ~ 2025.07.12</span>
-                <span>티켓금액의 10%</span>
-              </div>
-              <div className="grid grid-cols-2 border-b py-2">
-                <span>2025.07.13 ~ 2025.07.16</span>
-                <span>티켓금액의 20%</span>
-              </div>
-              <div className="grid grid-cols-2 py-2">
-                <span>2025.07.17 ~ 2025.07.18</span>
-                <span>티켓금액의 30%</span>
-              </div>
+              {policies.map((p, i) => (
+                <div
+                  key={p.id}
+                  className={`grid grid-cols-2 py-2 ${i !== policies.length - 1 ? 'border-b' : ''}`}
+                >
+                  <span>{p.period_desc}</span>
+                  <span>{p.fee_desc}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -241,17 +289,17 @@ export default function Payment({
             <Image src="/images/Tickity.svg" alt="로고" width={180} height={50} />
           </div>
 
-          <div className="border p-2 mb-4">
-            <div className="text-sm font-bold">{concertId}</div>
+          <div className="border border-gray-300 p-2 mb-4">
+            <div className="text-xl font-bold">{concertTitle}</div>
             <div className="text-xs text-gray-500 mt-1">{selectedDate} {selectedTime}</div>
-            <hr className="my-2" />
+            <hr className="my-2 border-gray-300" />
             <div className="text-sm">총 1석 선택</div>
             <div className="text-sm">{seatInfo}</div>
           </div>
 
           <div>
-            <h3 className="font-semibold text-sm mb-2">결제금액</h3>
-            <div className="text-xs border px-3 py-2 space-y-1">
+            <h3 className="font-semibold text-lg mb-2">결제금액</h3>
+            <div className="text-sms border border-gray-300 px-3 py-2 space-y-1">
               <div className="flex justify-between">
                 <span>티켓금액</span>
                 <span>{ticketPrice.toLocaleString()}원</span>
@@ -275,7 +323,7 @@ export default function Payment({
             </div>
           </div>
 
-          <div className="text-xs text-blue-500 mt-4 space-y-1">
+          <div className="text-sm text-blue-500 mt-4 space-y-1">
             <p>※ 취소기한: {selectedDate} 전날 23:59까지</p>
             <p>※ 취소수수료: 티켓금액의 0~30%</p>
           </div>
@@ -283,8 +331,15 @@ export default function Payment({
           <div className="mt-6 text-center flex flex-col items-center space-y-2">
             {/* 결제하기 버튼 */}
             <button
-              onClick={handlePayment}
-              className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2 rounded text-sm w-full"
+              onClick={() => {
+                if (!isAgreed) {
+                  setShowError(true);  
+                  return;              
+                }
+
+                handlePayment();       
+              }}
+              className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded text-base w-full cursor-pointer"
             >
               결제하기
             </button>
@@ -292,7 +347,7 @@ export default function Payment({
             {/* 이전으로 버튼 */}
             <button
               onClick={() => setShowConfirmModal(true)}
-              className="text-sm text-gray-500 underline"
+              className="text-base text-gray-500 underline cursor-pointer"
             >
               이전으로
             </button>
@@ -300,7 +355,7 @@ export default function Payment({
             {/* 남은 시간 */}
             {expiresAt && (
               <div className="text-center text-sm text-red-600 font-semibold">
-                ⏳ 남은 시간: {Math.floor(remainingSeconds / 60)}분 {remainingSeconds % 60}초
+                남은 시간: {Math.floor(remainingSeconds / 60)}분 {remainingSeconds % 60}초
               </div>
             )}
           </div>
