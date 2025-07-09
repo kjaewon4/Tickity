@@ -305,11 +305,11 @@ export const searchConcerts = async (query: string, category?: string) => {
  */
 export const getConcertDetail = async (concertId: string) => {
   try {
-    /* 1) 콘서트 + 공연장 메타 */
-    const { data: concertData, error: concertError } = await supabase
-      .from('concerts')
-      .select(
-        `
+  /* 1) 콘서트 + 공연장 메타 */
+  const { data: concertData, error: concertError } = await supabase
+    .from('concerts')
+    .select(
+      `
         id,
         title,
         start_date,
@@ -339,13 +339,13 @@ export const getConcertDetail = async (concertId: string) => {
         category,
         round,
         ticket_open_at,
-        venues ( id, name, address, capacity )
-      `,
-      )
-      .eq('id', concertId)
-      .single();
+      venues ( id, name, address, capacity )
+    `,
+    )
+    .eq('id', concertId)
+    .single();
 
-    if (concertError || !concertData) throw concertError;
+  if (concertError || !concertData) throw concertError;
 
     /* 2) 가격 + 총석수 (병렬 처리) */
     const [seat_prices, policiesData] = await Promise.all([
@@ -353,11 +353,11 @@ export const getConcertDetail = async (concertId: string) => {
       getCancellationPolicies()
     ]);
 
-    return {
-      concert: concertData,
-      seat_prices,
-      cancellation_policies: policiesData ?? [],
-    };
+  return {
+    concert: concertData,
+    seat_prices,
+    cancellation_policies: policiesData ?? [],
+  };
   } catch (error) {
     console.error('콘서트 상세 조회 오류:', error);
     throw error;

@@ -19,14 +19,14 @@ export const useFavorite = (concert: Concert | null, userId: string | null): Use
 
       // 찜하기 상태는 나중에 확인 (성능 최적화)
       setTimeout(async () => {
-        try {
-          const response = await checkFavoriteStatus(concert.id, userId);
-          if (response.success) {
-            setLiked(response.data.isFavorited);
-          }
-        } catch (error) {
-          console.error('찜하기 상태 확인 오류:', error);
+      try {
+        const response = await checkFavoriteStatus(concert.id, userId);
+        if (response.success) {
+          setLiked(response.data.isFavorited);
         }
+      } catch (error) {
+        console.error('찜하기 상태 확인 오류:', error);
+      }
       }, 2000); // 2초 지연
     };
 
