@@ -156,7 +156,7 @@ export default function HomePage() {
   const categories = ['전체', '여자아이돌', '남자아이돌', '솔로 가수', '내한공연', '랩/힙합'];
 
   return (
-    <main className="px-4 pt-40 pb-10 bg-white min-h-screen w-full max-w-[1700px] mx-auto">
+    <main className="px-4 pt-20 pb-10 bg-white min-h-screen w-full max-w-[1700px] mx-auto">
       <div className="mb-10 relative px-2">
         <Slider {...sliderSettings} className="-mx-[6px]">
           {upcomingConcerts.map((concert) => (

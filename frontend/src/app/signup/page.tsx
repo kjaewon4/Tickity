@@ -162,7 +162,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white px-4 mt-25">
+    <div className="flex flex-col min-h-screen bg-white px-4 mt-16">
       {/* 고정된 로고 영역 */}
       <div className="flex flex-col items-center justify-start mt-20 mb-10">
         <Image src="/images/Tickity.svg" alt="Tickity 로고" width={200} height={60} priority />
