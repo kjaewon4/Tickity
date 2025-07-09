@@ -106,6 +106,13 @@ async getUserTickets(userId: string): Promise<ApiResponse<{ tickets: UserTicket[
   });
 }
 
+// 사용자 대시보드 조회
+async getUserDashboard(userId: string): Promise<ApiResponse<any>> {
+  return this.request<any>(`/users/dashboard/${userId}`, {
+    method: 'GET',
+  });
+}
+
 // 블록체인 민팅 티켓 조회 (NFT 티켓 목록용)
 async getMintedTickets(userId: string): Promise<ApiResponse<TicketMintResult[]>> {
   return this.request(`/tickets/minted/${userId}`, {

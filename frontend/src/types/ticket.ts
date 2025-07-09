@@ -31,6 +31,7 @@ export interface UserTicket {
     number: string;
   };
   price: number;
+  is_cancelled?: boolean;
   status: 'active' | 'canceled';
 }
 

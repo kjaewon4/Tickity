@@ -5,6 +5,7 @@ import { MdCake, MdEmail, MdCalendarToday } from 'react-icons/md';
 import { FaTicketAlt } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/apiClient';
+import ConfirmModal from '@/app/modal/ConfirmModal';
 
 interface User {
   name: string;
@@ -25,7 +26,6 @@ interface ReservationItem {
   status: '예약완료' | '취소완료';
   ticketType: string;
   gradeName: string;
-  quantity: number;
   poster_url: string;
   seatId: string;
   tokenId: number;
@@ -41,87 +41,56 @@ export default function MyPage() {
   const [residentNumber, setResidentNumber] = useState<string | null>(null);
   const [gender, setGender] = useState<'male' | 'female' | null>(null);
 
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingCancelInfo, setPendingCancelInfo] = useState<{
+    seatId: string;
+    ticketId: string;
+    tokenId: number;
+  } | null>(null);
+
   const fetchUserDashboard = async () => {
-    const accessToken = localStorage.getItem('accessToken');
-    if (!accessToken) {
-      console.warn('accessToken이 없습니다');
-      router.replace('/login');
-      return;
-    }
-
     try {
-      // 사용자 정보 가져오기
-      const res1 = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/user`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!res1.ok) {
-        if (res1.status === 401) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          router.replace('/login?error=invalid_token');
-          return;
-        }
+      const userRes = await apiClient.getUser();
+      const userId = userRes.data?.user?.id;
+      if (!userId) {
+        router.replace('/login');
         return;
       }
 
-      const userData = await res1.json();
-      const userId = userData.data?.user?.id;
-      if (!userId) return;
-
-      const res2 = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/dashboard/${userId}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      const dashboardData = await res2.json();
-
-      console.log('🎟 대시보드 전체 응답:', dashboardData);
+      const dashboardData = await apiClient.getUserDashboard(userId);
+      const rrnData = await apiClient.getResidentNumber(userId);
 
       if (dashboardData.success && dashboardData.data) {
         const ticketCount = dashboardData.data.tickets?.length || 0;
-
         setUser({
           ...dashboardData.data.profile,
           ticketCount,
         });
 
-        const ticketList = dashboardData.data.tickets.map((ticket: any) => ({
-          id: ticket.id,
-          title: ticket.concert.title,
-          start_date: ticket.concert.start_date,
-          start_time: ticket.concert.start_time,
-          location: ticket.concert.venue_name || '장소 미정',
-          price: `${ticket.purchase_price.toLocaleString()}`,
-          bookedAt: ticket.created_at,
-          status: ticket.is_cancelled ? '취소완료' : '예약완료',
-          ticketType: ticket.seat_number || '좌석 미정',
-          gradeName: ticket.seat?.grade_name || '등급 미정',
-          poster_url: ticket.concert.poster_url,
-          seatId: ticket.seat_id,
-          tokenId: ticket.nft_token_id, 
-        }));
+        const ticketList: ReservationItem[] = dashboardData.data.tickets.map((ticket: any) => {
+          const status: '예약완료' | '취소완료' = ticket.is_cancelled ? '취소완료' : '예약완료';
 
+          return {
+            id: ticket.id,
+            title: ticket.concert.title,
+            start_date: ticket.concert.start_date,
+            start_time: ticket.concert.start_time,
+            location: ticket.concert.venue_name || '장소 미정',
+            price: `${ticket.purchase_price.toLocaleString()}`,
+            bookedAt: ticket.created_at,
+            status,
+            ticketType: ticket.seat_number || '좌석 미정',
+            gradeName: ticket.seat?.grade_name || '등급 미정',
+            poster_url: ticket.concert.poster_url,
+            seatId: ticket.seat_id,
+            tokenId: ticket.nft_token_id,
+          };
+        });
         setReservations(ticketList);
-      } else {
-        setUser(null);
-        setReservations([]);
       }
 
-      // 주민등록번호 복호화
-      const res4 = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/resident-number/${userId}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const decrypted = await res4.json();
-      const rrn = decrypted.data?.residentNumber;
-      if (rrn && rrn.length >= 7) {
+      if (rrnData.success && rrnData.data?.residentNumber) {
+        const rrn = rrnData.data.residentNumber;
         const yearPrefix = rrn[6] === '1' || rrn[6] === '2' ? '19' : '20';
         const year = `${yearPrefix}${rrn.slice(0, 2)}`;
         const month = rrn.slice(2, 4);
@@ -130,18 +99,18 @@ export default function MyPage() {
         setGender(rrn[6] === '1' || rrn[6] === '3' ? 'male' : 'female');
       }
     } catch (err) {
-      console.error('전체 요청 실패:', err);
+      console.error('대시보드 로드 실패:', err);
       setUser(null);
       setReservations([]);
     }
   };
 
-
-  const handleCancel = async (seatId: string, ticketId: string, tokenId: number) => {
-    console.log('⛳️ 취소 요청 파라미터:', { seatId, ticketId, tokenId });
+  const handleCancelConfirm = async () => {
+    if (!pendingCancelInfo) return;
+    const { seatId, ticketId, tokenId } = pendingCancelInfo;
     try {
       const res = await apiClient.cancelTicket(seatId, ticketId, tokenId);
-      if (res.success && res.data) {
+      if (res.success) {
         alert('취소 완료!');
         await fetchUserDashboard();
       } else {
@@ -149,13 +118,15 @@ export default function MyPage() {
       }
     } catch (e: any) {
       alert(e.message || '오류 발생');
+    } finally {
+      setShowConfirmModal(false);
+      setPendingCancelInfo(null);
     }
   };
 
   useEffect(() => {
     fetchUserDashboard();
   }, [router]);
-
 
   const filtered = reservations.filter((item) => {
     if (filter === '전체') return true;
@@ -174,6 +145,22 @@ export default function MyPage() {
       <h1 className="text-4xl font-bold mb-2">마이페이지</h1>
       <p className="text-lg text-gray-500 mb-8">회원정보와 예매내역을 확인하세요</p>
 
+      {/* ConfirmModal */}
+      {showConfirmModal && pendingCancelInfo && (
+        <ConfirmModal
+          message={
+            <>
+              <p className="font-semibold">정말 이 티켓을 취소하시겠습니까?</p>
+              <p className="text-sm text-gray-500 mt-1">취소 시 복구할 수 없으며 환불은 자동 정산됩니다.</p>
+            </>
+          }
+          onConfirm={handleCancelConfirm}
+          onCancel={() => {
+            setShowConfirmModal(false);
+            setPendingCancelInfo(null);
+          }}
+        />
+      )}
       {user && (
         <div className="w-full flex flex-col gap-8">
           <div className="flex justify-start gap-16 w-full">
@@ -289,7 +276,17 @@ export default function MyPage() {
                       <div className="mt-4 flex gap-2">
                         <button className="px-4 py-2 bg-gray-200 text-sm rounded">상세보기</button>
                         <button
-                          onClick={() => handleCancel(item.seatId, item.id.toString(), item.tokenId)}
+                          onClick={() => {
+                            if (item.status === '예약완료') {
+                              setPendingCancelInfo({
+                                seatId: item.seatId,
+                                ticketId: item.id.toString(),
+                                tokenId: item.tokenId,
+                              });
+                              setShowConfirmModal(true); // 이 줄이 꼭 필요함!
+                            }
+                          }}
+                          
                           className={`px-4 py-2 text-sm rounded ${
                             item.status === '예약완료'
                               ? 'bg-red-500 text-white'

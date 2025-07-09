@@ -55,9 +55,9 @@ const ConcertDetail = () => {
         const res = await apiClient.getUserTickets(userId);
         const tickets: UserTicket[] = res.data?.tickets ?? [];
 
-        const hasTicketForConcert = tickets.some(
-          (ticket) => ticket.concert?.id === concert.id
-        );
+const hasTicketForConcert = tickets.some(
+  (ticket) => ticket.concert?.id === concert.id && !ticket.is_cancelled
+);
 
         if (hasTicketForConcert) {
           setIsDuplicateBooking(true);
