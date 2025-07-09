@@ -11,10 +11,15 @@ interface MapArea {
 
 interface SeatSelectionProps {
   venueId: string | null;
-  onSectionSelect: (sectionId: string) => void; // 명확한 이름으로 변경
+  onSectionSelect: (sectionId: string) => void;
+  miniMapMode?: boolean; 
 }
 
-const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => {
+const SeatSelection: FC<SeatSelectionProps> = ({
+  venueId,
+  onSectionSelect,
+  miniMapMode = false,
+}) => {
   const [mapAreas, setMapAreas] = useState<MapArea[]>([]);
   const originalWidth = 1172;
   const originalHeight = 812;
@@ -24,7 +29,9 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => 
 
     const fetchSections = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/venues/${venueId}/sections`);
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/venues/${venueId}/sections`
+        );
         const json = await res.json();
         if (json.success && json.data) {
           setMapAreas(json.data); // 🔹 sections 정보 로드
@@ -42,14 +49,18 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => 
   };
 
   return (
-    <div className="bg-gray-50 w-full h-full flex flex-col justify-between">
+<div
+  className={`bg-gray-50 w-full h-full flex flex-col justify-between ${
+    miniMapMode ? '' : ''
+  }`}
+>
       {/* 이미지 영역 */}
       <div className="w-full max-w-full">
         <div
           className="relative"
           style={{
             width: '100%',
-            marginTop: '40px',
+            marginTop: miniMapMode ? '0px' : '40px',
             paddingTop: `${(originalHeight / originalWidth) * 100}%`,
           }}
         >
@@ -70,21 +81,27 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => 
           {mapAreas
             .filter((area) => Array.isArray(area.coords) && area.coords.length > 0)
             .map((area) => {
-              const isVIP = area.grade === 'VIP'; 
+              const isVIP = area.grade === 'VIP';
 
               const backgroundColor = isVIP
                 ? 'rgba(236, 72, 153, 0.3)'
-                : 'rgba(147, 197, 253, 0.3)'
+                : 'rgba(147, 197, 253, 0.3)';
 
               const hoverColor = isVIP
                 ? 'rgba(236, 72, 153, 0.5)'
                 : 'rgba(147, 197, 253, 0.5)';
+
               const polygonCoords = area.coords
-                .map(([x, y]) => `${(x / originalWidth) * 100}% ${(y / originalHeight) * 100}%`)
+                .map(
+                  ([x, y]) =>
+                    `${(x / originalWidth) * 100}% ${(y / originalHeight) * 100}%`
+                )
                 .join(', ');
 
-              const centerX = area.coords.reduce((sum, [x]) => sum + x, 0) / area.coords.length;
-              const centerY = area.coords.reduce((sum, [, y]) => sum + y, 0) / area.coords.length;
+              const centerX =
+                area.coords.reduce((sum, [x]) => sum + x, 0) / area.coords.length;
+              const centerY =
+                area.coords.reduce((sum, [, y]) => sum + y, 0) / area.coords.length;
 
               const centerLeft = `${(centerX / originalWidth) * 100}%`;
               const centerTop = `${(centerY / originalHeight) * 100}%`;
@@ -113,7 +130,9 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => 
 
                   {/* 구역 코드 표시 */}
                   <div
-                    className="absolute text-white text-xs font-bold drop-shadow-md pointer-events-none"
+                    className={`absolute font-bold drop-shadow-md pointer-events-none ${
+                      miniMapMode ? 'text-[6px] text-white' : 'text-xs text-white'
+                    }`}
                     style={{
                       left: centerLeft,
                       top: centerTop,
@@ -130,9 +149,11 @@ const SeatSelection: FC<SeatSelectionProps> = ({ venueId, onSectionSelect }) => 
       </div>
 
       {/* 안내 메시지 바 */}
-      <div className="w-full bg-gray-800 text-white text-sm px-6 py-8 text-center mt-6">
-        구역을 먼저 선택해주세요 (화면을 직접 선택하거나 우측 좌석등급을 선택해주세요)
-      </div>
+      {!miniMapMode && (
+        <div className="w-full bg-gray-800 text-white text-sm px-6 py-8 text-center mt-6">
+          구역을 먼저 선택해주세요 (화면을 직접 선택하거나 우측 좌석등급을 선택해주세요)
+        </div>
+      )}
     </div>
   );
 };

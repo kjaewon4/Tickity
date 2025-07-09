@@ -6,7 +6,7 @@ import SeatGrid from '../components/SeatGrid';
 import Sidebar from '../components/Sidebar';
 import Payment from '../components/Payment';
 import PaymentComplete from '../components/PaymentComplete';
-import CaptchaModal from '../modal/CaptchaModal'; 
+import CaptchaModal from '../modal/CaptchaModal';
 import { TicketMintResult } from '@/types/ticket';
 
 export default function SeatPage() {
@@ -22,7 +22,7 @@ export default function SeatPage() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [concertTitle, setConcertTitle] = useState<string | null>(null);
   const [bookingFee, setBookingFee] = useState<number>(0);
-  const [isPaid, setIsPaid] = useState(false); 
+  const [isPaid, setIsPaid] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [showCaptcha, setShowCaptcha] = useState(true);
   const [mintResult, setMintResult] = useState<TicketMintResult | null>(null);
@@ -50,10 +50,6 @@ export default function SeatPage() {
       localStorage.setItem('selectedCol', String(selectedCol));
     }
   }, [selectedSeatInfo, sectionId, selectedRow, selectedCol]);
-
-  useEffect(() => {
-    console.log('isConfirmed 상태 변경됨:', isConfirmed);
-  }, [isConfirmed]);
 
   const handleSectionSelect = (id: string) => {
     console.log('구역 선택됨:', id);
@@ -110,7 +106,7 @@ export default function SeatPage() {
             </div>
           )}
 
-          <div className="w-full overflow-hidden">
+          <div className="relative w-full min-h-[600px] overflow-visible">
             {isConfirmed ? (
               isPaid && mintResult ? (
                 <PaymentComplete result={mintResult} />
@@ -126,17 +122,25 @@ export default function SeatPage() {
                   }}
                 />
               )
-            ) : sectionId ? (
-              <SeatGrid
-                concertId={concertId!}
-                sectionId={sectionId!}
-                onSeatSelect={handleSeatSelect}
-              />
             ) : (
-              <SeatSelection
-                venueId={venueId}
-                onSectionSelect={handleSectionSelect}
-              />
+              <>
+                {/* 항상 표시되는 이미지 기반 좌석 맵 */}
+                <SeatSelection
+                  venueId={venueId}
+                  onSectionSelect={handleSectionSelect}
+                />
+
+                {/* 선택된 구역이 있을 때 좌석 상세 UI를 덮어쓰기 */}
+                {sectionId && (
+                  <div className="absolute top-0 left-0 w-full h-full z-10 bg-white bg-opacity-95 p-4">
+                    <SeatGrid
+                      concertId={concertId!}
+                      sectionId={sectionId}
+                      onSeatSelect={handleSeatSelect}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -144,20 +148,20 @@ export default function SeatPage() {
         {!isConfirmed && (
           <div className="w-[280px] shrink-0">
             <Sidebar
-              concertId={concertId}
+              concertId={concertId ?? undefined}
               selectedDate={selectedDate}
               selectedTime={selectedTime}
               selectedSeatInfo={selectedSeatInfo ?? undefined}
-              selectedZone={sectionId}
-              isVerified={isVerified} 
-              onRequireVerification={() => setShowCaptcha(true)} 
+              selectedZone={sectionId ?? undefined}
+              isVerified={isVerified}
+              onRequireVerification={() => setShowCaptcha(true)}
               onViewAll={() => {
                 console.log('전체보기 클릭됨');
                 setSectionId(null);
               }}
               onSectionSelect={handleSectionSelect}
               onConfirmSeat={() => {
-                setIsConfirmed(true); 
+                setIsConfirmed(true);
               }}
             />
           </div>
