@@ -70,12 +70,17 @@ export default function RootLayout({
 
   return (
     <html lang="ko">
-      {/* ✅ Montserrat 폰트를 전체에 적용 */}
+      {/* Montserrat 폰트를 전체에 적용 */}
       <body className={montserrat.className}>
         {!isSeatPage && (
           <Navbar user={user} loading={loading} handleLogout={handleLogout} />
         )}
-        {children}
+
+        {/* 네비바가 있는 경우에만 padding 적용 */}
+        <main style={!isSeatPage ? { paddingTop: 'var(--navbar-height)' } : {}}>
+          {children}
+        </main>
+
         {!isSeatPage && <Footer />}
       </body>
     </html>

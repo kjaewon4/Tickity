@@ -3,6 +3,16 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ✅ 네비게이션바 높이 변수 정의 (기본: 데스크탑) */
+  --navbar-height: 80px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    /* ✅ 모바일 화면일 때 navbar 높이 변경 */
+    --navbar-height: 56px;
+  }
 }
 
 @theme inline {
