@@ -12,7 +12,7 @@ interface PaymentProps {
   concertId: string | null;
   selectedDate: string | null;
   selectedTime: string | null;
-  onPaymentComplete: (result: TicketMintResult) => void
+  onPaymentComplete: (result: TicketMintResult) => void;
 }
 
 interface CancelPolicy {
@@ -26,6 +26,7 @@ interface CancelPolicyResponse {
   message: string;
   data: CancelPolicy[];
 }
+
 export default function Payment({
   seatInfo,
   concertId,
@@ -43,8 +44,8 @@ export default function Payment({
   const total = ticketPrice + bookingFee;
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [policies, setPolicies] = useState<CancelPolicy[]>([]);
-  const [isAgreed, setIsAgreed] = useState(false);    
-  const [showError, setShowError] = useState(false);   
+  const [isAgreed, setIsAgreed] = useState(false);
+  const [showError, setShowError] = useState(false);
 
   useEffect(() => {
     const storedPrice = localStorage.getItem('concertPrice');
@@ -64,30 +65,22 @@ export default function Payment({
 
     const fetchUser = async () => {
       const token = localStorage.getItem('accessToken');
-      console.log('🔍 사용자 정보 로딩 시작:', { hasToken: !!token });
-      
       if (token) {
         try {
           const res = await apiClient.getUserWithToken(token);
-          console.log('📥 사용자 정보 API 응답:', res);
-          
           if (res.success && res.data?.user) {
             setUser(res.data.user);
-            console.log('✅ 사용자 정보 설정 완료:', res.data.user);
           } else {
-            console.error('❌ 사용자 정보 로딩 실패:', res);
             localStorage.removeItem('accessToken');
             alert('사용자 정보를 불러올 수 없습니다. 다시 로그인해주세요.');
           }
         } catch (error) {
-          console.error('❌ 사용자 정보 API 오류:', error);
           localStorage.removeItem('accessToken');
           alert('사용자 정보를 불러오는 중 오류가 발생했습니다. 다시 로그인해주세요.');
         } finally {
           setLoading(false);
         }
       } else {
-        console.log('❌ 액세스 토큰이 없습니다.');
         setLoading(false);
         alert('로그인이 필요합니다.');
       }
@@ -114,35 +107,62 @@ export default function Payment({
     return () => clearInterval(interval);
   }, [expiresAt]);
 
-  const goToSeatPage = () => {
-    localStorage.removeItem('selectedZoneId');
-    localStorage.removeItem('selectedRow');
-    localStorage.removeItem('selectedCol');
-    localStorage.removeItem('seatInfo');
-    window.location.href = '/seat';
-  };
+  useEffect(() => {
+    const fetchCancellationPolicies = async () => {
+      const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/cancellation-policies`;
 
-useEffect(() => {
-  const fetchCancellationPolicies = async () => {
-    const endpoint = `${process.env.NEXT_PUBLIC_API_URL}/cancellation-policies`;
+      try {
+        const res = await fetch(endpoint);
+        const result = (await res.json()) as CancelPolicyResponse;
+
+        if (result && Array.isArray(result.data)) {
+          setPolicies(result.data);
+        } else {
+          console.warn('[취소정책] result.data가 배열이 아님:', result);
+        }
+      } catch (err) {
+        console.error('[취소정책] fetch 중 에러 발생:', err);
+      }
+    };
+
+    fetchCancellationPolicies();
+  }, []);
+
+  const goToSeatPage = async () => {
+    const row = Number(localStorage.getItem('selectedRow'));
+    const col = Number(localStorage.getItem('selectedCol'));
+    const sectionId = localStorage.getItem('selectedZoneId');
+    const userId = user?.id;
+
+    console.log('이동 요청됨. 파라미터:', {
+      concertId,
+      sectionId,
+      row,
+      col,
+      userId,
+    });
 
     try {
-      const res = await fetch(endpoint);
-
-      const result = await res.json() as CancelPolicyResponse;
-
-      if (result && Array.isArray(result.data)) {
-        setPolicies(result.data); 
-      } else {
-        console.warn('[취소정책] result.data가 배열이 아님:', result);
+      if (concertId && sectionId && row !== -1 && col !== -1 && userId) {
+        console.log('HOLD 해제 API POST 요청');
+        const res = await apiClient.post(`/concerts/${concertId}/seats/available`, {
+          sectionId,
+          row,
+          col,
+          userId,
+        });
+        console.log('좌석 HOLD 해제 응답:', res);
       }
     } catch (err) {
-      console.error('[취소정책] fetch 중 에러 발생:', err);
+      console.error('좌석 HOLD 해제 실패:', err);
+    } finally {
+      localStorage.removeItem('selectedZoneId');
+      localStorage.removeItem('selectedRow');
+      localStorage.removeItem('selectedCol');
+      localStorage.removeItem('seatInfo');
+      window.location.href = '/seat';
     }
   };
-
-  fetchCancellationPolicies();
-}, []);
 
   const handlePayment = async () => {
     const row = Number(localStorage.getItem('selectedRow'));
@@ -152,13 +172,6 @@ useEffect(() => {
     const price = ticketPrice + bookingFee;
 
     if (!concertId || row === undefined || col === undefined || !userId || !price) {
-      console.error('결제 정보 부족:', {
-        concertId: !!concertId,
-        row: row !== undefined,
-        col: col !== undefined,
-        userId: !!userId,
-        price: !!price
-      });
       alert('결제 정보가 부족합니다.');
       return;
     }
@@ -173,24 +186,21 @@ useEffect(() => {
       price: Number(price),
     };
 
-    console.log('📤 결제 API 요청 페이로드:', payload);
-
     try {
       const res = await apiClient.post<TicketMintResult>('/tickets', payload);
-      console.log('📥 결제 API 응답:', res);
-      
       if (res.success && res.data) {
         const { token_id, tx_hash, metadata_uri, seat_number } = res.data;
         onPaymentComplete({ token_id, tx_hash, metadata_uri, seat_number });
       } else {
-        console.error('❌ 결제 실패 응답:', res);
+        console.warn('⚠️ 결제 실패 응답:', res);
         alert('결제 실패: ' + (res.message || res.error || '알 수 없는 오류'));
       }
     } catch (err) {
-      console.error('결제 요청 중 오류:', err);
+      console.error('❌ 결제 중 오류 발생:', err);
       alert('결제 중 오류가 발생했습니다.');
     }
   };
+
 
   return (
     <main className="bg-white text-sm text-gray-800">
