@@ -94,7 +94,7 @@ export const useConcertData = (): UseConcertDataReturn => {
         if (err.name === 'AbortError') {
           setError('요청 시간이 초과되었습니다. 다시 시도해주세요.');
         } else {
-          setError('공연 정보를 불러오는 중 오류가 발생했습니다.');
+        setError('공연 정보를 불러오는 중 오류가 발생했습니다.');
         }
       } finally {
         setLoading(false);

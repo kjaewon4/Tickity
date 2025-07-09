@@ -597,56 +597,146 @@ router.post('/:concertId/seats/hold', async (req, res) => {
     });
   }
 
-  // 1. 좌표 → seat_id 조회
-  const seatId = await ticketsService.findSeatIdByPosition(sectionId, row, col);
-  
-  const { data: existingStatus } = await supabase
-    .from('concert_seats')
-    .select('current_status')
-    .eq('concert_id', concertId)
-    .eq('seat_id', seatId)
-    .single();
+  try {
+    // 1. 좌표 → seat_id 조회
+    const seatId = await ticketsService.findSeatIdByPosition(sectionId, row, col);
+    
+    console.log(`[HOLD] 요청: concertId=${concertId}, seatId=${seatId}, userId=${userId}`);
 
-  if (existingStatus?.current_status !== 'AVAILABLE') {
-    return res.status(409).json({
-      success: false,
-      error: '이미 HOLD 중이거나 예매된 좌석입니다.'
+    // 2. HOLD 만료 시간 설정
+    const holdUntil = new Date(Date.now() + 10 * 60 * 1000); // 10분 후
+
+    // 3. 안전한 좌석 상태 확인 및 업데이트 (조건부 업데이트)
+    const { data: updatedSeat, error: updateError, count } = await supabase
+      .from('concert_seats')
+      .update({
+        current_status: 'HOLD',
+        last_action_user: userId,
+        hold_expires_at: holdUntil.toISOString()
+      })
+      .eq('concert_id', concertId)
+      .eq('seat_id', seatId)
+      .eq('current_status', 'AVAILABLE') // 중요: AVAILABLE인 경우에만 업데이트
+      .select('current_status, hold_expires_at');
+
+    if (updateError) {
+      console.error('[HOLD] 업데이트 실패:', updateError.message);
+      return res.status(500).json({
+        success: false,
+        error: '좌석을 HOLD 상태로 변경하는 데 실패했습니다.'
+      });
+    }
+
+    // 업데이트된 행이 없다면 이미 다른 상태이거나 데이터가 없음
+    if (!count || count === 0) {
+      // 현재 상태 다시 확인 (안전한 조회)
+      const { data: currentStatus, error: statusError } = await supabase
+        .from('concert_seats')
+        .select('current_status, last_action_user, hold_expires_at')
+        .eq('concert_id', concertId)
+        .eq('seat_id', seatId)
+        .maybeSingle(); // single() 대신 maybeSingle() 사용
+
+      console.log(`[HOLD] 좌석 상태 조회: ${JSON.stringify(currentStatus)}, 에러: ${statusError?.message || 'none'}`);
+
+      // concert_seats 데이터가 아예 없는 경우 새로 생성
+      if (!currentStatus && !statusError) {
+        console.log(`[HOLD] concert_seats 데이터 없음. 새로 생성: seatId=${seatId}`);
+        
+        const { error: insertError } = await supabase
+          .from('concert_seats')
+          .insert({
+            concert_id: concertId,
+            seat_id: seatId,
+            current_status: 'HOLD',
+            last_action_user: userId,
+            hold_expires_at: holdUntil.toISOString(),
+            created_at: new Date().toISOString()
+          });
+
+        if (insertError) {
+          console.error('[HOLD] 새 데이터 생성 실패:', insertError.message);
+          return res.status(500).json({
+            success: false,
+            error: '좌석 데이터 생성 중 오류가 발생했습니다.'
+          });
+        }
+
+        console.log(`[HOLD] 새 데이터 생성 성공: seatId=${seatId}`);
+        
+        return res.json({
+          success: true,
+          message: '좌석이 HOLD 상태로 설정되었습니다.',
+          data: {
+            seatId,
+            hold_expires_at: holdUntil.toISOString()
+          }
+        });
+      }
+
+      // 같은 사용자가 이미 HOLD한 경우, HOLD 시간 연장
+      if (currentStatus?.current_status === 'HOLD' && currentStatus?.last_action_user === userId) {
+        console.log(`[HOLD] 같은 사용자의 HOLD 연장: userId=${userId}`);
+        
+        const { error: extendError } = await supabase
+          .from('concert_seats')
+          .update({
+            hold_expires_at: holdUntil.toISOString()
+          })
+          .eq('concert_id', concertId)
+          .eq('seat_id', seatId)
+          .eq('last_action_user', userId);
+
+        if (extendError) {
+          console.error('[HOLD] 연장 실패:', extendError.message);
+          return res.status(500).json({
+            success: false,
+            error: 'HOLD 시간 연장에 실패했습니다.'
+          });
+        }
+
+        console.log(`[HOLD] 연장 성공: seatId=${seatId}, newHoldUntil=${holdUntil.toISOString()}`);
+
+        return res.json({
+          success: true,
+          message: 'HOLD 시간이 연장되었습니다.',
+          data: {
+            seatId,
+            hold_expires_at: holdUntil.toISOString()
+          }
+        });
+      }
+
+      // 다른 사용자가 이미 점유한 경우
+      return res.status(409).json({
+        success: false,
+        error: '이미 HOLD 중이거나 예매된 좌석입니다.',
+        details: {
+          current_status: currentStatus?.current_status,
+          occupied_by: currentStatus?.last_action_user,
+          hold_expires_at: currentStatus?.hold_expires_at
+        }
+      });
+    }
+
+    console.log(`[HOLD] 성공: seatId=${seatId}, holdUntil=${holdUntil.toISOString()}`);
+
+    return res.json({
+      success: true,
+      message: '좌석이 HOLD 상태로 설정되었습니다.',
+      data: {
+        seatId,
+        hold_expires_at: holdUntil.toISOString()
+      }
     });
-  }
 
-
-  // 2. concert_seats 상태 → HOLD
-  const holdUntil = new Date(Date.now() + 10 * 60 * 1000); // 10분 후
-
-  // Test 1분 후
-  // const holdUntil = new Date(Date.now() + 1 * 60 * 1000);
-
-  const { error: updateError } = await supabase
-    .from('concert_seats')
-    .update({
-      current_status: 'HOLD',
-      last_action_user: userId,
-      hold_expires_at: holdUntil.toISOString()
-    })
-    .match({
-      concert_id: concertId,
-      seat_id: seatId
-    });
-
-  if (updateError) {
-    console.error('HOLD 업데이트 실패:', updateError.message);
+  } catch (error: any) {
+    console.error('[HOLD] 처리 중 오류:', error);
     return res.status(500).json({
       success: false,
-      error: '좌석을 HOLD 상태로 변경하는 데 실패했습니다.'
+      error: error.message || '좌석 HOLD 처리 중 오류가 발생했습니다.'
     });
   }
-
-  return res.json({
-    success: true,
-    message: '좌석이 HOLD 상태로 설정되었습니다.',
-    seatId,
-    hold_expires_at: holdUntil.toISOString()
-  });
 });
 
 // 클라이언트가 결제창 이탈 시, HOLD → ABALIABLE
