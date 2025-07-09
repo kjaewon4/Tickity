@@ -23,7 +23,7 @@ export class BlockchainVerificationService {
   /**
    * 블록체인에서 토큰 소유자 확인 (public 메서드)
    */
-  async getTokenOwner(tokenId: number): Promise<string> {
+  async getTokenOwner(tokenId: number | string): Promise<string> {
     try {
       // BigInt로 변환하여 컨트랙트에 전달
       const tokenIdBigInt = BigInt(tokenId);
@@ -37,7 +37,7 @@ export class BlockchainVerificationService {
   /**
    * 티켓 소유권 검증 (블록체인 중심)
    */
-  async verifyTicketOwnership(tokenId: number, userId: string): Promise<{
+  async verifyTicketOwnership(tokenId: number | string, userId: string): Promise<{
     isValid: boolean;
     blockchainOwner: string | null;
     userWallet: string | null;
@@ -60,8 +60,9 @@ export class BlockchainVerificationService {
         };
       }
 
-      // 2. 블록체인에서 실제 소유자 확인
-      const blockchainOwner = await this.contract.ownerOf(tokenId);
+      // 2. 블록체인에서 실제 소유자 확인 (BigInt 사용)
+      const tokenIdBigInt = BigInt(tokenId);
+      const blockchainOwner = await this.contract.ownerOf(tokenIdBigInt);
 
       // 3. 블록체인 중심 검증
       const isValid = blockchainOwner.toLowerCase() === userData.wallet_address.toLowerCase();
@@ -87,14 +88,15 @@ export class BlockchainVerificationService {
   /**
    * 티켓 사용 상태 검증 (블록체인 중심)
    */
-  async verifyTicketUsageStatus(tokenId: number): Promise<{
+  async verifyTicketUsageStatus(tokenId: number | string): Promise<{
     isValid: boolean;
     blockchainIsUsed: boolean | null;
     error?: string;
   }> {
     try {
-      // 블록체인에서 사용 상태 확인
-      const blockchainTicket = await this.contract.tickets(tokenId);
+      // 블록체인에서 사용 상태 확인 (BigInt 사용)
+      const tokenIdBigInt = BigInt(tokenId);
+      const blockchainTicket = await this.contract.tickets(tokenIdBigInt);
       const blockchainIsUsed = blockchainTicket.isUsed;
 
       // 사용되지 않은 티켓만 유효
@@ -119,14 +121,15 @@ export class BlockchainVerificationService {
   /**
    * 얼굴 인증 상태 검증 (블록체인 중심)
    */
-  async verifyFaceVerificationStatus(tokenId: number, userId: string): Promise<{
+  async verifyFaceVerificationStatus(tokenId: number | string, userId: string): Promise<{
     isValid: boolean;
     blockchainIsFaceVerified: boolean | null;
     error?: string;
   }> {
     try {
-      // 블록체인에서 얼굴 인증 상태 확인
-      const blockchainTicket = await this.contract.tickets(tokenId);
+      // 블록체인에서 얼굴 인증 상태 확인 (BigInt 사용)
+      const tokenIdBigInt = BigInt(tokenId);
+      const blockchainTicket = await this.contract.tickets(tokenIdBigInt);
       const blockchainIsFaceVerified = blockchainTicket.isFaceVerified;
 
       // 🧪 테스트용: 얼굴 인증 우회 (임시)
@@ -151,14 +154,15 @@ export class BlockchainVerificationService {
   /**
    * 티켓 취소 상태 검증 (블록체인 중심)
    */
-  async verifyTicketCancellationStatus(tokenId: number): Promise<{
+  async verifyTicketCancellationStatus(tokenId: number | string): Promise<{
     isValid: boolean;
     blockchainIsCancelled: boolean | null;
     error?: string;
   }> {
     try {
-      // 블록체인에서 취소 상태 확인
-      const blockchainIsCancelled = await this.contract.isCancelled(tokenId);
+      // 블록체인에서 취소 상태 확인 (BigInt 사용)
+      const tokenIdBigInt = BigInt(tokenId);
+      const blockchainIsCancelled = await this.contract.isCancelled(tokenIdBigInt);
 
       // 취소되지 않은 티켓만 유효
       const isValid = !blockchainIsCancelled;
@@ -182,7 +186,7 @@ export class BlockchainVerificationService {
   /**
    * 입장 검증 (종합적인 티켓 상태 확인)
    */
-  async verifyTicketForEntry(tokenId: number, userId: string): Promise<{
+  async verifyTicketForEntry(tokenId: number | string, userId: string): Promise<{
     canEnter: boolean;
     exists: boolean;
     isUsed: boolean | null;
@@ -192,8 +196,9 @@ export class BlockchainVerificationService {
     errors: string[];
   }> {
     try {
-      // 1. 블록체인에서 티켓 정보 조회
-      const blockchainTicket = await this.contract.tickets(tokenId);
+      // 1. 블록체인에서 티켓 정보 조회 (BigInt 사용)
+      const tokenIdBigInt = BigInt(tokenId);
+      const blockchainTicket = await this.contract.tickets(tokenIdBigInt);
       const exists = blockchainTicket.issuedAt > 0;
 
       if (!exists) {

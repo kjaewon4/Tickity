@@ -48,6 +48,38 @@ const ConcertDetail = () => {
   // 진입 시 무조건 1인 1매 안내 모달
   useEffect(() => {
     if (concert) {
+    const checkDuplicate = async () => {
+      if (!concert || !userId) return;
+
+      // 로딩 중에는 중복 체크를 지연시킴
+      setTimeout(async () => {
+        try {
+          const res = await apiClient.getUserTickets(userId);
+          const tickets: UserTicket[] = res.data?.tickets ?? [];
+
+          const hasTicketForConcert = tickets.some(
+            (ticket) => ticket.concert?.id === concert.id
+          );
+
+          if (hasTicketForConcert) {
+            setIsDuplicateBooking(true);
+            setModalMode('duplicate');
+            setShowLimitModal(true);
+          }
+        } catch (err) {
+          console.error('중복 티켓 확인 실패:', err);
+        } finally {
+          setCheckedDuplicate(true); 
+        }
+      }, 1000); // 1초 지연
+    };
+
+    checkDuplicate();
+  }, [concert?.id, userId]);
+
+  // 중복 검사 후 1인 1매 안내 띄움 (중복 아닌 경우만)
+  useEffect(() => {
+    if (concert && checkedDuplicate && !isDuplicateBooking) {
       setModalMode('limit');
       setShowLimitModal(true);
     }
@@ -128,7 +160,15 @@ const proceedToSeatSelection = () => {
     }
   }, [activeTab]);
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600 text-lg">콘서트 정보를 불러오는 중...</p>
+        <p className="text-gray-400 text-sm mt-2">잠시만 기다려주세요</p>
+      </div>
+    </div>
+  );
   if (error) return <div className="p-6 text-red-500">{error}</div>;
   if (!concert || !ticketInfo) return <div className="p-6">콘서트 정보를 찾을 수 없습니다.</div>;
 

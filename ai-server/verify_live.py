@@ -6,37 +6,55 @@ from insightface.app import FaceAnalysis
 
 # ✅ 현재 파일 기준으로 루트 디렉토리를 sys.path에 등록
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-from utils.similarity import cosine_similarity
 
+from config import supabase
+from utils.crypto_utils import decrypt_embedding
+from utils.similarity import cosine_similarity, l2_distance
+
+# 🔧 Threshold 설정
 THRESHOLD = 0.5
-SAVE_DIR = "./data/registered_faces"
+L2_THRESHOLD = 1.2
 
-# 모델 준비
+# ✅ 모델 준비
 app = FaceAnalysis(name="buffalo_l", providers=['CPUExecutionProvider'])
 app.prepare(ctx_id=0, det_size=(320, 320))
 
-# 등록된 얼굴 임베딩 로드
-def load_registered_embeddings():
-    db = {}
-    for file in os.listdir(SAVE_DIR):
-        if file.endswith(".npy"):
-            name = file.replace(".npy", "")
-            vec = np.load(os.path.join(SAVE_DIR, file))
-            db[name] = vec
-    return db
+# ✅ 특정 user_id만 테스트
+TARGET_USER_ID = "c2440e95-0434-413a-8577-ed3b81b1b7d4"  # 🔴 테스트할 user_id로 수정
 
+def load_registered_embeddings():
+    print("🔄 Supabase에서 등록된 embedding 로딩 중...")
+    try:
+        response = supabase.table("face_embeddings").select("user_id, embedding_enc").execute()
+        embeddings = {}
+        for record in response.data:
+            user_id = record['user_id'].strip()  # 혹시 모를 공백 제거
+            embedding_enc = record['embedding_enc']
+            emb = decrypt_embedding(embedding_enc)  # (5,512) or (512,)
+            embeddings[user_id] = emb
+        print(f"✅ {len(embeddings)}명의 임베딩 로드 완료")
+        return embeddings
+    except Exception as e:
+        print(f"❌ Supabase 조회 실패: {e}")
+        return {}
+
+# ✅ 등록된 embedding 로드
 db_embeddings = load_registered_embeddings()
-if not db_embeddings:
-    print("❌ 등록된 사용자가 없습니다. 먼저 얼굴을 등록하세요.")
+print("🔎 등록된 user_ids:", list(db_embeddings.keys()))  # 디버깅용
+
+if TARGET_USER_ID not in db_embeddings:
+    print(f"❌ {TARGET_USER_ID} 사용자가 등록되어 있지 않습니다.")
     exit(1)
 
-# ✅ 고정된 카메라 인덱스 사용 (video0)
+target_embedding = db_embeddings[TARGET_USER_ID]
+
+# ✅ 카메라 초기화
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     print("❌ 웹캠을 열 수 없습니다.")
     exit(1)
 
-print("🎥 실시간 얼굴 인증 시작 (ESC: 종료)")
+print(f"🎥 실시간 얼굴 인증 시작 (ESC: 종료) - 대상 사용자: {TARGET_USER_ID}")
 
 while True:
     ret, frame = cap.read()
@@ -51,17 +69,21 @@ while True:
         bbox = face.bbox.astype(int)
         live_emb = face.embedding
 
-        best_match = "Unknown"
-        best_score = -1
+        # ✅ 다중 embedding 비교
+        if target_embedding.ndim == 2:
+            scores = [cosine_similarity(live_emb, emb) for emb in target_embedding]
+            distances = [l2_distance(live_emb, emb) for emb in target_embedding]
+            score = max(scores)
+            distance = distances[np.argmax(scores)]
+        else:
+            score = cosine_similarity(live_emb, target_embedding)
+            distance = l2_distance(live_emb, target_embedding)
 
-        for name, reg_emb in db_embeddings.items():
-            score = cosine_similarity(live_emb, reg_emb)
-            if score > best_score:
-                best_score = score
-                best_match = name if score > THRESHOLD else "Unknown"
+        verified = score > THRESHOLD and distance < L2_THRESHOLD
+
+        label = f"{'✅' if verified else '❌'} {TARGET_USER_ID} ({score:.2f}, L2:{distance:.2f})"
 
         cv2.rectangle(display_frame, tuple(bbox[:2]), tuple(bbox[2:]), (0, 255, 0), 2)
-        label = f"{best_match} ({best_score:.2f})"
         cv2.putText(display_frame, label, (bbox[0], bbox[1] - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 

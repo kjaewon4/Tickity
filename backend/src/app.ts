@@ -11,7 +11,6 @@ import cors from 'cors';
 import usersRouter from './users/users.controller';
 import concertsRouter from './concerts/concerts.controller';
 import venuesRouter from './venues/venues.controller';
-import faceEmbeddingsRouter from './face_embeddings/face_embeddings.controller';
 import seatGradesRouter from './seat_grades/seat_grades.controller';
 import ticketsRouter from './tickets/tickets.controller';
 import authRouter from './auth/auth.controller';
@@ -52,11 +51,10 @@ app.use(morgan('dev'));
 
 // Auth (로그인/회원가입 등)
 app.use('/auth', authRouter);
-// 사용자, 공연, 얼굴임베딩, 좌석등급 기본 CRUD
+// 사용자, 공연, 좌석등급 기본 CRUD
 app.use('/users', usersRouter);
 app.use('/concerts', concertsRouter);
 app.use('/venues', venuesRouter);
-app.use('/face-embeddings', faceEmbeddingsRouter);
 app.use('/seat-grades', seatGradesRouter);
 
 // ■ 티켓 관련 라우트

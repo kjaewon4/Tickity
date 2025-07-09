@@ -111,9 +111,9 @@ export default function FaceRegistrationPage() {
     timerRef.current = setInterval(() => {
       setRecordingTime(prev => {
         const newTime = prev + 1;
-        if (newTime >= 3) {
+        if (newTime >= 6) {
           mediaRecorder.stop();
-          return 3;
+          return 6;
         }
         return newTime;
       });
@@ -193,9 +193,9 @@ export default function FaceRegistrationPage() {
             <h3 className="font-bold">사용 방법</h3>
             <ul className="mt-2 list-disc list-inside text-sm">
               <li>얼굴이 화면 중앙에 잘 보이도록 위치하세요</li>
-              <li>녹화 버튼을 눌러 3초간 비디오를 촬영하세요 (자동 중지)</li>
+              <li>녹화 버튼을 눌러 6초간 비디오를 촬영하세요 (자동 중지)</li>
               <li>자동으로 얼굴 정보가 등록됩니다</li>
-              <li><strong>AI가 3초 동안 여러 프레임을 분석해 최적의 얼굴 데이터를 생성합니다</strong></li>
+              <li><strong>AI가 6초 동안 여러 프레임을 분석해 최적의 얼굴 데이터를 생성합니다</strong></li>
             </ul>
           </div>
 
@@ -229,7 +229,7 @@ export default function FaceRegistrationPage() {
                 </div>
                 {/* 타이머 */}
                 <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded">
-                  <span className="font-bold">{recordingTime}/3초</span>
+                  <span className="font-bold">{recordingTime}/6초</span>
                 </div>
                 {/* 가이드 테두리 */}
                 <div className="absolute inset-2 border-2 border-green-400 rounded-lg pointer-events-none"></div>
@@ -267,7 +267,7 @@ export default function FaceRegistrationPage() {
                 disabled={!cameraReady}
                 className="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {cameraReady ? '3초 녹화 시작' : '카메라 준비 중...'}
+                {cameraReady ? '6초 녹화 시작' : '카메라 준비 중...'}
               </button>
             ) : isRegistering ? (
               <div className="flex items-center justify-center">

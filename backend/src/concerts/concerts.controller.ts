@@ -153,18 +153,25 @@ router.get('/:concertId', async (req, res) => {
       });
     }
 
-    // 공연 상세 정보 조회
-    const concertDetail = await getConcertDetail(concert.id);
+    // 공연 상세 정보 조회 (타임아웃 설정)
+    const concertDetail = await Promise.race([
+      getConcertDetail(concert.id),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('요청 시간 초과')), 8000)
+      )
+    ]);
     
     res.json({
       success: true,
       data: concertDetail
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('공연 조회 오류:', error);
     res.status(500).json({
       success: false,
-      message: '공연 조회 중 오류가 발생했습니다.'
+      message: error.message === '요청 시간 초과' 
+        ? '요청 시간이 초과되었습니다. 다시 시도해주세요.'
+        : '공연 조회 중 오류가 발생했습니다.'
     });
   }
 });
@@ -642,5 +649,88 @@ router.post('/:concertId/seats/hold', async (req, res) => {
   });
 });
 
+// 클라이언트가 결제창 이탈 시, HOLD → ABALIABLE
+router.post('/:concertId/seats/available', async (req, res) => {
+  const { concertId } = req.params;
+  const { sectionId, row, col, userId } = req.body;
+
+  if (!concertId || !sectionId || row === undefined || col === undefined || !userId) {
+    return res.status(400).json({
+      success: false,
+      error: '필수 정보가 부족합니다.'
+    });
+  }
+
+  // 1. 좌표 → seat_id 조회
+  const seatId = await ticketsService.findSeatIdByPosition(sectionId, row, col);
+  
+  const { data: existingSeat, error: fetchError } = await supabase
+    .from('concert_seats')
+    .select('current_status')
+    .eq('concert_id', concertId)
+    .eq('seat_id', seatId)
+    .single();
+
+    if (fetchError) {
+    console.error('좌석 상태 조회 실패:', fetchError.message);
+    return res.status(500).json({
+      success: false,
+      error: '좌석 정보를 조회하는 데 실패했습니다.'
+    });
+  }
+
+  // 좌석이 존재하지 않는 경우 처리
+  if (!existingSeat) {
+    return res.status(404).json({
+      success: false,
+      error: '해당 좌석을 찾을 수 없습니다.'
+    });
+  }
+
+  // SOLD 상태일 때만 명시적인 오류 메시지를 반환
+  if (existingSeat.current_status === 'SOLD') {
+    return res.status(409).json({ // 409 Conflict는 여전히 적절합니다.
+      success: false,
+      error: '이미 판매 완료된 좌석입니다.'
+    });
+  }
+
+  const { error: updateError, count } = await supabase
+    .from('concert_seats')
+    .update({
+      current_status: 'AVAILABLE',
+      last_action_user: null,
+      hold_expires_at: null
+    })
+    .match({
+      concert_id: concertId,
+      seat_id: seatId,
+      current_status: existingSeat.current_status // 현재 조회된 상태 그대로 매치 (HOLD or AVAILABLE)
+    });
+
+  if (updateError) {
+    console.error('AVAILABLE 업데이트 실패:', updateError.message);
+    return res.status(500).json({
+      success: false,
+      error: '좌석을 AVAILABLE 상태로 변경하는 데 실패했습니다.'
+    });
+  }
+
+  // 업데이트가 실제로 발생하지 않았을 경우 (예: 이미 AVAILABLE이었음)
+  if (!count || count === 0) {
+    console.log(`[${new Date().toISOString()}] 콘서트 ID: ${concertId}, 좌석 ID: ${seatId}는 이미 AVAILABLE 상태였습니다.`);
+    return res.json({
+      success: true,
+      message: '좌석은 이미 AVAILABLE 상태였거나 성공적으로 설정되었습니다.',
+      seatId,
+    });
+  }
+
+  return res.json({
+    success: true,
+    message: '좌석이 AVAILABLE 상태로 설정되었습니다.',
+    seatId,
+  });
+});
 
 export default router; 
