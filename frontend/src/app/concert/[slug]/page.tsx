@@ -19,6 +19,8 @@ const ConcertDetail = () => {
   const [activeTab, setActiveTab] = useState('공연정보');
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [modalMode, setModalMode] = useState<'duplicate' | 'limit' | null>(null);
+  const [isDuplicateBooking, setIsDuplicateBooking] = useState(false);
+  const [checkedDuplicate, setCheckedDuplicate] = useState(false);
 
   // 커스텀 훅들 사용
   const { concert, policies, ticketInfo, loading, error } = useConcertData();
@@ -45,45 +47,43 @@ const ConcertDetail = () => {
     }
   }, [concert]);
 
-  // 진입 시 무조건 1인 1매 안내 모달
+  // 진입 시 중복 예매 여부 확인 (1초 지연 후)
   useEffect(() => {
-    if (concert) {
+    if (!concert || !userId) return;
+
     const checkDuplicate = async () => {
-      if (!concert || !userId) return;
+      try {
+        const res = await apiClient.getUserTickets(userId);
+        const tickets: UserTicket[] = res.data?.tickets ?? [];
 
-      // 로딩 중에는 중복 체크를 지연시킴
-      setTimeout(async () => {
-        try {
-          const res = await apiClient.getUserTickets(userId);
-          const tickets: UserTicket[] = res.data?.tickets ?? [];
+        const hasTicketForConcert = tickets.some(
+          (ticket) => ticket.concert?.id === concert.id
+        );
 
-          const hasTicketForConcert = tickets.some(
-            (ticket) => ticket.concert?.id === concert.id
-          );
-
-          if (hasTicketForConcert) {
-            setIsDuplicateBooking(true);
-            setModalMode('duplicate');
-            setShowLimitModal(true);
-          }
-        } catch (err) {
-          console.error('중복 티켓 확인 실패:', err);
-        } finally {
-          setCheckedDuplicate(true); 
+        if (hasTicketForConcert) {
+          setIsDuplicateBooking(true);
+          setModalMode('duplicate');
+          setShowLimitModal(true);
         }
-      }, 1000); // 1초 지연
+      } catch (err) {
+        console.error('중복 티켓 확인 실패:', err);
+      } finally {
+        setCheckedDuplicate(true);
+      }
     };
 
-    checkDuplicate();
+    const timer = setTimeout(checkDuplicate, 1000); // 1초 지연 실행
+
+    return () => clearTimeout(timer); // cleanup
   }, [concert?.id, userId]);
 
-  // 중복 검사 후 1인 1매 안내 띄움 (중복 아닌 경우만)
+  // 중복이 아닌 경우 1인 1매 모달 띄우기
   useEffect(() => {
     if (concert && checkedDuplicate && !isDuplicateBooking) {
       setModalMode('limit');
       setShowLimitModal(true);
     }
-  }, [concert]);
+  }, [concert, checkedDuplicate, isDuplicateBooking]);
 
   // 예매 버튼 클릭 시 실시간 중복 검사 또는 로그인 확인
   const handleReservation = async () => {
@@ -93,6 +93,11 @@ const ConcertDetail = () => {
     if (!userId) {
       router.push('/login');
       return;
+    }
+
+    if (!selectedTime) {
+    alert('시간을 선택해주세요.');
+    return;
     }
 
     try {
