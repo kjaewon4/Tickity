@@ -30,23 +30,25 @@ const maxPriorityFeePerGas = parseUnits('1.5', 'gwei'); // 1500000000n
 
 async function generateUniqueTokenId(maxAttempts = 5): Promise<string> {
   for (let i = 0; i < maxAttempts; i++) {
-    // 1) 16자리 랜덤 숫자 생성
+    // 1) 16자리 랜덤 숫자 생성 (새로운 범위 사용하여 기존 토큰과 충돌 방지)
     const candidate = String(
-      Math.floor(1e15 + Math.random() * 9e15)  // 1e15 ~ 1e16-1
+      Math.floor(9e15 + Math.random() * 1e15)  // 9e15 ~ 1e16-1 (더 높은 범위 사용)
     );
 
-    // 2) DB에 이미 있는지 미리 조회
+    // 2) DB에서 중복 확인
     const { data, error: queryErr } = await supabase
       .from('tickets')
       .select('id', { count: 'exact' })
       .eq('nft_token_id', candidate);
 
-    if (queryErr) throw new Error('중복 조회 실패: ' + queryErr.message);
+    if (queryErr) throw new Error('DB 중복 조회 실패: ' + queryErr.message);
     if ((data?.length ?? 0) === 0) {
       // 중복 없으니 이 ID 확정
+      console.log(`✅ 새로운 범위에서 유니크 토큰 ID 생성: ${candidate}`);
       return candidate;
     }
     // 중복이면 다음 루프에서 새로 뽑기
+    console.log(`🔄 토큰 ID ${candidate}: DB에서 중복 발견, 재생성 중...`);
   }
 
   throw new Error('유니크 토큰 ID 생성에 실패했습니다 (재시도 한도 초과)');
@@ -208,15 +210,20 @@ export class BlockchainService {
       // BigInt로 변환하여 컨트랙트에 전달
       const tokenIdBigInt = BigInt(tokenId);
       
-      // 입장 처리 - nonce 자동 관리
+      // nonce 자동 관리 - 현재 nonce 확인
+      const currentNonce = await adminSigner.getNonce();
+      console.log(`🔢 입장 처리용 현재 관리자 nonce: ${currentNonce}`);
+      
+      // 입장 처리 - nonce 명시적 지정
       const tx = await contractWithAdmin.markAsUsed(tokenIdBigInt, {
         gasLimit: 200_000n,
         maxFeePerGas,
         maxPriorityFeePerGas,
+        nonce: currentNonce, // 명시적으로 nonce 지정
       });
       
       await tx.wait();
-      console.log(`토큰 ${tokenId} 입장 처리 완료`);
+      console.log(`✅ 토큰 ${tokenId} 입장 처리 완료 (nonce: ${currentNonce})`);
     } catch (error: any) {
       console.error(`토큰 ${tokenId} 입장 처리 실패:`, error);
       throw new Error(error.error?.message || error.reason || error.message);
