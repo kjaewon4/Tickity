@@ -209,7 +209,7 @@ const FavoritesPage = () => {
       );
 
  return (
-  <main className="px-4 pt-40 pb-10 bg-white min-h-screen w-full max-w-[1700px] mx-auto">
+  <main className="px-4 pt-20 p-20 bg-white min-h-screen w-full max-w-[1700px] mx-auto">
     {/* 찜한 공연 타이틀 영역 */}
     <div className="mb-10">
       <h1 className="text-3xl font-bold text-gray-800 mb-2">찜한 공연</h1>

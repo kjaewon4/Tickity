@@ -1,5 +1,3 @@
-import { FaTwitter, FaFacebookF, FaInstagram } from 'react-icons/fa';
-
 export default function Footer() {
   return (
     <footer className="bg-gray-800 text-white px-6 py-10 text-sm">
@@ -9,11 +7,6 @@ export default function Footer() {
           <h3 className="text-lg font-semibold mb-2">Tickity</h3>
           <p>고객센터: 1588-1234 (평일 09:00 ~ 18:00)</p>
           <p>이메일: support@tickity.com</p>
-          <div className="flex gap-4 mt-4 text-xl">
-            <FaTwitter className="hover:text-blue-400 cursor-pointer" />
-            <FaFacebookF className="hover:text-blue-500 cursor-pointer" />
-            <FaInstagram className="hover:text-pink-400 cursor-pointer" />
-          </div>
         </div>
 
         {/* 오른쪽 링크 영역 */}
@@ -46,8 +39,7 @@ export default function Footer() {
 
       <div className="border-t border-gray-600 mt-10 pt-6 text-center space-y-2">
         <p>
-          (주)티키티컴퍼니 | 대표: 3조 | 사업자등록번호: 123-45-67890<br />
-          서울특별시 강남구 테헤란로 123, 45층
+          (주)티키티컴퍼니 | 대표: 3조 | GitHub: https://github.com/kjaewon4/Tickity<br />
         </p>
         <p>© 2024 Tickity Corp. All rights reserved.</p>
       </div>

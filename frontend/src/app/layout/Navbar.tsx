@@ -180,7 +180,7 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
           </button>
         </form>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-center md:justify-end w-full md:w-auto">
           <Link href="/" className="text-gray-700 hover:bg-gray-100 px-2.5 py-2 rounded text-sm md:text-base font-semibold">
             Home
           </Link>
