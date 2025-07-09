@@ -41,7 +41,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({ message, onConfirm, onCance
               취소
             </button>
             <button
-              className="px-4 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
+              className="px-4 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
               onClick={onConfirm}
             >
               확인

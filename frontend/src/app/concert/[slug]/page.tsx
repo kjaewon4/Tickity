@@ -154,7 +154,7 @@ const hasTicketForConcert = tickets.some(
   if (!concert || !ticketInfo) return <div className="p-6">콘서트 정보를 찾을 수 없습니다.</div>;
 
   return (
-    <div className="p-6 bg-white text-[#222] max-w-[1200px] mx-auto pt-40">
+    <div className="p-6 bg-white text-[#222] max-w-[1200px] mx-auto pt-20">
       {showLimitModal && modalMode && (
         <OneTicketModal
           mode={modalMode}

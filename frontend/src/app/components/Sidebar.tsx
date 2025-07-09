@@ -269,7 +269,7 @@ const Sidebar: FC<SidebarProps> = ({
         <button
           onClick={handleConfirmSeat}
           disabled={!selectedSeatInfo}
-          className="w-full bg-gray-700 text-white py-2 rounded hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          className="w-full bg-gray-700 text-white py-2 rounded hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition cursor-pointer"
         >
           좌석 선택 완료
         </button>

@@ -6,6 +6,7 @@ import { FaTicketAlt } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/apiClient';
 import ConfirmModal from '@/app/modal/ConfirmModal';
+import { createSeoConcertUrl } from '@/utils/urlUtils';
 
 interface User {
   name: string;
@@ -84,6 +85,7 @@ export default function MyPage() {
             poster_url: ticket.concert.poster_url,
             seatId: ticket.seat_id,
             tokenId: ticket.nft_token_id,
+            
           };
         });
         setReservations(ticketList);
@@ -163,8 +165,8 @@ export default function MyPage() {
       )}
       {user && (
         <div className="w-full flex flex-col gap-8">
-          <div className="flex justify-start gap-16 w-full">
-            <div className="w-[360px] px-6 py-6 bg-white rounded-xl shadow flex flex-col items-center">
+          <div className="flex justify-start gap-48 w-full items-start">
+            <div className="w-[360px] px-6 py-6 bg-white rounded-xl shadow flex flex-col items-center self-start">
               <div className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center text-sm text-gray-500 mb-3">
                 {gender ? (
                   <img
@@ -225,10 +227,10 @@ export default function MyPage() {
                           setFilter(f);
                           setCurrentPage(1);
                         }}
-                        className={`px-4 py-2 rounded-full border text-base ${
+                        className={`px-4 py-2 rounded-full border text-base cursor-pointer transition-colors duration-150 ${
                           filter === f
                             ? 'bg-blue-500 text-white'
-                            : 'bg-white text-gray-600 border-gray-300'
+                            : 'bg-white text-gray-600 border-gray-300 hover:bg-blue-500 hover:text-white'
                         }`}
                       >
                         {f}
@@ -274,7 +276,12 @@ export default function MyPage() {
 
                       {/* 버튼 묶음 */}
                       <div className="mt-4 flex gap-2">
-                        <button className="px-4 py-2 bg-gray-200 text-sm rounded">상세보기</button>
+                          <button
+                            onClick={() => router.push(createSeoConcertUrl(item.title, item.id.toString()))}
+                            className="px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 cursor-pointer"
+                          >
+                            상세보기
+                          </button>
                         <button
                           onClick={() => {
                             if (item.status === '예약완료') {
@@ -283,13 +290,13 @@ export default function MyPage() {
                                 ticketId: item.id.toString(),
                                 tokenId: item.tokenId,
                               });
-                              setShowConfirmModal(true); // 이 줄이 꼭 필요함!
+                              setShowConfirmModal(true); 
                             }
                           }}
                           
-                          className={`px-4 py-2 text-sm rounded ${
+                          className={`px-4 py-2 text-sm rounded cursor-pointer ${
                             item.status === '예약완료'
-                              ? 'bg-red-500 text-white'
+                              ? 'bg-red-500 text-white hover:bg-red-600'
                               : 'bg-gray-300 text-gray-600'
                           }`}
                         >
@@ -300,9 +307,9 @@ export default function MyPage() {
                   </div>
 
                   {/* 우측: 가격/예매일 */}
-                  <div className="text-right text-sm whitespace-nowrap pl-4 shrink-0">
-                    <p className="font-semibold mb-1">{item.price}원</p>
-                    <p className="text-gray-500">예매일: {item.bookedAt.split('T')[0]}</p>
+                  <div className="text-right whitespace-nowrap pl-4 shrink-0">
+                    <p className="font-semibold mb-1 text-lg">{item.price}원</p>
+                    <p className="text-gray-500 text-md">예매일: {item.bookedAt.split('T')[0]}</p>
                   </div>
                 </div>
 
@@ -315,10 +322,10 @@ export default function MyPage() {
                       <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`w-8 h-8 text-sm rounded border ${
+                        className={`w-8 h-8 text-sm rounded border transition-colors duration-150 cursor-pointer ${
                           currentPage === i + 1
                             ? 'bg-blue-500 text-white'
-                            : 'bg-white text-gray-700'
+                            : 'bg-white text-gray-700 hover:bg-blue-500 hover:text-white'
                         }`}
                       >
                         {i + 1}

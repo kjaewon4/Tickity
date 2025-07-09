@@ -65,6 +65,7 @@ export default function RootLayout({
       localStorage.removeItem('refreshToken');
       setUser(null);
       setAccessToken(null);
+      window.location.reload();
     }
   };
 
