@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import '../../globals.css';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useConcertData, useAuth, useFavorite } from './hooks';
 import { ConcertHeader, ConcertInfoTabs, BookingBox } from './components';
 import OneTicketModal from '@/app/modal/OneTicketModal';
 import apiClient from '@/lib/apiClient';
 import { UserTicket } from '@/types/ticket';
+import ChatbotModal from '@/app/layout/ChatbotModal';
 
 const ConcertDetail = () => {
   const { slug } = useParams();
@@ -18,6 +19,7 @@ const ConcertDetail = () => {
   const [isDuplicateBooking, setIsDuplicateBooking] = useState(false);
   const [modalMode, setModalMode] = useState<'duplicate' | 'limit' | null>(null);
   const [checkedDuplicate, setCheckedDuplicate] = useState(false); 
+  const router = useRouter();
 
   // 커스텀 훅들 사용
   const { concert, policies, ticketInfo, loading, error } = useConcertData();
@@ -84,6 +86,12 @@ const ConcertDetail = () => {
   let seatPopup: Window | null = null;
 
   const handleReservation = () => {
+
+    if (!userId) {
+      router.push('/login');
+      return;
+    }
+
     if (isDuplicateBooking) {
       setModalMode('duplicate');
       setShowLimitModal(true);
@@ -149,7 +157,7 @@ const ConcertDetail = () => {
     <div className="p-6 bg-white text-[#222] max-w-[1200px] mx-auto pt-40">
       {showLimitModal && modalMode && (
         <OneTicketModal
-          isDuplicate={modalMode === 'duplicate'}
+          mode={modalMode}
           onClose={() => {
             setShowLimitModal(false);
             const currentMode = modalMode;
@@ -191,7 +199,7 @@ const ConcertDetail = () => {
         </div>
 
         {/* 오른쪽 예약 박스 */}
-        <div className="sticky top-10 h-fit">
+        <div className="sticky top-20 self-start">
           <BookingBox
             selectedDate={selectedDate}
             selectedTime={selectedTime}
@@ -210,6 +218,7 @@ const ConcertDetail = () => {
           />
         </div>
       </div>
+      <ChatbotModal />
     </div>
   );
 };
