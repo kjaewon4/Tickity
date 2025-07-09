@@ -3,16 +3,16 @@ import { IoClose } from 'react-icons/io5';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface OneTicketModalProps {
-  isDuplicate?: boolean;
+  mode: 'duplicate' | 'limit';
   onClose: () => void;
 }
 
-const OneTicketModal: React.FC<OneTicketModalProps> = ({ isDuplicate = false, onClose }) => {
+const OneTicketModal: React.FC<OneTicketModalProps> = ({ mode, onClose }) => {
   const [highlight, setHighlight] = useState(false);
 
   const handleBackdropClick = () => {
     setHighlight(true);
-    setTimeout(() => setHighlight(false), 1000); // 깜빡임 지속 시간
+    setTimeout(() => setHighlight(false), 1000);
   };
 
   return (
@@ -51,12 +51,10 @@ const OneTicketModal: React.FC<OneTicketModalProps> = ({ isDuplicate = false, on
             <IoClose />
           </button>
 
-          {/* 내용 */}
-          <h3 className="text-2xl font-bold mb-6 text-center">
-            알림
-          </h3>
+          <h3 className="text-2xl font-bold mb-6 text-center">알림</h3>
+
           <p className="text-base text-gray-700 text-center leading-relaxed">
-            {isDuplicate ? (
+            {mode === 'duplicate' ? (
               <>
                 해당 콘서트는 <span className="text-red-500 font-bold">이미 예매</span>하셨습니다. <br />
                 중복 예매는 <span className="text-red-500 font-bold">불가능</span>합니다.
