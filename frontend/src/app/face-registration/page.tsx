@@ -149,10 +149,11 @@ function FaceRegistrationContent() {
       console.log('✅ 얼굴 등록 응답:', result);
 
       if (response.ok && result.message) {
-        setSuccess('얼굴 등록이 완료되었습니다! 잠시 후 메인 페이지로 이동합니다.');
+        setSuccess('얼굴 등록이 완료되었습니다! 잠시 후 회원정보 입력 페이지로 이동합니다.');
         setTimeout(() => {
-          router.push('/');
-        }, 3000);
+          // 얼굴 등록 후 회원정보 입력 페이지로 이동
+          router.push(`/signup/complete?user_id=${userId}`);
+        }, 2000);
       } else {
         const errorMsg = result.error || result.detail || '얼굴 등록에 실패했습니다.';
         setError(errorMsg);

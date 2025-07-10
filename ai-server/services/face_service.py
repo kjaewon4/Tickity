@@ -4,6 +4,8 @@ from utils.crypto_utils import encrypt_embedding, decrypt_embedding
 from utils.similarity import cosine_similarity
 from config import supabase, THRESHOLD
 from fastapi import UploadFile
+import os
+import requests
 
 def validate_uuid_or_test_id(user_id: str) -> str:
     """UUID 형식이거나 테스트 ID인지 확인"""
@@ -41,46 +43,65 @@ def fetch_registered_embeddings():
 
 async def register_user_face_db(user_id: str, video: UploadFile):
     """
-    사용자 얼굴 비디오에서 embedding을 KMeans로 5개 추출 후 암호화하여 Supabase에 저장
+    사용자 얼굴 비디오에서 embedding을 KMeans로 5개 추출 후 암호화하여 Tickity 백엔드에 저장
     """
     try:
         # ✅ UUID 형식 검증
         validated_user_id = validate_uuid_or_test_id(user_id)
-        
         # ✅ 비디오에서 embedding 추출 (5개 대표 embedding)
         video_bytes = await video.read()
         embeddings = extract_embedding_from_video_kmeans(video_bytes)  # KMeans 적용된 새 함수
-        
         if embeddings is None or len(embeddings) == 0:
             return {"success": False, "error": "❌ 얼굴을 감지하지 못했습니다."}
-        
         # ✅ embedding 암호화 (5개 저장)
         encrypted_embedding = encrypt_embedding(embeddings)  # (5,512) -> bytes -> base64 str
-        
-        # ✅ 기존 레코드 있는지 확인
-        existing = supabase.table("face_embeddings").select("id").eq("user_id", validated_user_id).execute()
-        
-        if existing.data and len(existing.data) > 0:
-            # ✅ 업데이트
-            result = supabase.table("face_embeddings").update({
-                "embedding_enc": encrypted_embedding
-            }).eq("user_id", validated_user_id).execute()
-            action = "업데이트"
+
+        # --- 디버깅용 print ---
+        print("[DEBUG] user_id:", validated_user_id)
+        print("[DEBUG] embedding_enc type:", type(encrypted_embedding))
+        if hasattr(encrypted_embedding, '__len__'):
+            print("[DEBUG] embedding_enc length:", len(encrypted_embedding))
         else:
-            # ✅ 새로 삽입
-            result = supabase.table("face_embeddings").insert({
-                "user_id": validated_user_id,
-                "embedding_enc": encrypted_embedding
-            }).execute()
-            action = "등록"
-        
-        # ✅ 결과 확인
-        if result.data:
-            print(f"✅ 사용자 {validated_user_id} 얼굴 임베딩 {action} 성공 (총 {len(embeddings)}개 저장)")
-            return {"success": True, "message": f"{len(embeddings)}개 embedding {action} 완료"}
-        else:
-            print(f"❌ DB {action} 실패")
-            return {"success": False, "error": f"DB {action} 실패"}
+            print("[DEBUG] embedding_enc has no len")
+        print("[DEBUG] embedding_enc preview:", str(encrypted_embedding)[:100])
+
+        # embedding_enc가 bytes면 문자열로 변환
+        if isinstance(encrypted_embedding, bytes):
+            encrypted_embedding = encrypted_embedding.decode()
+
+        files = {
+            'user_id': (None, str(validated_user_id)),
+            'embedding_enc': (None, str(encrypted_embedding))
+        }
+        print("[DEBUG] POST /auth/face-register files:", {k: v[1][:100] for k, v in files.items()})
+        backend_url = os.getenv("TICKITY_BACKEND_URL", "http://localhost:4000")
+        full_url = f"{backend_url.rstrip('/')}/auth/face-register"
+        print("[DEBUG] 실제 요청 URL:", full_url)
+        response = requests.post(full_url, files=files)
+        try:
+            return response.json()
+        except Exception:
+            return {"success": False, "error": f"백엔드 응답 파싱 실패: {response.text}"}
+
+        # --- 기존 Supabase 직접 접근 코드 (비활성화) ---
+        # existing = supabase.table("face_embeddings").select("id").eq("user_id", validated_user_id).execute()
+        # if existing.data and len(existing.data) > 0:
+        #     result = supabase.table("face_embeddings").update({
+        #         "embedding_enc": encrypted_embedding
+        #     }).eq("user_id", validated_user_id).execute()
+        #     action = "업데이트"
+        # else:
+        #     result = supabase.table("face_embeddings").insert({
+        #         "user_id": validated_user_id,
+        #         "embedding_enc": encrypted_embedding
+        #     }).execute()
+        #     action = "등록"
+        # if result.data:
+        #     print(f"✅ 사용자 {validated_user_id} 얼굴 임베딩 {action} 성공 (총 {len(embeddings)}개 저장)")
+        #     return {"success": True, "message": f"{len(embeddings)}개 embedding {action} 완료"}
+        # else:
+        #     print(f"❌ DB {action} 실패")
+        #     return {"success": False, "error": f"DB {action} 실패"}
 
     except Exception as e:
         print(f"❌ 얼굴 등록 실패: {e}")
