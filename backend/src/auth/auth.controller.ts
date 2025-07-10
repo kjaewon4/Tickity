@@ -287,6 +287,7 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
     };
 
     // ✅ 로그인 성공 후 embedding 존재 여부 확인
+    console.log(`🔍 얼굴 임베딩 조회 시작: 사용자 ID ${userData.id}`);
     const { data: embeddingData, error: embeddingError } = await supabase
       .from('face_embeddings')
       .select('embedding_enc')
@@ -300,6 +301,12 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
         error: '임베딩 조회 중 오류가 발생했습니다.'
       });
     }
+
+    console.log(`🔍 얼굴 임베딩 조회 결과:`, {
+      hasEmbeddingData: !!embeddingData,
+      embeddingDataLength: embeddingData?.embedding_enc?.length || 0,
+      userDataId: userData.id
+    });
 
     const hasEmbedding = !!embeddingData;
 
@@ -439,6 +446,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
     };
 
     // ✅ 추가: 임베딩 존재 여부 확인
+    console.log(`🔍 사용자 정보 조회 - 얼굴 임베딩 조회 시작: 사용자 ID ${userData.id}`);
     const { data: embeddingData, error: embeddingError } = await supabase
       .from('face_embeddings')
       .select('embedding_enc')
@@ -452,6 +460,12 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
         error: '임베딩 조회 중 오류가 발생했습니다.'
       });
     }
+
+    console.log(`🔍 사용자 정보 조회 - 얼굴 임베딩 조회 결과:`, {
+      hasEmbeddingData: !!embeddingData,
+      embeddingDataLength: embeddingData?.embedding_enc?.length || 0,
+      userDataId: userData.id
+    });
 
     const hasEmbedding = !!embeddingData;
 

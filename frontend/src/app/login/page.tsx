@@ -61,12 +61,20 @@ function LoginPageContent() {
 
             if (response.success && response.data) {
               const user = response.data.user;
+              console.log('🔍 사용자 정보 확인:', {
+                userId: user.id,
+                hasEmbedding: user.hasEmbedding,
+                hasName: !!user.name,
+                hasResidentNumber: !!user.residentNumber
+              });
+              
               if (user.hasEmbedding === false) {
-                console.log('임베딩 없음, 얼굴 등록 페이지로 이동');
+                console.log('❌ 임베딩 없음, 얼굴 등록 페이지로 이동');
                 router.push(`/face-registration?user_id=${user.id}`);
                 return;
               }
 
+              console.log('✅ 임베딩 있음, 사용자 정보 확인 중...');
               // 사용자 정보가 완전한지 확인
               if (user.name && user.residentNumber && user.residentNumber !== '1900-01-01' && user.residentNumber !== '') {
                 // 기존 사용자 - 메인 페이지로

@@ -77,6 +77,7 @@ const Navbar = ({ user, loading = false, handleLogout }: NavbarProps) => {
               ticketId: ticket.id,
               metadata,
               price: ticket.purchase_price,
+              is_cancelled: ticket.is_cancelled, // 취소 상태 추가
             } as TicketInfo;
           } catch (err) {
             console.warn(`토큰 ${ticket.nft_token_id} 메타데이터 로드 실패:`, err);

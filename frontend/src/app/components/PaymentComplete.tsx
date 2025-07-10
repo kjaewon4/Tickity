@@ -24,7 +24,17 @@ export default function PaymentComplete({ result }: Props) {
   };
 
   const handleGoToMypage = () => {
-    router.push('/mypage');
+    if (typeof window !== 'undefined') {
+      if (window.opener && !window.opener.closed) {
+        // 부모 창에서 마이페이지로 이동
+        window.opener.location.href = '/mypage';
+        // 현재 창 닫기
+        window.close();
+      } else {
+        // 부모 창이 없으면 현재 창에서 이동
+        router.push('/mypage');
+      }
+    }
   };
 
   return (

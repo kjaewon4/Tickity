@@ -26,7 +26,10 @@ interface Props {
 const RecentNFTTickets = ({ tickets = [], onQRShowingChange }: Props) => {
   const validTickets = tickets.filter(ticket => {
     const dateStr = getAttributeValue(ticket.metadata.attributes, 'Date');
-    return isFutureDate(dateStr);
+    const isFuture = isFutureDate(dateStr);
+    const isNotCancelled = !ticket.is_cancelled; // 취소되지 않은 티켓만 포함
+    
+    return isFuture && isNotCancelled;
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
