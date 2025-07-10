@@ -30,6 +30,7 @@ interface ReservationItem {
   poster_url: string;
   seatId: string;
   tokenId: number;
+  concertId: string; // 콘서트 ID 추가
 }
 
 export default function MyPage() {
@@ -85,7 +86,7 @@ export default function MyPage() {
             poster_url: ticket.concert.poster_url,
             seatId: ticket.seat_id,
             tokenId: ticket.nft_token_id,
-            
+            concertId: ticket.concert.id.toString(), // 콘서트 ID 추가
           };
         });
         setReservations(ticketList);
@@ -227,7 +228,7 @@ export default function MyPage() {
                           setFilter(f);
                           setCurrentPage(1);
                         }}
-                        className={`px-4 py-2 rounded-full border text-base cursor-pointer transition-colors duration-150 ${
+                        className={`px-4 py-2 rounded-full border text-base cursor-pointer transition-all duration-200 transform hover:scale-105 hover:shadow-md ${
                           filter === f
                             ? 'bg-blue-500 text-white'
                             : 'bg-white text-gray-600 border-gray-300 hover:bg-blue-500 hover:text-white'
@@ -242,7 +243,7 @@ export default function MyPage() {
                 {currentItems.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-start justify-between border border-gray-300 shadow-sm rounded-lg p-6 mb-6 text-base font-medium"
+                  className="flex items-start justify-between border border-gray-300 shadow-sm rounded-lg p-6 mb-6 text-base font-medium transition-all duration-200 hover:shadow-lg hover:border-blue-300"
                 >
                   {/* 좌측: 이미지 + 정보 */}
                   <div className="flex gap-6 w-full">
@@ -277,8 +278,32 @@ export default function MyPage() {
                       {/* 버튼 묶음 */}
                       <div className="mt-4 flex gap-2">
                           <button
-                            onClick={() => router.push(createSeoConcertUrl(item.title, item.id.toString()))}
-                            className="px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 cursor-pointer"
+                            onClick={() => {
+                              console.log('상세보기 클릭:', { title: item.title, concertId: item.concertId });
+                              const url = createSeoConcertUrl(item.title, item.concertId);
+                              console.log('생성된 URL:', url);
+                              router.push(url);
+                            }}
+                            style={{
+                              backgroundColor: '#3b82f6',
+                              color: 'white',
+                              padding: '8px 16px',
+                              fontSize: '14px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              transform: 'scale(1)',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#2563eb';
+                              e.currentTarget.style.transform = 'scale(1.05)';
+                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = '#3b82f6';
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
                           >
                             상세보기
                           </button>
@@ -293,12 +318,30 @@ export default function MyPage() {
                               setShowConfirmModal(true); 
                             }
                           }}
-                          
-                          className={`px-4 py-2 text-sm rounded cursor-pointer ${
-                            item.status === '예약완료'
-                              ? 'bg-red-500 text-white hover:bg-red-600'
-                              : 'bg-gray-300 text-gray-600'
-                          }`}
+                          style={{
+                            backgroundColor: item.status === '예약완료' ? '#ef4444' : '#d1d5db',
+                            color: item.status === '예약완료' ? 'white' : '#4b5563',
+                            padding: '8px 16px',
+                            fontSize: '14px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            transform: 'scale(1)',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (item.status === '예약완료') {
+                              e.currentTarget.style.backgroundColor = '#dc2626';
+                              e.currentTarget.style.transform = 'scale(1.05)';
+                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (item.status === '예약완료') {
+                              e.currentTarget.style.backgroundColor = '#ef4444';
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }
+                          }}
                         >
                           {item.status === '예약완료' ? '취소하기' : '환불완료'}
                         </button>
@@ -322,7 +365,7 @@ export default function MyPage() {
                       <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`w-8 h-8 text-sm rounded border transition-colors duration-150 cursor-pointer ${
+                        className={`w-8 h-8 text-sm rounded border transition-all duration-200 transform hover:scale-105 hover:shadow-md cursor-pointer ${
                           currentPage === i + 1
                             ? 'bg-blue-500 text-white'
                             : 'bg-white text-gray-700 hover:bg-blue-500 hover:text-white'
