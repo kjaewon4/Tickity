@@ -252,7 +252,7 @@ function FaceRegistrationContent() {
           {isRecording && (
             <div className="text-center mb-6">
               <div className="text-xl font-bold text-red-600">
-                녹화 중... {recordingTime}/3초
+                녹화 중... {recordingTime}/6초
               </div>
               <div className="text-sm text-gray-600 mt-1">
                 AI가 최적의 프레임들을 자동 선별합니다

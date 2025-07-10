@@ -47,4 +47,5 @@ export interface TicketInfo {
     title: string;
     start_date: string;
   };
+  is_cancelled?: boolean; // 취소 상태 추가
 }
