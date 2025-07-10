@@ -29,11 +29,20 @@ const maxFeePerGas = parseUnits('2.5', 'gwei');         // 2500000000n
 const maxPriorityFeePerGas = parseUnits('1.5', 'gwei'); // 1500000000n
 
 async function generateUniqueTokenId(maxAttempts = 5): Promise<string> {
+  // JavaScript Number가 안전하게 표현할 수 있는 최대 15자리 숫자: 9007199254740991
+  // 이 범위 안에서 가장 큰 15자리 숫자를 목표로 합니다.
+  // 실제 최대 안전 정수는 9,007,199,254,740,991 이므로
+  // 15자리 숫자의 시작인 1,000,000,000,000,000 (1e14)부터
+  // 안전한 최대값 (9,007,199,254,740,991)까지의 범위에서 생성합니다.
+  const SAFE_MAX_INT = 9007199254740991; // Number.MAX_SAFE_INTEGER
+  const MIN_15_DIGIT = 1000000000000000; // 10^14 (15자리 숫자의 최소값)
+
   for (let i = 0; i < maxAttempts; i++) {
-    // 1) 16자리 랜덤 숫자 생성 (새로운 범위 사용하여 기존 토큰과 충돌 방지)
-    const candidate = String(
-      Math.floor(9e15 + Math.random() * 1e15)  // 9e15 ~ 1e16-1 (더 높은 범위 사용)
-    );
+    // 1) Number 타입의 안전한 범위 내에서 15자리 랜덤 숫자 생성
+    // Math.random()은 0 (포함)에서 1 (제외) 사이의 값을 반환합니다.
+    // 따라서 (SAFE_MAX_INT - MIN_15_DIGIT + 1) 범위의 랜덤 값을 생성한 후 MIN_15_DIGIT를 더합니다.
+    const candidateNumber = Math.floor(Math.random() * (SAFE_MAX_INT - MIN_15_DIGIT + 1)) + MIN_15_DIGIT;
+    const candidate = String(candidateNumber);
 
     // 2) DB에서 중복 확인
     const { data, error: queryErr } = await supabase
@@ -44,7 +53,7 @@ async function generateUniqueTokenId(maxAttempts = 5): Promise<string> {
     if (queryErr) throw new Error('DB 중복 조회 실패: ' + queryErr.message);
     if ((data?.length ?? 0) === 0) {
       // 중복 없으니 이 ID 확정
-      console.log(`✅ 새로운 범위에서 유니크 토큰 ID 생성: ${candidate}`);
+      console.log(`✅ Number 안전 범위에서 유니크 토큰 ID 생성: ${candidate}`);
       return candidate;
     }
     // 중복이면 다음 루프에서 새로 뽑기

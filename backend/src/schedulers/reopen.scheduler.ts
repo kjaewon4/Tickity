@@ -12,7 +12,7 @@ export async function runReopenJob(): Promise<void> {
   // 1) 재오픈 대상 티켓 조회
   const { data: tickets, error } = await supabase
     .from('tickets')
-    .select('id, nft_token_id')
+    .select('id, nft_token_id, seat_id, concert_id')
     .eq('is_cancelled', true)
     .lte('reopen_time', now)
 
@@ -21,8 +21,15 @@ export async function runReopenJob(): Promise<void> {
   for (const t of tickets || []) {
     const tokenId = parseInt(t.nft_token_id, 10)
     try {
-      await reopenOnChain(tokenId)
-      await markTicketReopened(t.id)
+      // await reopenOnChain(tokenId)
+
+      const cleanedConcertId = t.concert_id.trim();
+      const cleanedSeatId = t.seat_id.trim();
+
+      // SupabaseDB 업데이트 (좌석 상태 AVAILABLE로)
+      await markTicketReopened(cleanedConcertId, cleanedSeatId);
+      console.log(`✅ 좌석 [${t.concert_id}] ${t.seat_id} 재오픈 완료 (티켓 ID: ${t.id})`);
+
     } catch (e) {
       console.error(`reopen failed for ${t.id}`, e)
     }

@@ -175,7 +175,7 @@ router.post(
       }
 
       // 1) DB: 좌석 예약 해제
-      await ticketsService.setSeatReserved(seatId, false);
+      // await ticketsService.setSeatReserved(seatId, false);
 
          
 			// 환불 금액 계산 후 반환 { originalPriceWon, cancellationFeeWon, refundedAmountWon } 
@@ -186,6 +186,17 @@ router.post(
       const {reopenTime, transactionHash}  = await ticketsService.cancelOnChain(
         Number(tokenId),refundedAmountWon
       );
+
+      // ----------------------------------------------------
+      // ⭐ 여기부터 재오픈 시간을 1분 뒤로 임의로 설정하는 부분 ⭐
+      // ----------------------------------------------------
+      const oneMinuteFromNow = Math.floor(Date.now() / 1000) + 60; // 현재 시간(초) + 60초
+      const artificialReopenTime = oneMinuteFromNow; // 이 값을 DB에 저장할 재오픈 시간으로 사용
+
+      console.log(`[DEBUG] 원래 재오픈 시간: ${reopenTime}, 임의 설정 재오픈 시간: ${artificialReopenTime}`);
+      // ----------------------------------------------------
+
+
       // 3) DB: 티켓 취소 정보 저장
       await ticketsService.markTicketCancelled(ticketId, reopenTime, transactionHash, cancellationFeeWon, refundedAmountWon);
 

@@ -729,15 +729,27 @@ export const reopenOnChain = async (tokenId: number) => {
 // ───────────────────────────────────────────────────────────
 // DB: 티켓 재오픈 상태 저장
 // ───────────────────────────────────────────────────────────
-export const markTicketReopened = async (ticketId: string) => {
-  const { error } = await supabase
-    .from('tickets')
-    .update({ is_cancelled: false })
-    .eq('id', ticketId);
-  if (error) {
-    console.error('markTicketReopened 오류:', error);
-    throw error;
-  }
+// src/tickets/tickets.service.ts
+export const markTicketReopened = async (concertId: string, seatId: string) => {
+  console.log(`[markTicketReopened] Trying to update concertId: ${concertId}, seatId: ${seatId}`);
+    const { data: updatedData, error: updateError } = await supabase
+        .from('concert_seats')
+        .update({
+            current_status: 'AVAILABLE',
+            last_action_user: null,
+        })
+        .eq('concert_id', concertId)
+        .eq('seat_id', seatId)
+        .select(); // 이 부분이 중요: 업데이트된 레코드를 반환하도록 요청
+
+    if (updateError) {
+        console.error('markTicketReopened - UPDATE 오류:', updateError);
+        throw updateError;
+    }
+
+    console.log('DB: 티켓 재오픈 상태 저장 - 업데이트 결과: ', updatedData); // 이 로그를 확인해야 합니다.
+                                                                       // `updatedData`가 빈 배열이거나,
+                                                                       // `current_status`가 여전히 `SOLD`인지 확인
 };
 
 // seats 테이블에서 seat_id 조회
