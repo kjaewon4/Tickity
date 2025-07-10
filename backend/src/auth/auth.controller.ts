@@ -14,6 +14,8 @@ import { config, getDynamicConfig } from '../config/environment';
 import { BlockchainService } from '../blockchain/blockchain.service';
 import axios from 'axios';
 import dns from 'dns';
+import multer from 'multer';
+const upload = multer();
 
 const router = Router();
 const bc = new BlockchainService();
@@ -643,25 +645,10 @@ router.get('/google/callback', async (req: Request, res: Response) => {
       }
     }
 
-    // 지갑 생성
-    let address = '';
-    let encryptedKey = '';
-
-    try {
-      const { address: walletAddress, privateKey } = await bc.createUserWallet();
-      address = walletAddress;
-      encryptedKey = encrypt(privateKey);
-    } catch (walletError) {
-      console.error('지갑 생성 실패:', walletError);
-      // 지갑 생성 실패 시에도 사용자 정보는 저장
-      address = 'wallet_creation_failed';
-      encryptedKey = 'wallet_creation_failed';
-    }
-
-    // 기존 사용자 확인
+    // 기존 사용자 확인 (최소 정보로 insert된 경우 포함)
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
-      .select('id, name, resident_number_encrypted')
+      .select('*')
       .eq('id', data.user.id)
       .maybeSingle();
 
@@ -671,10 +658,20 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 
     let needsSignupComplete = false;
 
-    // 사용자가 없으면 데이터베이스에 사용자 정보 저장
+    // ✅ 이미 있으면 update, 없으면 insert
+    let address = '';
+    let encryptedKey = '';
     if (!existingUser) {
+      // 새로 insert
+      try {
+        const wallet = await bc.createUserWallet();
+        address = wallet.address;
+        encryptedKey = encrypt(wallet.privateKey);
+      } catch (walletError) {
+        address = 'wallet_creation_failed';
+        encryptedKey = 'wallet_creation_failed';
+      }
       needsSignupComplete = !name || !residentNumber;
-
       const { error: dbInsertError } = await supabase
         .from('users')
         .insert([{
@@ -687,7 +684,6 @@ router.get('/google/callback', async (req: Request, res: Response) => {
           password_hash: 'google_oauth',
           created_at: new Date().toISOString()
         }]);
-
       if (dbInsertError && dbInsertError.code !== '42501') {
         console.error('Google OAuth 사용자 DB 저장 오류:', dbInsertError);
         return res.status(500).json({
@@ -696,11 +692,36 @@ router.get('/google/callback', async (req: Request, res: Response) => {
         });
       }
     } else {
-      // 기존 사용자이지만 이름이나 주민번호가 없는 경우 signup/complete 필요
-      needsSignupComplete = !existingUser.name ||
-        !existingUser.resident_number_encrypted ||
-        existingUser.resident_number_encrypted === 'not_provided' ||
-        existingUser.name.trim() === '';
+      // 이미 있으면 update (이메일, 이름, 주민번호, 지갑주소 등)
+      let updateFields: any = {
+        email: data.user.email,
+        name,
+        resident_number_encrypted: encryptedResidentNumber,
+        password_hash: 'google_oauth'
+      };
+      // 지갑이 없으면 새로 생성
+      if (!existingUser.wallet_address || !existingUser.private_key_encrypted || existingUser.wallet_address === '') {
+        try {
+          const wallet = await bc.createUserWallet();
+          updateFields.wallet_address = wallet.address;
+          updateFields.private_key_encrypted = encrypt(wallet.privateKey);
+        } catch (walletError) {
+          updateFields.wallet_address = 'wallet_creation_failed';
+          updateFields.private_key_encrypted = 'wallet_creation_failed';
+        }
+      }
+      const { error: dbUpdateError } = await supabase
+        .from('users')
+        .update(updateFields)
+        .eq('id', data.user.id);
+      needsSignupComplete = !name || !residentNumber;
+      if (dbUpdateError) {
+        console.error('Google OAuth 사용자 DB 업데이트 오류:', dbUpdateError);
+        return res.status(500).json({
+          success: false,
+          error: '사용자 정보 업데이트 중 오류가 발생했습니다.'
+        });
+      }
     }
 
     // 리다이렉트 결정
@@ -731,7 +752,7 @@ router.put('/user', async (req: Request, res: Response<ApiResponse>) => {
     const token = authHeader.replace('Bearer ', '');
     const { name, resident_number, password_hash, password } = req.body;
 
-    // 토큰으로 사용자 정보 조회
+    // 토큰으로 사용자 정보 조회 (여기서 email도 가져옴)
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
@@ -755,13 +776,17 @@ router.put('/user', async (req: Request, res: Response<ApiResponse>) => {
       }
     }
 
-    // 사용자 정보 업데이트
+    // 사용자 정보 업데이트 (email은 Supabase Auth에서 가져온 값으로 항상 업데이트)
+    const updateData: any = {
+      name,
+      resident_number_encrypted: encryptedResidentNumber,
+      email: user.email,
+      password_hash: 'google_oauth'
+    };
+
     const { error: updateError } = await supabase
       .from('users')
-      .update({
-        name,
-        resident_number_encrypted: encryptedResidentNumber
-      })
+      .update(updateData)
       .eq('id', user.id);
 
     if (updateError) {
@@ -1239,6 +1264,92 @@ router.get('/admin-address', async (req: Request, res: Response<ApiResponse>) =>
     res.status(500).json({
       success: false,
       error: '관리자 주소 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 얼굴 임베딩 등록 (AI 서버 → Tickity 백엔드)
+router.post('/face-register', upload.none(), async (req: Request, res: Response<ApiResponse>) => {
+  try {
+    const { user_id, embedding_enc } = req.body;
+    if (!user_id || !embedding_enc) {
+      return res.status(400).json({
+        success: false,
+        error: 'user_id와 embedding_enc가 필요합니다.'
+      });
+    }
+
+    // 1. users 테이블에 user_id가 있는지 확인
+    const { data: existingUser, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', user_id)
+      .maybeSingle();
+
+    if (userError) {
+      return res.status(500).json({
+        success: false,
+        error: 'users 테이블 조회 중 오류가 발생했습니다.'
+      });
+    }
+
+    // 2. 없으면 최소 정보로 insert (이메일 등은 알 수 없으니 빈 값)
+    if (!existingUser) {
+      // ✅ 지갑 생성
+      let address = '';
+      let encryptedKey = '';
+      try {
+        const { address: walletAddress, privateKey } = await bc.createUserWallet();
+        address = walletAddress;
+        encryptedKey = encrypt(privateKey);
+      } catch (walletError) {
+        address = 'wallet_creation_failed';
+        encryptedKey = 'wallet_creation_failed';
+      }
+      const { error: insertUserError } = await supabase
+        .from('users')
+        .insert([{
+          id: user_id,
+          email: '',
+          name: '',
+          resident_number_encrypted: 'not_provided',
+          wallet_address: address,
+          private_key_encrypted: encryptedKey,
+          password_hash: 'face_register',
+          created_at: new Date().toISOString()
+        }]);
+      if (insertUserError && insertUserError.code !== '42501') {
+        return res.status(500).json({
+          success: false,
+          error: 'users 테이블에 사용자 생성 중 오류가 발생했습니다.'
+        });
+      }
+    }
+
+    // 3. face_embeddings에 insert
+    const { error: embeddingError } = await supabase
+      .from('face_embeddings')
+      .insert([{
+        user_id,
+        embedding_enc,
+        created_at: new Date().toISOString()
+      }]);
+    if (embeddingError) {
+      return res.status(500).json({
+        success: false,
+        error: `face_embeddings 저장 중 오류: ${embeddingError.message}`
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: '얼굴 임베딩 등록 성공'
+    });
+  } catch (error) {
+    console.error('face-register 오류:', error);
+    return res.status(500).json({
+      success: false,
+      error: '얼굴 임베딩 등록 중 서버 오류가 발생했습니다.'
     });
   }
 });
