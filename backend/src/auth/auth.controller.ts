@@ -293,7 +293,7 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response<A
     const { data: embeddingData, error: embeddingError } = await supabase
       .from('face_embeddings')
       .select('embedding_enc')
-      .eq('user_id', userData.id)
+      .eq('user_id', String(userData.id).trim())
       .maybeSingle();
 
     if (embeddingError) {
@@ -452,7 +452,7 @@ router.get('/user', async (req: Request, res: Response<ApiResponse>) => {
     const { data: embeddingData, error: embeddingError } = await supabase
       .from('face_embeddings')
       .select('embedding_enc')
-      .eq('user_id', userData.id)
+      .eq('user_id', String(userData.id).trim())
       .maybeSingle();
 
     if (embeddingError) {
@@ -1271,13 +1271,14 @@ router.get('/admin-address', async (req: Request, res: Response<ApiResponse>) =>
 // 얼굴 임베딩 등록 (AI 서버 → Tickity 백엔드)
 router.post('/face-register', upload.none(), async (req: Request, res: Response<ApiResponse>) => {
   try {
-    const { user_id, embedding_enc } = req.body;
+    let { user_id, embedding_enc } = req.body;
     if (!user_id || !embedding_enc) {
       return res.status(400).json({
         success: false,
         error: 'user_id와 embedding_enc가 필요합니다.'
       });
     }
+    user_id = String(user_id).trim(); // 공백 제거
 
     // 1. users 테이블에 user_id가 있는지 확인
     const { data: existingUser, error: userError } = await supabase
@@ -1326,14 +1327,38 @@ router.post('/face-register', upload.none(), async (req: Request, res: Response<
       }
     }
 
-    // 3. face_embeddings에 insert
-    const { error: embeddingError } = await supabase
+    // 3. face_embeddings에 이미 있으면 update, 없으면 insert
+    const { data: existingEmbedding, error: embeddingCheckError } = await supabase
       .from('face_embeddings')
-      .insert([{
-        user_id,
-        embedding_enc,
-        created_at: new Date().toISOString()
-      }]);
+      .select('id')
+      .eq('user_id', user_id)
+      .maybeSingle();
+    if (embeddingCheckError) {
+      return res.status(500).json({
+        success: false,
+        error: `face_embeddings 중복 체크 오류: ${embeddingCheckError.message}`
+      });
+    }
+    let embeddingError;
+    if (existingEmbedding) {
+      // update
+      ({ error: embeddingError } = await supabase
+        .from('face_embeddings')
+        .update({
+          embedding_enc,
+          created_at: new Date().toISOString()
+        })
+        .eq('user_id', user_id));
+    } else {
+      // insert
+      ({ error: embeddingError } = await supabase
+        .from('face_embeddings')
+        .insert([{
+          user_id,
+          embedding_enc,
+          created_at: new Date().toISOString()
+        }]));
+    }
     if (embeddingError) {
       return res.status(500).json({
         success: false,

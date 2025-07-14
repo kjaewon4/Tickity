@@ -85,6 +85,16 @@ export async function createTicket(payload: {
   seat_number: string;
   price: number;
 }) {
+  // FK 사전 검증: user_id, concert_id, seat_id 모두 존재해야 함
+  const [{ data: user, error: userErr }, { data: concert, error: concertErr }, { data: seat, error: seatErr }] = await Promise.all([
+    supabase.from('users').select('id').eq('id', payload.user_id).maybeSingle(),
+    supabase.from('concerts').select('id').eq('id', payload.concert_id).maybeSingle(),
+    supabase.from('seats').select('id').eq('id', payload.seat_id).maybeSingle(),
+  ]);
+  if (userErr || !user) throw new Error('티켓 생성 실패: 유효하지 않은 사용자입니다.');
+  if (concertErr || !concert) throw new Error('티켓 생성 실패: 유효하지 않은 콘서트입니다.');
+  if (seatErr || !seat) throw new Error('티켓 생성 실패: 유효하지 않은 좌석입니다.');
+
   const { data, error } = await supabase
     .from('tickets')
     .insert({
